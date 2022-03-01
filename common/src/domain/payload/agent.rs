@@ -2,7 +2,7 @@ use bytes::{Buf, BufMut, Bytes, BytesMut};
 
 use crate::error::CommonError;
 
-use super::common::Address;
+use super::common::NetAddress;
 
 /// The agent message body type
 #[derive(Debug)]
@@ -52,9 +52,9 @@ impl TryFrom<u8> for AgentMessagePayloadType {
 #[derive(Debug)]
 pub struct PpaassAgentMessagePayload {
     /// The source address
-    source_address: Address,
+    source_address: NetAddress,
     /// The target address
-    target_address: Address,
+    target_address: NetAddress,
     /// The payload type
     payload_type: AgentMessagePayloadType,
     /// The data
