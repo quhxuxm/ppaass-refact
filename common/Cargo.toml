@@ -1,0 +1,16 @@
+[package]
+name = "common"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[dependencies]
+thiserror = "1.0.30"
+bytes = "1.1.0"
+rsa = "0.5.0"
+rand = "0.8.5"
+rust-crypto = "0.2.36"
+uuid = { version = "0.8.2", features = ["v4"] }
+tokio-util = { version = "0.7.0", features = ["codec"] }
+lz4 = "1.23.2"
+tracing = "0.1.31"
