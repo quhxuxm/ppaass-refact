@@ -1,9 +1,13 @@
+use bytes::Bytes;
+
+#[derive(Debug)]
 pub enum AddressType {
     IpV4,
     IpV6,
     Domain,
 }
 
+#[derive(Debug)]
 pub struct Address {
     host: Vec<u8>,
     port: u16,
