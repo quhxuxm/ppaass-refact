@@ -12,7 +12,7 @@ pub enum PayloadEncryptionType {
 impl TryFrom<Bytes> for PayloadEncryptionType {
     type Error = CommonError;
 
-    fn try_from(value: Bytes) -> Result<Self, Self::Error> {
+    fn try_from(mut value: Bytes) -> Result<Self, Self::Error> {
         if value.remaining() < 5 {
             error!("Fail to parse PayloadEncryptionType because of no remining in byte buffer.");
             return Err(CommonError::FailToParsePayloadEncryptionType);
@@ -41,7 +41,7 @@ impl TryFrom<Bytes> for PayloadEncryptionType {
 
 impl From<PayloadEncryptionType> for Bytes {
     fn from(value: PayloadEncryptionType) -> Self {
-        let result = BytesMut::new();
+        let mut result = BytesMut::new();
         match value {
             PayloadEncryptionType::Plain => {
                 result.put_u8(0);
@@ -92,7 +92,6 @@ pub struct MessageBuilder {
 
 impl MessageBuilder {
     pub fn new(user_token: String, payload_encryption_type: PayloadEncryptionType) -> Self {
-        let uuid = generate_uuid();
         Self {
             id: generate_uuid(),
             ref_id: None,

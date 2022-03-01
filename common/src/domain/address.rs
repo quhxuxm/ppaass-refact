@@ -20,7 +20,7 @@ pub enum NetAddress {
 impl TryFrom<Bytes> for NetAddress {
     type Error = CommonError;
 
-    fn try_from(value: Bytes) -> Result<Self, Self::Error> {
+    fn try_from(mut value: Bytes) -> Result<Self, Self::Error> {
         if !value.has_remaining() {
             error!("Fail to parse NetAddress because of no remaining in bytes buffer.");
             return Err(CommonError::FailToParseNetAddress);
@@ -94,7 +94,7 @@ impl TryFrom<Bytes> for NetAddress {
 
 impl From<NetAddress> for Bytes {
     fn from(address: NetAddress) -> Self {
-        let result = BytesMut::new();
+        let mut result = BytesMut::new();
         match address {
             NetAddress::IpV4(addr_content, port) => {
                 result.put_u8(IPV4_TYPE);

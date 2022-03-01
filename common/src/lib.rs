@@ -1,11 +1,22 @@
-pub mod domain {
-    pub mod payload {
-        pub mod agent;
-        pub mod proxy;
+mod domain {
+    mod payload {
+        mod agent;
+        mod proxy;
     }
-    pub mod address;
-    pub mod message;
+    mod address;
+    mod message;
+
+    /// Public use by outside
+    pub use message::Message;
+    pub use message::MessageBuilder;
+    pub use message::PayloadEncryptionType;
 }
 
-pub mod error;
-pub mod util;
+mod error;
+mod util;
+
+/// Public use by outside
+pub use domain::Message;
+pub use domain::MessageBuilder;
+pub use domain::PayloadEncryptionType;
+pub use error::CommonError;
