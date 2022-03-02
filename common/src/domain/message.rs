@@ -77,6 +77,49 @@ pub struct Message {
     payload: Bytes,
 }
 
+
+impl TryFrom<Bytes> for Message {
+    type Error = CommonError;
+
+    fn try_from(mut value: Bytes) -> Result<Self, Self::Error> {
+        let id_length = value.get_u64();
+        let id_bytes = value.copy_to_bytes(id_length as usize);
+        let id = String::from_utf8(id_bytes.to_vec())?;
+        let ref_id_length = value.get_u64();
+        let ref_id_bytes = value.copy_to_bytes(ref_id_length as usize);
+        let ref_id = String::from_utf8(ref_id_bytes.to_vec())?;
+        let user_token_length = value.get_u64();
+        let user_token_bytes = value.copy_to_bytes(user_token_length as usize);
+        let user_token = match String::from_utf8(user_token_bytes.to_vec()){
+            Ok(v)=>v,
+            Err(e)=>{
+                error!("Fail")
+            }
+        }
+        let payload_encryption_token_length = bytes.get_u64();
+        let payload_encryption_token =
+            bytes.copy_to_bytes(payload_encryption_token_length as usize);
+        let payload_encryption_type: PpaassMessagePayloadEncryptionType =
+            bytes.get_u8().try_into()?;
+        let payload_length = bytes.get_u64() as usize;
+        let payload =bytes.copy_to_bytes(payload_length);
+        Ok(Self {
+            id,
+            ref_id,
+            user_token,
+            payload_encryption_type,
+            payload_encryption_token,
+            payload,
+        })
+    }
+}
+
+impl From<Message> for Bytes {
+    fn from(value: Message) -> Self {
+        todo!()
+    }
+}
+
 pub struct MessageBuilder {
     /// The message id
     id: String,
