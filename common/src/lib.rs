@@ -1,18 +1,11 @@
-mod domain {
-    mod address;
-    mod message;
-
-    /// Public use by outside
-    pub use message::Message;
-    pub use message::MessagePayload;
-    pub use message::PayloadEncryptionType;
-}
-
+mod address;
+mod crypto;
 mod error;
+mod message;
 mod util;
 
 /// Public use by outside
-pub use domain::Message;
-pub use domain::MessagePayload;
-pub use domain::PayloadEncryptionType;
 pub use error::CommonError;
+pub use message::Message;
+pub use message::MessagePayload;
+pub use message::PayloadEncryptionType;

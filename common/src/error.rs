@@ -4,10 +4,14 @@ pub enum CommonError {
     FailToParsePayloadType,
     #[error("Fail to parse payload")]
     FailToParsePayload,
-    #[error("Fail to parse NetAddress.")]
+    #[error("Fail to parse net address.")]
     FailToParseNetAddress,
-    #[error("Fail to parse PayloadEncryptionType.")]
+    #[error("Fail to parse encryption type.")]
     FailToParsePayloadEncryptionType,
-    #[error("Fail to parse FailToParseMessage.")]
+    #[error("Fail to parse message.")]
     FailToParseMessage,
+    #[error("Fail to parse rsa key.")]
+    FailToParseRsaKey,
+    #[error("Fail to encrypt data with rsa.")]
+    FailToEncryptDataWithRsa,
 }
