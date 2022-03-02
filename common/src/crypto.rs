@@ -1,13 +1,11 @@
-use std::{borrow::BorrowMut, array};
-
-use bytes::{BufMut, Bytes, BytesMut, Buf};
+use bytes::{BufMut, Bytes, BytesMut};
 use crypto::symmetriccipher::{BlockDecryptor, BlockEncryptor};
 use crypto::{aessafe, blowfish};
-use rand::{rngs::OsRng, Rng};
+use rand::rngs::OsRng;
 use rsa::pkcs8::{FromPrivateKey, FromPublicKey};
 use rsa::{PaddingScheme, PublicKey, RsaPrivateKey, RsaPublicKey};
 
-use crate::{error, CommonError};
+use crate::CommonError;
 use tracing::error;
 
 const BLOWFISH_CHUNK_LENGTH: usize = 8;
@@ -21,7 +19,7 @@ pub(crate) struct RsaCrypto {
     private_key: RsaPrivateKey,
     /// The public used to do encryption
     public_key: RsaPublicKey,
-    rng: Box<OsRng>
+    rng: Box<OsRng>,
 }
 
 impl RsaCrypto {
@@ -43,7 +41,7 @@ impl RsaCrypto {
         Ok(Self {
             public_key,
             private_key,
-            rng: Box::new(OsRng)
+            rng: Box::new(OsRng),
         })
     }
 
@@ -72,11 +70,15 @@ pub(crate) fn encrypt_with_aes(encryption_token: &Bytes, target: &Bytes) -> Byte
     let mut result = BytesMut::new();
     let aes_encryptor = aessafe::AesSafe256Encryptor::new(encryption_token);
     let target_chunks = target.chunks(AES_CHUNK_LENGTH);
-    target_chunks.for_each(|chunk|{
-        let mut chunk_to_encrypt = &mut [0u8; AES_CHUNK_LENGTH];
+    target_chunks.for_each(|chunk| {
+        let chunk_to_encrypt = &mut [0u8; AES_CHUNK_LENGTH];
         let chunk_encrypted = &mut [0u8; AES_CHUNK_LENGTH];
-        unsafe{
-            chunk_to_encrypt = std::mem::transmute(chunk);
+        if chunk.len() < AES_CHUNK_LENGTH {
+            for (i, v) in chunk.iter().enumerate() {
+                chunk_to_encrypt[i] = *v;
+            }
+        } else {
+            chunk_encrypted.copy_from_slice(chunk);
         }
         aes_encryptor.encrypt_block(chunk_to_encrypt, chunk_encrypted);
         result.put_slice(chunk_encrypted);
@@ -84,50 +86,62 @@ pub(crate) fn encrypt_with_aes(encryption_token: &Bytes, target: &Bytes) -> Byte
     result.into()
 }
 
-pub(crate) fn decrypt_with_aes(encryption_token: &[u8], target: &[u8]) -> Bytes {
+pub(crate) fn decrypt_with_aes(encryption_token: &Bytes, target: &Bytes) -> Bytes {
     let mut result = BytesMut::new();
     let aes_decryptor = aessafe::AesSafe256Decryptor::new(encryption_token);
     let target_chunks = target.chunks(AES_CHUNK_LENGTH);
-    for (_, current_chunk) in target_chunks.into_iter().enumerate() {
+    target_chunks.for_each(|chunk| {
         let chunk_to_decrypt = &mut [0u8; AES_CHUNK_LENGTH];
-        for (i, b) in current_chunk.iter().enumerate() {
-            chunk_to_decrypt[i] = *b;
+        if chunk.len() < AES_CHUNK_LENGTH {
+            for (i, v) in chunk.iter().enumerate() {
+                chunk_to_decrypt[i] = *v;
+            }
+        } else {
+            chunk_to_decrypt.copy_from_slice(chunk);
         }
         let chunk_decrypted = &mut [0u8; AES_CHUNK_LENGTH];
         aes_decryptor.decrypt_block(chunk_to_decrypt, chunk_decrypted);
         result.put_slice(chunk_decrypted);
-    }
+    });
     result.into()
 }
 
-pub(crate) fn encrypt_with_blowfish(encryption_token: &[u8], target: &[u8]) -> Bytes {
+pub(crate) fn encrypt_with_blowfish(encryption_token: &Bytes, target: &Bytes) -> Bytes {
     let mut result = BytesMut::new();
     let blowfish_encryption = blowfish::Blowfish::new(encryption_token);
     let target_chunks = target.chunks(BLOWFISH_CHUNK_LENGTH);
-    for current_chunk in target_chunks {
+    target_chunks.for_each(|chunk| {
         let chunk_to_encrypt = &mut [0u8; BLOWFISH_CHUNK_LENGTH];
-        for (i, b) in current_chunk.iter().enumerate() {
-            chunk_to_encrypt[i] = *b;
+        if chunk.len() < BLOWFISH_CHUNK_LENGTH {
+            for (i, v) in chunk.iter().enumerate() {
+                chunk_to_encrypt[i] = *v;
+            }
+        } else {
+            chunk_to_encrypt.copy_from_slice(chunk);
         }
         let chunk_encrypted = &mut [0u8; BLOWFISH_CHUNK_LENGTH];
         blowfish_encryption.encrypt_block(chunk_to_encrypt, chunk_encrypted);
         result.put_slice(chunk_encrypted);
-    }
+    });
     result.into()
 }
 
-pub(crate) fn decrypt_with_blowfish(encryption_token: &[u8], target: &[u8]) -> Bytes {
+pub(crate) fn decrypt_with_blowfish(encryption_token: &Bytes, target: &Bytes) -> Bytes {
     let mut result = BytesMut::new();
     let blowfish_encryption = blowfish::Blowfish::new(encryption_token);
     let target_chunks = target.chunks(BLOWFISH_CHUNK_LENGTH);
-    for (_, current_chunk) in target_chunks.into_iter().enumerate() {
+    target_chunks.for_each(|chunk| {
         let chunk_to_decrypt = &mut [0u8; BLOWFISH_CHUNK_LENGTH];
-        for (i, b) in current_chunk.iter().enumerate() {
-            chunk_to_decrypt[i] = *b;
+        if chunk.len() < BLOWFISH_CHUNK_LENGTH {
+            for (i, v) in chunk.iter().enumerate() {
+                chunk_to_decrypt[i] = *v;
+            }
+        } else {
+            chunk_to_decrypt.copy_from_slice(chunk);
         }
         let chunk_decrypted = &mut [0u8; BLOWFISH_CHUNK_LENGTH];
         blowfish_encryption.decrypt_block(chunk_to_decrypt, chunk_decrypted);
         result.put_slice(chunk_decrypted);
-    }
+    });
     result.into()
 }
