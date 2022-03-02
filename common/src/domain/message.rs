@@ -211,6 +211,22 @@ pub struct MessagePayload {
     data: Bytes,
 }
 
+impl MessagePayload {
+    pub fn new(
+        source_address: NetAddress,
+        target_address: NetAddress,
+        payload_type: PayloadType,
+        data: Bytes,
+    ) -> Self {
+        Self {
+            source_address,
+            target_address,
+            payload_type,
+            data,
+        }
+    }
+}
+
 impl From<MessagePayload> for Bytes {
     fn from(value: MessagePayload) -> Self {
         let mut result = BytesMut::new();
@@ -286,23 +302,37 @@ pub struct Message {
     payload: Option<MessagePayload>,
 }
 
+impl Message {
+    pub fn new(
+        ref_id: Option<String>,
+        user_token: String,
+        payload_encryption_type: PayloadEncryptionType,
+        payload: Option<MessagePayload>,
+    ) -> Self {
+        Self {
+            id: generate_uuid(),
+            ref_id,
+            user_token,
+            payload_encryption_type,
+            payload,
+        }
+    }
+}
+
 impl TryFrom<Bytes> for Message {
     type Error = CommonError;
 
     fn try_from(mut value: Bytes) -> Result<Self, Self::Error> {
-        let id_length = if value.remaining() >= 4 {
-            value.get_u32() as usize
-        } else {
+        if value.remaining() < 4 {
             error!("Fail to parse message because of no remaining");
             return Err(CommonError::FailToParseMessage);
         };
-
-        let id_bytes = if value.remaining() >= id_length {
-            value.copy_to_bytes(id_length as usize)
-        } else {
+        let id_length = value.get_u32() as usize;
+        if value.remaining() < id_length {
             error!("Fail to parse message because of no remaining");
             return Err(CommonError::FailToParseMessage);
         };
+        let id_bytes = value.copy_to_bytes(id_length as usize);
         let id = match String::from_utf8(id_bytes.to_vec()) {
             Ok(v) => v,
             Err(e) => {
@@ -310,18 +340,16 @@ impl TryFrom<Bytes> for Message {
                 return Err(CommonError::FailToParseMessage);
             }
         };
-        let ref_id_length = if value.remaining() >= 8 {
-            value.get_u32() as usize
-        } else {
+        if value.remaining() < 8 {
             error!("Fail to parse message because of no remaining");
             return Err(CommonError::FailToParseMessage);
         };
-        let ref_id_bytes = if value.remaining() >= ref_id_length {
-            value.copy_to_bytes(ref_id_length as usize)
-        } else {
+        let ref_id_length = value.get_u32() as usize;
+        if value.remaining() < ref_id_length {
             error!("Fail to parse message because of no remaining");
             return Err(CommonError::FailToParseMessage);
         };
+        let ref_id_bytes = value.copy_to_bytes(ref_id_length as usize);
         let ref_id = match String::from_utf8(ref_id_bytes.to_vec()) {
             Ok(v) => v,
             Err(e) => {
@@ -329,19 +357,16 @@ impl TryFrom<Bytes> for Message {
                 return Err(CommonError::FailToParseMessage);
             }
         };
-
-        let user_token_length = if value.remaining() >= 8 {
-            value.get_u64() as usize
-        } else {
+        if value.remaining() < 8 {
             error!("Fail to parse message because of no remaining");
             return Err(CommonError::FailToParseMessage);
         };
-        let user_token_bytes = if value.remaining() >= user_token_length {
-            value.copy_to_bytes(user_token_length as usize)
-        } else {
+        let user_token_length = value.get_u64() as usize;
+        if value.remaining() < user_token_length {
             error!("Fail to parse message because of no remaining");
             return Err(CommonError::FailToParseMessage);
         };
+        let user_token_bytes = value.copy_to_bytes(user_token_length as usize);
         let user_token = match String::from_utf8(user_token_bytes.to_vec()) {
             Ok(v) => v,
             Err(e) => {
@@ -358,12 +383,12 @@ impl TryFrom<Bytes> for Message {
             }
         };
 
-        let payload_length = if value.remaining() >= 8 {
-            value.get_u64() as usize
-        } else {
+        if value.remaining() < 8 {
             error!("Fail to parse message because of no remaining");
             return Err(CommonError::FailToParseMessage);
         };
+
+        let payload_length = value.get_u64() as usize;
 
         let payload = if payload_length == 0 {
             None
@@ -420,55 +445,5 @@ impl From<Message> for Bytes {
             }
         }
         result.into()
-    }
-}
-
-pub struct MessageBuilder {
-    /// The message id
-    id: String,
-    /// The message id that this message reference to
-    ref_id: Option<String>,
-    /// The user token
-    user_token: String,
-    /// The payload encryption type
-    payload_encryption_type: PayloadEncryptionType,
-    /// The payload
-    payload: Option<MessagePayload>,
-}
-
-impl MessageBuilder {
-    pub fn new(user_token: String, payload_encryption_type: PayloadEncryptionType) -> Self {
-        Self {
-            id: generate_uuid(),
-            ref_id: None,
-            user_token,
-            payload_encryption_type,
-            payload: None,
-        }
-    }
-
-    pub fn ref_id(mut self, ref_id: String) -> Self {
-        self.ref_id = Some(ref_id);
-        self
-    }
-
-    pub fn user_token(mut self, user_token: String) -> Self {
-        self.user_token = user_token;
-        self
-    }
-
-    pub fn payload(mut self, payload: MessagePayload) -> Self {
-        self.payload = Some(payload);
-        self
-    }
-
-    pub fn build(self) -> Message {
-        Message {
-            id: self.id,
-            ref_id: self.ref_id,
-            user_token: self.user_token,
-            payload_encryption_type: self.payload_encryption_type,
-            payload: self.payload,
-        }
     }
 }
