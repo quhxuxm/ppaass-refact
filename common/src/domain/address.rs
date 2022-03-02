@@ -17,10 +17,10 @@ pub enum NetAddress {
     Domain(String, u16),
 }
 
-impl TryFrom<Bytes> for NetAddress {
+impl TryFrom<&mut Bytes> for NetAddress {
     type Error = CommonError;
 
-    fn try_from(mut value: Bytes) -> Result<Self, Self::Error> {
+    fn try_from(value: &mut Bytes) -> Result<Self, Self::Error> {
         if !value.has_remaining() {
             error!("Fail to parse NetAddress because of no remaining in bytes buffer.");
             return Err(CommonError::FailToParseNetAddress);
@@ -89,6 +89,15 @@ impl TryFrom<Bytes> for NetAddress {
             }
         };
         Ok(address)
+    }
+}
+
+impl TryFrom<Bytes> for NetAddress {
+    type Error = CommonError;
+
+    fn try_from(mut value: Bytes) -> Result<Self, Self::Error> {
+        let value_mut_ref: &mut Bytes = &mut value;
+        value_mut_ref.try_into()
     }
 }
 
