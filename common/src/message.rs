@@ -299,7 +299,7 @@ pub struct Message {
     /// The payload encryption type
     payload_encryption_type: PayloadEncryptionType,
     /// The payload
-    payload: Option<MessagePayload>,
+    payload: Option<Bytes>,
 }
 
 impl Message {
@@ -307,7 +307,7 @@ impl Message {
         ref_id: Option<String>,
         user_token: String,
         payload_encryption_type: PayloadEncryptionType,
-        payload: Option<MessagePayload>,
+        payload: Option<Bytes>,
     ) -> Self {
         Self {
             id: generate_uuid(),
@@ -395,14 +395,7 @@ impl TryFrom<Bytes> for Message {
         } else {
             if value.remaining() >= payload_length {
                 let payload_bytes = value.copy_to_bytes(payload_length as usize);
-                let payload: MessagePayload = match payload_bytes.try_into() {
-                    Ok(v) => v,
-                    Err(e) => {
-                        error!("Fail to parse message because of no error: {:#?}", e);
-                        return Err(CommonError::FailToParseMessage);
-                    }
-                };
-                Some(payload)
+                Some(payload_bytes)
             } else {
                 error!("Fail to parse message because of no remaining");
                 return Err(CommonError::FailToParseMessage);
@@ -441,7 +434,7 @@ impl From<Message> for Bytes {
                 result.put_u64(0);
             }
             Some(p) => {
-                result.put::<Bytes>(p.into());
+                result.put(p);
             }
         }
         result.into()

@@ -1,7 +1,9 @@
+use std::cell::Cell;
+
 use bytes::{BufMut, Bytes, BytesMut};
 use crypto::symmetriccipher::{BlockDecryptor, BlockEncryptor};
 use crypto::{aessafe, blowfish};
-use rand::rngs::OsRng;
+use rand::Rng;
 use rsa::pkcs8::{FromPrivateKey, FromPublicKey};
 use rsa::{PaddingScheme, PublicKey, RsaPrivateKey, RsaPublicKey};
 
@@ -14,16 +16,23 @@ const RSA_BIT_SIZE: usize = 2048;
 
 /// The util to do RSA encryption and decryption.
 #[derive(Debug)]
-pub(crate) struct RsaCrypto {
+pub(crate) struct RsaCrypto<T: Rng> {
     /// The private used to do decryption
     private_key: RsaPrivateKey,
     /// The public used to do encryption
     public_key: RsaPublicKey,
-    rng: Box<OsRng>,
+    rng: T,
 }
 
-impl RsaCrypto {
-    pub fn new(public_key: &'static str, private_key: &'static str) -> Result<Self, CommonError> {
+impl<T> RsaCrypto<T>
+where
+    T: Rng,
+{
+    pub fn new(
+        public_key: &'static str,
+        private_key: &'static str,
+        rng: T,
+    ) -> Result<Self, CommonError> {
         let public_key = match RsaPublicKey::from_public_key_pem(public_key) {
             Ok(v) => v,
             Err(e) => {
@@ -41,13 +50,13 @@ impl RsaCrypto {
         Ok(Self {
             public_key,
             private_key,
-            rng: Box::new(OsRng),
+            rng,
         })
     }
 
     pub(crate) fn encrypt(&mut self, target: &Bytes) -> Result<Bytes, CommonError> {
         self.public_key
-            .encrypt(self.rng.as_mut(), PaddingScheme::PKCS1v15Encrypt, target)
+            .encrypt(&mut self.rng, PaddingScheme::PKCS1v15Encrypt, target)
             .map_err(|e| {
                 error!("Fail to encrypt data with rsa because of error: {:#?}", e);
                 CommonError::FailToEncryptDataWithRsa
