@@ -59,15 +59,15 @@ impl Decoder for MessageCodec<ThreadRng> {
                 Err(e) => {
                     error!("Fail to decompress message because of error: {:#?}", e);
                     return Err(CommonError::IoError {
-                        e
-                    }));
+                        source: e
+                    });
                 }
                 Ok(r) => Bytes::from(r)
             };
             match lz4_decompress_result.try_into() {
                 Err(e) => {
                     error!("Fail to parse message because of error: {:#?}", e);
-                    return Err(CommonError::FailToParseMessage);
+                    return Err(e);
                 }
                 Ok(r) => r
             }
@@ -75,7 +75,7 @@ impl Decoder for MessageCodec<ThreadRng> {
             match length_delimited_decode_result.freeze().try_into() {
                 Err(e) => {
                     error!("Fail to parse message because of error: {:#?}", e);
-                    return Err(CommonError::FailToParseMessage);
+                    return Err(e);
                 }
                 Ok(r) => r
             }
@@ -96,7 +96,7 @@ impl Decoder for MessageCodec<ThreadRng> {
                             .decrypt(encryption_token) {
                             Err(e) => {
                                 error!("Fail to decrypt message with blowfish because of error: {:#?}", e);
-                                return Err(CommonError::FailToParseMessage);
+                                return Err(e);
                             }
                             Ok(r) => r
                         };
@@ -116,7 +116,7 @@ impl Decoder for MessageCodec<ThreadRng> {
                             .decrypt(encryption_token) {
                             Err(e) => {
                                 error!("Fail to decrypt message with aes because of error: {:#?}", e);
-                                return Err(CommonError::FailToParseMessage);
+                                return Err(e);
                             }
                             Ok(r) => r
                         };
@@ -144,25 +144,22 @@ impl Encoder<Message> for MessageCodec<ThreadRng> {
             "Encode message to output(decrypted): {:?}",
             original_message
         );
-
         let rsa_encrypted_payload_encryption_token = match original_message.payload_encryption_type() {
-            PayloadEncryptionType::Plain=>{
+            PayloadEncryptionType::Plain => {
                 None
             }
-            PayloadEncryptionType::Blowfish(original_token)=>{
-              match  self
+            PayloadEncryptionType::Blowfish(original_token) => {
+                match self
                     .rsa_crypto
-                    .encrypt(original_token){
-                  Ok(r)=>Some(r),
-                  Err(e)=>{
-                      return Err(CommonError::)
-                  }
-              }
+                    .encrypt(original_token) {
+                    Ok(r) => Some(r),
+                    Err(e) => {
+                        return Err(CommonError::);
+                    }
+                }
             }
-            PayloadEncryptionType::Aes(original_token)=>{
-
-            }
-        } ;
+            PayloadEncryptionType::Aes(original_token) => {}
+        };
         let encrypted_payload = match payload_encryption_type {
             PpaassMessagePayloadEncryptionType::Plain => payload,
             PpaassMessagePayloadEncryptionType::Blowfish => {
