@@ -7,7 +7,6 @@ use tokio::runtime::Runtime;
 use tracing::{error, info};
 
 use crate::config::PROXY_SERVER_CONFIG;
-use crate::transport::Transport;
 
 const LOCAL_ADDRESS: [u8; 4] = [0u8; 4];
 const SERVER_RUNTIME_THREAD_NAME: &str = "proxy-tokio-runtime";
@@ -52,28 +51,26 @@ impl Server {
             let tcp_listener = TcpListener::bind(local_address).await.unwrap_or_else(|e| panic!("Fail to start proxy because of error, error: {:#?}", e));
             //Start to processing client protocol
             info!("Success to bind TCP server on port: [{}]", local_port);
-
             loop {
-                let (agent_stream, agent_remote_address)  =match  tcp_listener.accept().await{
-                    Err(e)=>{
+                let (agent_stream, agent_remote_address) = match tcp_listener.accept().await {
+                    Err(e) => {
                         error!("Fail to accept agent protocol because of error: {:#?}", e);
                         continue;
                     }
-                    Ok(r)=>{
+                    Ok(r) => {
                         if let Err(e) = r.0.set_nodelay(true) {
                             error!("Fail to set no delay on agent stream because of error, agent stream:{:?}, error: {:#?}", r.0.peer_addr(), e);
                         }
                         r
                     }
                 };
-
                 tokio::spawn(async move {
-                    let mut transport = match Transport::new(agent_remote_address){
-                        Err(e)=>{
+                    let mut transport = match Transport::new(agent_remote_address) {
+                        Err(e) => {
                             error!("Fail to create agent tcp transport because of error, error: {:#?}",e );
                             return;
                         }
-                        Ok(r)=>r
+                        Ok(r) => r
                     };
                     let transport_id = transport.id().to_string();
                     info!("Receive a agent stream from: [{}], assign it to transport: [{}].", agent_remote_address, transport_id);

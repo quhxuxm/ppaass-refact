@@ -8,10 +8,14 @@ pub enum CommonError {
     FailToParseNetAddress,
     #[error("Fail to parse encryption type.")]
     FailToParsePayloadEncryptionType,
-    #[error("Fail to parse message.")]
-    FailToParseMessage,
+
     #[error("Fail to parse rsa key.")]
     FailToParseRsaKey,
     #[error("Fail to encrypt data with rsa.")]
     FailToEncryptDataWithRsa,
+
+    #[error("I/O error happen.")]
+    IoError {
+        #[from] source: std::io::Error
+    },
 }

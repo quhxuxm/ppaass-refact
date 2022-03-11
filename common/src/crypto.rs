@@ -3,7 +3,7 @@ use std::cell::Cell;
 use bytes::{BufMut, Bytes, BytesMut};
 use crypto::symmetriccipher::{BlockDecryptor, BlockEncryptor};
 use crypto::{aessafe, blowfish};
-use rand::Rng;
+use rand::{Rng, RngCore};
 use rsa::pkcs8::{FromPrivateKey, FromPublicKey};
 use rsa::{PaddingScheme, PublicKey, RsaPrivateKey, RsaPublicKey};
 
@@ -24,10 +24,7 @@ pub(crate) struct RsaCrypto<T: Rng> {
     rng: T,
 }
 
-impl<T> RsaCrypto<T>
-where
-    T: Rng,
-{
+impl<T: Rng> RsaCrypto<T> {
     pub fn new(
         public_key: &'static str,
         private_key: &'static str,

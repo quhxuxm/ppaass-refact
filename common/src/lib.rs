@@ -3,6 +3,7 @@ mod crypto;
 mod error;
 mod message;
 mod util;
+mod codec;
 
 /// Public use by outside
 pub use error::CommonError;
