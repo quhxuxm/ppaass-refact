@@ -1,6 +1,7 @@
-use crate::error::CommonError;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use tracing::error;
+
+use crate::error::CommonError;
 
 const IPV4_TYPE: u8 = 0;
 const IPV6_TYPE: u8 = 1;
@@ -23,7 +24,7 @@ impl TryFrom<&mut Bytes> for NetAddress {
     fn try_from(value: &mut Bytes) -> Result<Self, Self::Error> {
         if !value.has_remaining() {
             error!("Fail to parse NetAddress because of no remaining in bytes buffer.");
-            return Err(CommonError::FailToParseNetAddress);
+            return Err(CommonError::CodecError);
         }
         let address_type = value.get_u8();
         let address = match address_type {
@@ -32,7 +33,7 @@ impl TryFrom<&mut Bytes> for NetAddress {
                 //A ip v6 address is 6 bytes: 4 bytes for host, 2 bytes for port
                 if value.remaining() < 6 {
                     error!("Fail to parse NetAddress(IpV4) because of not enough remaining in bytes buffer.");
-                    return Err(CommonError::FailToParseNetAddress);
+                    return Err(CommonError::CodecError);
                 }
                 let mut addr_content = [0u8; 4];
                 addr_content.iter_mut().for_each(|item| {
@@ -46,7 +47,7 @@ impl TryFrom<&mut Bytes> for NetAddress {
                 //A ip v6 address is 18 bytes: 16 bytes for host, 2 bytes for port
                 if value.remaining() < 18 {
                     error!("Fail to parse NetAddress(IpV6) because of not enough remaining in bytes buffer.");
-                    return Err(CommonError::FailToParseNetAddress);
+                    return Err(CommonError::CodecError);
                 }
                 let mut addr_content = [0u8; 16];
                 addr_content.iter_mut().for_each(|item| {
@@ -59,12 +60,12 @@ impl TryFrom<&mut Bytes> for NetAddress {
                 //Convert the NetAddress::Domain
                 if value.remaining() < 4 {
                     error!("Fail to parse NetAddress(Domain) because of not enough remaining in bytes buffer.");
-                    return Err(CommonError::FailToParseNetAddress);
+                    return Err(CommonError::CodecError);
                 }
                 let host_name_length = value.get_u32() as usize;
                 if value.remaining() < host_name_length + 2 {
                     error!("Fail to parse NetAddress(Domain) because of not enough remaining in bytes buffer, require: {}.", host_name_length + 2);
-                    return Err(CommonError::FailToParseNetAddress);
+                    return Err(CommonError::CodecError);
                 }
                 let host_bytes = value.copy_to_bytes(host_name_length);
                 let host = match String::from_utf8(host_bytes.to_vec()) {
@@ -74,7 +75,7 @@ impl TryFrom<&mut Bytes> for NetAddress {
                             "Fail to parse NetAddress(Domain) because of error: {:#?}.",
                             e
                         );
-                        return Err(CommonError::FailToParseNetAddress);
+                        return Err(CommonError::CodecError);
                     }
                 };
                 let port = value.get_u16();
@@ -85,7 +86,7 @@ impl TryFrom<&mut Bytes> for NetAddress {
                     "Fail to parse NetAddress because of invalide address type {}.",
                     invalid_address_type
                 );
-                return Err(CommonError::FailToParseNetAddress);
+                return Err(CommonError::CodecError);
             }
         };
         Ok(address)

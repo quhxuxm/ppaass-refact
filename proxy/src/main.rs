@@ -1,14 +1,15 @@
-mod config;
-mod server;
-
 use chrono::Local;
-use config::PROXY_SERVER_CONFIG;
-use server::Server;
 use tracing::{debug, error, info};
 use tracing_appender::non_blocking;
 use tracing_appender::rolling::hourly;
 use tracing_subscriber::fmt::format::Writer;
 use tracing_subscriber::fmt::time::FormatTime;
+
+use config::PROXY_SERVER_CONFIG;
+use server::Server;
+
+mod config;
+mod server;
 
 struct LogTimer;
 

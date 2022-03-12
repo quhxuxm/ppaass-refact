@@ -6,9 +6,9 @@ use crypto::{aessafe, blowfish};
 use rand::{Rng, RngCore};
 use rsa::pkcs8::{FromPrivateKey, FromPublicKey};
 use rsa::{PaddingScheme, PublicKey, RsaPrivateKey, RsaPublicKey};
+use tracing::error;
 
 use crate::CommonError;
-use tracing::error;
 
 const BLOWFISH_CHUNK_LENGTH: usize = 8;
 const AES_CHUNK_LENGTH: usize = 16;
@@ -34,14 +34,14 @@ impl<T: Rng> RsaCrypto<T> {
             Ok(v) => v,
             Err(e) => {
                 error!("Fail to parse rsa key because of error: {:#?}", e);
-                return Err(CommonError::FailToParseRsaKey);
+                return Err(CommonError::CodecError);
             }
         };
         let private_key = match RsaPrivateKey::from_pkcs8_pem(private_key) {
             Ok(v) => v,
             Err(e) => {
                 error!("Fail to parse rsa key because of error: {:#?}", e);
-                return Err(CommonError::FailToParseRsaKey);
+                return Err(CommonError::CodecError);
             }
         };
         Ok(Self {
@@ -56,7 +56,7 @@ impl<T: Rng> RsaCrypto<T> {
             .encrypt(&mut self.rng, PaddingScheme::PKCS1v15Encrypt, target)
             .map_err(|e| {
                 error!("Fail to encrypt data with rsa because of error: {:#?}", e);
-                CommonError::FailToEncryptDataWithRsa
+                CommonError::CodecError
             })
             .map(|v| v.into())
     }
@@ -66,7 +66,7 @@ impl<T: Rng> RsaCrypto<T> {
             .decrypt(PaddingScheme::PKCS1v15Encrypt, target)
             .map_err(|e| {
                 error!("Fail to encrypt data with rsa because of error: {:#?}", e);
-                CommonError::FailToEncryptDataWithRsa
+                CommonError::CodecError
             })
             .map(|v| v.into())
     }

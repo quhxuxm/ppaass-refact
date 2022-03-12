@@ -132,7 +132,7 @@ impl TryFrom<u8> for PayloadType {
 
             invalid_type => {
                 error!("Fail to parse payload type: {}", invalid_type);
-                Err(CommonError::FailToParsePayloadType)
+                Err(CommonError::CodecError)
             }
         }
     }
@@ -144,13 +144,13 @@ impl TryFrom<&mut Bytes> for PayloadEncryptionType {
     fn try_from(value: &mut Bytes) -> Result<Self, Self::Error> {
         if value.remaining() < 5 {
             error!("Fail to parse PayloadEncryptionType because of no remining in byte buffer.");
-            return Err(CommonError::FailToParsePayloadEncryptionType);
+            return Err(CommonError::CodecError);
         }
         let enc_type_value = value.get_u8();
         let enc_type_token_length = value.get_u32() as usize;
         if value.remaining() < enc_type_token_length {
             error!("Fail to parse PayloadEncryptionType because of no remining in byte buffer.");
-            return Err(CommonError::FailToParsePayloadEncryptionType);
+            return Err(CommonError::CodecError);
         }
         let enc_token = value.copy_to_bytes(enc_type_token_length);
         match enc_type_value {
@@ -162,7 +162,7 @@ impl TryFrom<&mut Bytes> for PayloadEncryptionType {
                     "Fail to parse PayloadEncryptionType because of invalid type: {}.",
                     invalid_type
                 );
-                Err(CommonError::FailToParsePayloadEncryptionType)
+                Err(CommonError::CodecError)
             }
         }
     }
@@ -246,37 +246,37 @@ impl TryFrom<Bytes> for MessagePayload {
     fn try_from(mut value: Bytes) -> Result<Self, Self::Error> {
         if value.remaining() < 1 {
             error!("Fail to parse message payload because of no remaining");
-            return Err(CommonError::FailToParsePayload);
+            return Err(CommonError::CodecError);
         }
         let payload_type: PayloadType = match value.get_u8().try_into() {
             Ok(v) => v,
             Err(e) => {
                 error!("Fail to parse message payload because of error: {:#?}", e);
-                return Err(CommonError::FailToParsePayloadType);
+                return Err(CommonError::CodecError);
             }
         };
         let source_address: NetAddress = match (&mut value).try_into() {
             Ok(v) => v,
             Err(e) => {
                 error!("Fail to parse source address because of error: {:#?}", e);
-                return Err(CommonError::FailToParseNetAddress);
+                return Err(CommonError::CodecError);
             }
         };
         let target_address: NetAddress = match (&mut value).try_into() {
             Ok(v) => v,
             Err(e) => {
                 error!("Fail to parse target address because of error: {:#?}", e);
-                return Err(CommonError::FailToParseNetAddress);
+                return Err(CommonError::CodecError);
             }
         };
         if value.remaining() < 8 {
             error!("Fail to parse message payload because of no remaining");
-            return Err(CommonError::FailToParsePayload);
+            return Err(CommonError::CodecError);
         }
         let data_length = value.get_u64() as usize;
         if value.remaining() < data_length {
             error!("Fail to parse message payload because of no remaining");
-            return Err(CommonError::FailToParsePayload);
+            return Err(CommonError::CodecError);
         }
         let data = value.copy_to_bytes(data_length);
         Ok(Self {
@@ -292,15 +292,15 @@ impl TryFrom<Bytes> for MessagePayload {
 #[derive(Debug)]
 pub struct Message {
     /// The message id
-    id: String,
+    pub id: String,
     /// The message id that this message reference to
-    ref_id: Option<String>,
+    pub ref_id: Option<String>,
     /// The user token
-    user_token: String,
+    pub user_token: String,
     /// The payload encryption type
-    payload_encryption_type: PayloadEncryptionType,
+    pub payload_encryption_type: PayloadEncryptionType,
     /// The payload
-    payload: Option<Bytes>,
+    pub payload: Option<Bytes>,
 }
 
 impl Message {
@@ -333,25 +333,6 @@ impl Message {
             payload,
         }
     }
-    pub fn id(&self) -> &str {
-        &self.id
-    }
-    pub fn ref_id(&self) -> &Option<String> {
-        &self.ref_id
-    }
-    pub fn user_token(&self) -> &str {
-        &self.user_token
-    }
-    pub fn payload_encryption_type(&self) -> &PayloadEncryptionType {
-        &self.payload_encryption_type
-    }
-    pub fn payload(&self) -> &Option<Bytes> {
-        &self.payload
-    }
-
-    pub fn set_payload(&mut self, payload: Option<Bytes>) {
-        self.payload = payload;
-    }
 }
 
 impl TryFrom<Bytes> for Message {
@@ -360,65 +341,65 @@ impl TryFrom<Bytes> for Message {
     fn try_from(mut value: Bytes) -> Result<Self, Self::Error> {
         if value.remaining() < 4 {
             error!("Fail to parse message because of no remaining");
-            return Err(CommonError::FailToParseMessage);
+            return Err(CommonError::CodecError);
         };
         let id_length = value.get_u32() as usize;
         if value.remaining() < id_length {
             error!("Fail to parse message because of no remaining");
-            return Err(CommonError::FailToParseMessage);
+            return Err(CommonError::CodecError);
         };
         let id_bytes = value.copy_to_bytes(id_length as usize);
         let id = match String::from_utf8(id_bytes.to_vec()) {
             Ok(v) => v,
             Err(e) => {
                 error!("Fail to parse message because of error: {:#?}", e);
-                return Err(CommonError::FailToParseMessage);
+                return Err(CommonError::CodecError);
             }
         };
         if value.remaining() < 8 {
             error!("Fail to parse message because of no remaining");
-            return Err(CommonError::FailToParseMessage);
+            return Err(CommonError::CodecError);
         };
         let ref_id_length = value.get_u32() as usize;
         if value.remaining() < ref_id_length {
             error!("Fail to parse message because of no remaining");
-            return Err(CommonError::FailToParseMessage);
+            return Err(CommonError::CodecError);
         };
         let ref_id_bytes = value.copy_to_bytes(ref_id_length as usize);
         let ref_id = match String::from_utf8(ref_id_bytes.to_vec()) {
             Ok(v) => v,
             Err(e) => {
                 error!("Fail to parse message because of error: {:#?}", e);
-                return Err(CommonError::FailToParseMessage);
+                return Err(CommonError::CodecError);
             }
         };
         if value.remaining() < 8 {
             error!("Fail to parse message because of no remaining");
-            return Err(CommonError::FailToParseMessage);
+            return Err(CommonError::CodecError);
         };
         let user_token_length = value.get_u64() as usize;
         if value.remaining() < user_token_length {
             error!("Fail to parse message because of no remaining");
-            return Err(CommonError::FailToParseMessage);
+            return Err(CommonError::CodecError);
         };
         let user_token_bytes = value.copy_to_bytes(user_token_length as usize);
         let user_token = match String::from_utf8(user_token_bytes.to_vec()) {
             Ok(v) => v,
             Err(e) => {
                 error!("Fail to parse message because of error: {:#?}", e);
-                return Err(CommonError::FailToParseMessage);
+                return Err(CommonError::CodecError);
             }
         };
         let payload_encryption_type: PayloadEncryptionType = match (&mut value).try_into() {
             Ok(v) => v,
             Err(e) => {
                 error!("Fail to parse message because of error: {:#?}", e);
-                return Err(CommonError::FailToParseMessage);
+                return Err(CommonError::CodecError);
             }
         };
         if value.remaining() < 8 {
             error!("Fail to parse message because of no remaining");
-            return Err(CommonError::FailToParseMessage);
+            return Err(CommonError::CodecError);
         };
         let payload_length = value.get_u64() as usize;
         let payload = if payload_length == 0 {
@@ -428,7 +409,7 @@ impl TryFrom<Bytes> for Message {
             Some(payload_bytes)
         } else {
             error!("Fail to parse message because of no remaining");
-            return Err(CommonError::FailToParseMessage);
+            return Err(CommonError::CodecError);
         };
         Ok(Self {
             id,
