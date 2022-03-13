@@ -34,7 +34,7 @@ impl TryFrom<&mut Bytes> for NetAddress {
         let address = match address_type {
             IPV4_TYPE => {
                 //Convert the NetAddress::IpV4
-                //A ip v6 address is 6 bytes: 4 bytes for host, 2 bytes for port
+                //A ip v4 address is 6 bytes: 4 bytes for host, 2 bytes for port
                 if value.remaining() < 6 {
                     error!("Fail to parse NetAddress(IpV4) because of not enough remaining in bytes buffer.");
                     return Err(CommonError::CodecError);
@@ -122,6 +122,7 @@ impl From<NetAddress> for Bytes {
             }
             NetAddress::Domain(addr_content, port) => {
                 result.put_u8(DOMAIN_TYPE);
+                result.put_u32(addr_content.len() as u32);
                 result.put_slice(addr_content.as_bytes());
                 result.put_u16(port);
             }
