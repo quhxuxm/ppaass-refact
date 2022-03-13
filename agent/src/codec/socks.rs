@@ -4,7 +4,7 @@ use tracing::error;
 
 use common::CommonError;
 
-use crate::protocol::socks::{
+use crate::protocol::socks::command::{
     Socks5Addr, Socks5AuthMethod, Socks5AuthRequest, Socks5AuthResponse, Socks5ConnectRequest,
     Socks5ConnectRequestType, Socks5ConnectResponse,
 };
