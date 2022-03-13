@@ -10,8 +10,8 @@ use crate::config::PROXY_SERVER_CONFIG;
 
 const LOCAL_ADDRESS: [u8; 4] = [0u8; 4];
 const SERVER_RUNTIME_THREAD_NAME: &str = "proxy-tokio-runtime";
-const DEFAULT_RUNTIME_THREAD_NUMNER: usize = 128;
-const DEFAULT_MAX_BLOCKING_THREAD_NUMNER: usize = 32;
+const DEFAULT_RUNTIME_THREAD_NUMBER: usize = 128;
+const DEFAULT_MAX_BLOCKING_THREAD_NUMBER: usize = 32;
 const DEFAULT_THREAD_KEEP_ALIVE_SECONDS: u64 = 20;
 pub struct Server {
     runtime: Runtime,
@@ -23,12 +23,12 @@ impl Server {
         runtime_builder.worker_threads(
             PROXY_SERVER_CONFIG
                 .thread_number()
-                .unwrap_or(DEFAULT_RUNTIME_THREAD_NUMNER),
+                .unwrap_or(DEFAULT_RUNTIME_THREAD_NUMBER),
         );
         runtime_builder.max_blocking_threads(
             PROXY_SERVER_CONFIG
                 .max_blocking_threads()
-                .unwrap_or(DEFAULT_MAX_BLOCKING_THREAD_NUMNER),
+                .unwrap_or(DEFAULT_MAX_BLOCKING_THREAD_NUMBER),
         );
         runtime_builder.thread_name(SERVER_RUNTIME_THREAD_NAME);
         runtime_builder.thread_keep_alive(Duration::from_secs(
