@@ -4,10 +4,8 @@ pub use message::Message;
 pub use message::MessagePayload;
 pub use message::PayloadEncryptionType;
 
-mod address;
+mod codec;
 mod crypto;
 mod error;
 mod message;
 mod util;
-mod codec;
-
