@@ -1,18 +1,13 @@
-use std::task::{Context, Poll};
-use std::time::Duration;
+use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 
-use bytes::Bytes;
-use futures_util::StreamExt;
-use tokio::net::TcpListener;
-use tokio_tower::multiplex::Server;
-use tokio_util::codec::Framed;
-use tower::timeout::Timeout;
-use tower::Service;
-use tracing::error;
+use tokio::net::{TcpListener, TcpStream};
+use tower::{service_fn, BoxError, Service, ServiceExt};
+use tracing::{error, info};
 
-use crate::codec::socks::{Socks5AuthCodec, Socks5ConnectCodec};
+use common::CommonError;
+use common::CommonError::CodecError;
+
 use crate::protocol::socks::command::{Socks5AuthMethod, Socks5AuthRequest, Socks5AuthResponse};
-use crate::protocol::socks::service::{Socks5AuthCommandService, Socks5ConnectCommandService};
 
 pub(crate) mod protocol {
     pub(crate) mod http;
@@ -23,11 +18,41 @@ pub(crate) mod codec {
     pub(crate) mod socks;
 }
 
+const SOCKS5_PROTOCOL_FLAG: u8 = 5;
+const SOCKS4_PROTOCOL_FLAG: u8 = 4;
+
+async fn handle_client_accept(
+    client: (TcpStream, SocketAddr),
+) -> Result<(TcpStream, SocketAddr), BoxError> {
+    println!("Call handle client accept for: {}", client.1);
+    Ok(client)
+}
+
 #[tokio::main]
 async fn main() {
-    let listener = TcpListener::bind("127.0.0.1:10081").await.unwrap();
+    let listener =
+        match TcpListener::bind(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), 10081)).await {
+            Err(e) => {
+                panic!("Fail to bind agent because of error: {:#?}", e);
+            }
+            Ok(listener) => {
+                info!("Success to bind agent, start listening ... ");
+                listener
+            }
+        };
+    let mut client_accept_service = service_fn(handle_client_accept);
+    let client_accept_service = client_accept_service.ready();
+    let client_accept_service = match client_accept_service.await {
+        Err(e) => {
+            panic!(
+                "Fail to create client accept service because of error: {:#?}",
+                e
+            );
+        }
+        Ok(s) => s,
+    };
     loop {
-        let (mut client_stream, client_address) = match listener.accept().await {
+        let (client_stream, client_address) = match listener.accept().await {
             Err(e) => {
                 error!(
                     "Fail to accept client connection because of error: {:#?}",
@@ -37,17 +62,55 @@ async fn main() {
             }
             Ok((client_stream, client_address)) => (client_stream, client_address),
         };
-        let auth_command_framed = Framed::new(&mut client_stream, Socks5AuthCodec);
-        let auth_command_server = Server::new(auth_command_framed, Socks5AuthCommandService);
-        auth_command_server.await;
+        let (client_stream, client_address) = match client_accept_service
+            .call((client_stream, client_address))
+            .await
+        {
+            Err(e) => {
+                error!(
+                    "Fail to accept client connection [{}] because of error: {:#?}.",
+                    client_address, e
+                );
+                continue;
+            }
+            Ok(client) => client,
+        };
 
-        let connect_command_framed = Framed::new(&mut client_stream, Socks5ConnectCodec);
-        let connect_command_server =
-            Server::new(connect_command_framed, Socks5ConnectCommandService);
-        connect_command_server.await;
+        let mut protocol_switch_buf: [u8; 1] = [0];
+        let protocol_flag = match client_stream.peek(&mut protocol_switch_buf).await {
+            Err(e) => {
+                error!(
+                    "Fail to switch client connection [{}] protocol because of error: {:#?}",
+                    client_address, e
+                );
+                continue;
+            }
+            Ok(1) => protocol_switch_buf[0],
+            Ok(_) => {
+                error!("Fail to switch client connection protocol because of no enough data");
+                continue;
+            }
+        };
+        match protocol_flag {
+            SOCKS4_PROTOCOL_FLAG => {
+                error!("Do not support socks 4 protocol.");
+                continue;
+            }
+            SOCKS5_PROTOCOL_FLAG => {
+                println!(
+                    "Handle socks 5 request for client connection [{}].",
+                    client_address
+                );
 
-        let relay_framed = Framed::new(&mut client_stream, Socks5AuthCodec);
-        let relay_server = Server::new(relay_framed, Socks5AuthCommandService);
-        relay_server.await;
+                continue;
+            }
+            _ => {
+                println!(
+                    "Handle http request for client connection [{}].",
+                    client_address
+                );
+                continue;
+            }
+        }
     }
 }
