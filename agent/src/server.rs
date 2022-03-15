@@ -7,10 +7,8 @@ use std::{
 use futures_util::Future;
 use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
-use tower::{Layer, Service, ServiceBuilder};
+use tower::{Layer, Service, ServiceBuilder, ServiceExt};
 use tracing::{error, info};
-
-use common::CommonError;
 
 use crate::service::common::{ClientConnection, HandleClientConnectionService};
 
@@ -62,19 +60,25 @@ impl AgentServer {
                 };
                 let client_connection = ClientConnection::new(client_stream, client_address);
                 let mut handle_client_connection_service = ServiceBuilder::new()
-                    // .buffer(100)
-                    // .concurrency_limit(10)
+                    .buffer(100)
+                    .concurrency_limit(10)
                     .service(HandleClientConnectionService);
-                tokio::runtim
-                handle_client_connection_service.poll_ready()
-                if let Err(e) = handle_client_connection_service
-                    .call(client_connection)
-                    .await
-                {
-                    error!(
-                        "Error happen when handle client connection [{}], error:{:#?}",
-                        client_address, e
-                    )
+                match handle_client_connection_service.ready().await {
+                    Err(e) => {
+                        error!(
+                            "Error happen when handle client connection [{}] on poll ready, error:{:#?}",
+                            client_address, e
+                        );
+                        continue;
+                    }
+                    Ok(s) => {
+                        if let Err(e) = s.call(client_connection).await {
+                            error!(
+                                "Error happen when handle client connection [{}], error:{:#?}",
+                                client_address, e
+                            )
+                        }
+                    }
                 }
             }
         });
