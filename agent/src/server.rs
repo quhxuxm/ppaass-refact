@@ -62,9 +62,11 @@ impl AgentServer {
                 };
                 let client_connection = ClientConnection::new(client_stream, client_address);
                 let mut handle_client_connection_service = ServiceBuilder::new()
-                    .buffer(100)
-                    .concurrency_limit(10)
+                    // .buffer(100)
+                    // .concurrency_limit(10)
                     .service(HandleClientConnectionService);
+                tokio::runtim
+                handle_client_connection_service.poll_ready()
                 if let Err(e) = handle_client_connection_service
                     .call(client_connection)
                     .await

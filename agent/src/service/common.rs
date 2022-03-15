@@ -29,7 +29,7 @@ impl Service<ClientConnection> for HandleClientConnectionService {
     type Future = futures_util::future::Ready<Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        todo!()
+        Poll::Ready(Ok(()))
     }
 
     fn call(&mut self, req: ClientConnection) -> Self::Future {
@@ -38,6 +38,7 @@ impl Service<ClientConnection> for HandleClientConnectionService {
             client_address,
         } = req;
         let mut protocol_buf: [u8; 1] = [0];
-        let peek_result = stream.poll_peek(protocol_buf).await;
+        let peek_result = stream.peek(&mut protocol_buf);
+        todo!()
     }
 }
