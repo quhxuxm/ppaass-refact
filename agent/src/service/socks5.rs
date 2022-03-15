@@ -2,15 +2,15 @@ use std::task::{Context, Poll};
 
 use tower::Service;
 
-use crate::protocol::socks::command::{
-    Socks5ConnectRequest, Socks5ConnectResponse, Socks5ConnectResponseStatus,
+use crate::command::socks5::{
+    Socks5AuthCommand, Socks5AuthCommandResult, Socks5AuthMethod, Socks5ConnectCommand,
+    Socks5ConnectCommandResult, Socks5ConnectCommandResultStatus,
 };
-use crate::{Socks5AuthMethod, Socks5AuthRequest, Socks5AuthResponse};
 
 pub(crate) struct Socks5AuthCommandService;
 
-impl Service<Socks5AuthRequest> for Socks5AuthCommandService {
-    type Response = Socks5AuthResponse;
+impl Service<Socks5AuthCommand> for Socks5AuthCommandService {
+    type Response = Socks5AuthCommandResult;
     type Error = ();
     type Future = futures_util::future::Ready<Result<Self::Response, Self::Error>>;
 
@@ -18,9 +18,9 @@ impl Service<Socks5AuthRequest> for Socks5AuthCommandService {
         Poll::Ready(Ok(()))
     }
 
-    fn call(&mut self, request: Socks5AuthRequest) -> Self::Future {
+    fn call(&mut self, request: Socks5AuthCommand) -> Self::Future {
         println!("Socks5 auth command: {:#?}", request);
-        futures_util::future::ok(Socks5AuthResponse::new(
+        futures_util::future::ok(Socks5AuthCommandResult::new(
             Socks5AuthMethod::NoAuthenticationRequired,
         ))
     }
@@ -28,8 +28,8 @@ impl Service<Socks5AuthRequest> for Socks5AuthCommandService {
 
 pub(crate) struct Socks5ConnectCommandService;
 
-impl Service<Socks5ConnectRequest> for Socks5ConnectCommandService {
-    type Response = Socks5ConnectResponse;
+impl Service<Socks5ConnectCommand> for Socks5ConnectCommandService {
+    type Response = Socks5ConnectCommandResult;
     type Error = ();
     type Future = futures_util::future::Ready<Result<Self::Response, Self::Error>>;
 
@@ -37,10 +37,10 @@ impl Service<Socks5ConnectRequest> for Socks5ConnectCommandService {
         Poll::Ready(Ok(()))
     }
 
-    fn call(&mut self, request: Socks5ConnectRequest) -> Self::Future {
+    fn call(&mut self, request: Socks5ConnectCommand) -> Self::Future {
         println!("Socks5 connect command: {:#?}", request);
-        futures_util::future::ok(Socks5ConnectResponse::new(
-            Socks5ConnectResponseStatus::Succeeded,
+        futures_util::future::ok(Socks5ConnectCommandResult::new(
+            Socks5ConnectCommandResultStatus::Succeeded,
             None,
         ))
     }

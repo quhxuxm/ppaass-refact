@@ -14,3 +14,4 @@ tower = { version = "0.4.12", features = ["full"] }
 bytes = "1.1.0"
 tokio-util = { version = "0.7.0", features = ["codec"] }
 futures-util = "0.3.21"
+anyhow = "1.0.55"

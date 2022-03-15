@@ -43,19 +43,19 @@ impl From<Socks5AuthMethod> for u8 {
 }
 
 #[derive(Debug)]
-pub(crate) enum Socks5ConnectRequestType {
+pub(crate) enum Socks5ConnectCommandType {
     Connect,
     Bind,
     UdpAssociate,
 }
 
-impl TryFrom<u8> for Socks5ConnectRequestType {
+impl TryFrom<u8> for Socks5ConnectCommandType {
     type Error = CommonError;
     fn try_from(v: u8) -> Result<Self, CommonError> {
         match v {
-            1 => Ok(Socks5ConnectRequestType::Connect),
-            2 => Ok(Socks5ConnectRequestType::Bind),
-            3 => Ok(Socks5ConnectRequestType::UdpAssociate),
+            1 => Ok(Socks5ConnectCommandType::Connect),
+            2 => Ok(Socks5ConnectCommandType::Bind),
+            3 => Ok(Socks5ConnectCommandType::UdpAssociate),
             unknown_type => {
                 error!(
                     "Fail to decode socks 5 connect request type: {}",
@@ -68,7 +68,7 @@ impl TryFrom<u8> for Socks5ConnectRequestType {
 }
 
 #[derive(Debug)]
-pub(crate) enum Socks5ConnectResponseStatus {
+pub(crate) enum Socks5ConnectCommandResultStatus {
     Succeeded,
     Failure,
     ConnectionNotAllowedByRuleSet,
@@ -81,43 +81,43 @@ pub(crate) enum Socks5ConnectResponseStatus {
     Unassigned,
 }
 
-impl From<u8> for Socks5ConnectResponseStatus {
+impl From<u8> for Socks5ConnectCommandResultStatus {
     fn from(v: u8) -> Self {
         match v {
-            0 => Socks5ConnectResponseStatus::Succeeded,
-            1 => Socks5ConnectResponseStatus::Failure,
-            2 => Socks5ConnectResponseStatus::ConnectionNotAllowedByRuleSet,
-            3 => Socks5ConnectResponseStatus::NetworkUnReachable,
-            4 => Socks5ConnectResponseStatus::HostUnReachable,
-            5 => Socks5ConnectResponseStatus::ConnectionRefused,
-            6 => Socks5ConnectResponseStatus::TtlExpired,
-            7 => Socks5ConnectResponseStatus::CommandNotSupported,
-            8 => Socks5ConnectResponseStatus::AddressTypeNotSupported,
-            9 => Socks5ConnectResponseStatus::Unassigned,
+            0 => Socks5ConnectCommandResultStatus::Succeeded,
+            1 => Socks5ConnectCommandResultStatus::Failure,
+            2 => Socks5ConnectCommandResultStatus::ConnectionNotAllowedByRuleSet,
+            3 => Socks5ConnectCommandResultStatus::NetworkUnReachable,
+            4 => Socks5ConnectCommandResultStatus::HostUnReachable,
+            5 => Socks5ConnectCommandResultStatus::ConnectionRefused,
+            6 => Socks5ConnectCommandResultStatus::TtlExpired,
+            7 => Socks5ConnectCommandResultStatus::CommandNotSupported,
+            8 => Socks5ConnectCommandResultStatus::AddressTypeNotSupported,
+            9 => Socks5ConnectCommandResultStatus::Unassigned,
             unknown_status => {
                 error!(
                     "Fail to decode socks 5 connect response status: {}",
                     unknown_status
                 );
-                Socks5ConnectResponseStatus::Failure
+                Socks5ConnectCommandResultStatus::Failure
             }
         }
     }
 }
 
-impl From<Socks5ConnectResponseStatus> for u8 {
-    fn from(value: Socks5ConnectResponseStatus) -> Self {
+impl From<Socks5ConnectCommandResultStatus> for u8 {
+    fn from(value: Socks5ConnectCommandResultStatus) -> Self {
         match value {
-            Socks5ConnectResponseStatus::Succeeded => 0,
-            Socks5ConnectResponseStatus::Failure => 1,
-            Socks5ConnectResponseStatus::ConnectionNotAllowedByRuleSet => 2,
-            Socks5ConnectResponseStatus::NetworkUnReachable => 3,
-            Socks5ConnectResponseStatus::HostUnReachable => 4,
-            Socks5ConnectResponseStatus::ConnectionRefused => 5,
-            Socks5ConnectResponseStatus::TtlExpired => 6,
-            Socks5ConnectResponseStatus::CommandNotSupported => 7,
-            Socks5ConnectResponseStatus::AddressTypeNotSupported => 8,
-            Socks5ConnectResponseStatus::Unassigned => 9,
+            Socks5ConnectCommandResultStatus::Succeeded => 0,
+            Socks5ConnectCommandResultStatus::Failure => 1,
+            Socks5ConnectCommandResultStatus::ConnectionNotAllowedByRuleSet => 2,
+            Socks5ConnectCommandResultStatus::NetworkUnReachable => 3,
+            Socks5ConnectCommandResultStatus::HostUnReachable => 4,
+            Socks5ConnectCommandResultStatus::ConnectionRefused => 5,
+            Socks5ConnectCommandResultStatus::TtlExpired => 6,
+            Socks5ConnectCommandResultStatus::CommandNotSupported => 7,
+            Socks5ConnectCommandResultStatus::AddressTypeNotSupported => 8,
+            Socks5ConnectCommandResultStatus::Unassigned => 9,
         }
     }
 }
@@ -237,15 +237,15 @@ impl From<Socks5Addr> for Bytes {
 }
 
 #[derive(Debug)]
-pub(crate) struct Socks5AuthRequest {
+pub(crate) struct Socks5AuthCommand {
     pub version: u8,
     pub method_number: u8,
     pub methods: Vec<Socks5AuthMethod>,
 }
 
-impl Socks5AuthRequest {
+impl Socks5AuthCommand {
     pub fn new(method_number: u8, methods: Vec<Socks5AuthMethod>) -> Self {
-        Socks5AuthRequest {
+        Socks5AuthCommand {
             version: 5,
             method_number,
             methods,
@@ -254,14 +254,14 @@ impl Socks5AuthRequest {
 }
 
 #[derive(Debug)]
-pub(crate) struct Socks5AuthResponse {
+pub(crate) struct Socks5AuthCommandResult {
     pub version: u8,
     pub method: Socks5AuthMethod,
 }
 
-impl Socks5AuthResponse {
+impl Socks5AuthCommandResult {
     pub fn new(method: Socks5AuthMethod) -> Self {
-        Socks5AuthResponse {
+        Socks5AuthCommandResult {
             version: 5u8,
             method,
         }
@@ -269,20 +269,20 @@ impl Socks5AuthResponse {
 }
 
 #[derive(Debug)]
-pub(crate) struct Socks5ConnectRequest {
+pub(crate) struct Socks5ConnectCommand {
     pub version: u8,
-    pub request_type: Socks5ConnectRequestType,
+    pub request_type: Socks5ConnectCommandType,
     pub source_address: Socks5Addr,
     pub dest_address: Socks5Addr,
 }
 
-impl Socks5ConnectRequest {
+impl Socks5ConnectCommand {
     pub fn new(
-        request_type: Socks5ConnectRequestType,
+        request_type: Socks5ConnectCommandType,
         source_address: Socks5Addr,
         dest_address: Socks5Addr,
     ) -> Self {
-        Socks5ConnectRequest {
+        Socks5ConnectCommand {
             version: 5,
             request_type,
             source_address,
@@ -292,22 +292,21 @@ impl Socks5ConnectRequest {
 }
 
 #[derive(Debug)]
-pub(crate) struct Socks5ConnectResponse {
+pub(crate) struct Socks5ConnectCommandResult {
     pub version: u8,
-    pub status: Socks5ConnectResponseStatus,
+    pub status: Socks5ConnectCommandResultStatus,
     pub bind_address: Option<Socks5Addr>,
 }
 
-impl Socks5ConnectResponse {
-    pub fn new(status: Socks5ConnectResponseStatus, bind_address: Option<Socks5Addr>) -> Self {
-        Socks5ConnectResponse {
+impl Socks5ConnectCommandResult {
+    pub fn new(status: Socks5ConnectCommandResultStatus, bind_address: Option<Socks5Addr>) -> Self {
+        Socks5ConnectCommandResult {
             version: 5,
             status,
             bind_address,
         }
     }
 }
-
 /////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////
