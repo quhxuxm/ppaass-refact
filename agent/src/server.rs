@@ -1,16 +1,11 @@
-use std::{
-    net::{Ipv4Addr, SocketAddrV4},
-    pin::Pin,
-    process::Command,
-};
+use std::net::{Ipv4Addr, SocketAddrV4};
 
-use futures_util::Future;
 use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
 use tower::{Service, ServiceBuilder, ServiceExt};
 use tracing::{error, info};
 
-use crate::service::common::{ClientConnection, HandleClientConnectionService};
+use crate::service::common::{ClientConnectionInfo, HandleClientConnectionService};
 
 pub(crate) struct AgentServer {
     runtime: Runtime,
@@ -61,7 +56,6 @@ impl AgentServer {
                     }
                     Ok((client_stream, client_address)) => (client_stream, client_address),
                 };
-                let client_connection = ClientConnection::new(client_stream, client_address);
                 match handle_client_connection_service.ready().await {
                     Err(e) => {
                         error!(
@@ -71,7 +65,9 @@ impl AgentServer {
                         continue;
                     }
                     Ok(s) => {
-                        if let Err(e) = s.call(client_connection).await {
+                        if let Err(e) = s.call(ClientConnectionInfo{
+                            client_stream, client_address
+                        }).await {
                             error!(
                                 "Error happen when handle client connection [{}], error:{:#?}",
                                 client_address, e

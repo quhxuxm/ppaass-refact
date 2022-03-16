@@ -129,6 +129,37 @@ pub(crate) enum Socks5Addr {
     Domain(String, u16),
 }
 
+impl ToString for Socks5Addr {
+    fn to_string(&self) -> String {
+        match self {
+            Self::IpV4(ip_content, port) => {
+                format!(
+                    "{}.{}.{}.{}:{}",
+                    ip_content[0], ip_content[1], ip_content[2], ip_content[3], port
+                )
+            }
+            Self::IpV6(ip_content, port) => {
+                let mut ip_content_bytes = Bytes::from(ip_content.to_vec());
+                format!(
+                    "{:x}:{:x}:{:x}:{:x}:{:x}:{:x}:{:x}:{:x}:{}",
+                    ip_content_bytes.get_u16(),
+                    ip_content_bytes.get_u16(),
+                    ip_content_bytes.get_u16(),
+                    ip_content_bytes.get_u16(),
+                    ip_content_bytes.get_u16(),
+                    ip_content_bytes.get_u16(),
+                    ip_content_bytes.get_u16(),
+                    ip_content_bytes.get_u16(),
+                    port
+                )
+            }
+            Self::Domain(host, port) => {
+                format!("{}:{}", host, port)
+            }
+        }
+    }
+}
+
 impl TryFrom<&mut Bytes> for Socks5Addr {
     type Error = CommonError;
     fn try_from(value: &mut Bytes) -> Result<Self, Self::Error> {

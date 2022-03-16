@@ -1,20 +1,26 @@
+use std::net::SocketAddr;
 use std::task::{Context, Poll};
 
 use futures_util::future::BoxFuture;
+use tokio::net::TcpStream;
 use tower::Service;
 
 use common::CommonError;
 
-use crate::command::socks5::{
-    Socks5ConnectCommand, Socks5ConnectCommandResult, Socks5ConnectCommandResultStatus,
-};
-use crate::service::common::ClientConnection;
+pub(crate) struct Socks5RelayFlowRequest {
+    pub client_stream: TcpStream,
+    pub client_address: SocketAddr,
+}
 
+pub(crate) struct Socks5RelayFlowResult {
+    pub client_stream: TcpStream,
+    pub client_address: SocketAddr,
+}
 #[derive(Clone)]
 pub(crate) struct Socks5RelayService;
 
-impl Service<ClientConnection> for Socks5RelayService {
-    type Response = ClientConnection;
+impl Service<Socks5RelayFlowRequest> for Socks5RelayService {
+    type Response = Socks5RelayFlowResult;
     type Error = CommonError;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
@@ -22,8 +28,7 @@ impl Service<ClientConnection> for Socks5RelayService {
         Poll::Ready(Ok(()))
     }
 
-    fn call(&mut self, request: ClientConnection) -> Self::Future {
-        println!("Socks5 connect command: {:#?}", request);
+    fn call(&mut self, request: Socks5RelayFlowRequest) -> Self::Future {
         todo!()
     }
 }
