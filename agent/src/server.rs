@@ -7,7 +7,7 @@ use std::{
 use futures_util::Future;
 use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
-use tower::{Layer, Service, ServiceBuilder, ServiceExt};
+use tower::{Service, ServiceBuilder, ServiceExt};
 use tracing::{error, info};
 
 use crate::service::common::{ClientConnection, HandleClientConnectionService};
@@ -46,7 +46,10 @@ impl AgentServer {
                     listener
                 }
             };
-
+            let mut handle_client_connection_service = ServiceBuilder::new()
+                .buffer(100)
+                .concurrency_limit(10)
+                .service(HandleClientConnectionService::new());
             loop {
                 let (client_stream, client_address) = match listener.accept().await {
                     Err(e) => {
@@ -59,10 +62,6 @@ impl AgentServer {
                     Ok((client_stream, client_address)) => (client_stream, client_address),
                 };
                 let client_connection = ClientConnection::new(client_stream, client_address);
-                let mut handle_client_connection_service = ServiceBuilder::new()
-                    .buffer(100)
-                    .concurrency_limit(10)
-                    .service(HandleClientConnectionService);
                 match handle_client_connection_service.ready().await {
                     Err(e) => {
                         error!(
