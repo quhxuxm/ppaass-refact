@@ -16,6 +16,8 @@ pub(crate) mod codec {
 
 pub(crate) mod service;
 
+pub(crate) mod config;
+
 fn main() -> Result<()> {
     let agent_server = AgentServer::new();
     agent_server.run();

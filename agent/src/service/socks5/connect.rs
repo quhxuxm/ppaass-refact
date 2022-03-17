@@ -5,14 +5,13 @@ use futures_util::future::BoxFuture;
 use futures_util::{SinkExt, StreamExt};
 use tokio::net::TcpStream;
 use tokio_util::codec::Framed;
-use tower::Service;
+use tower::{Service, ServiceExt};
 
 use common::CommonError;
 
 use crate::codec::socks5::Socks5ConnectCodec;
-use crate::command::socks5::{
-    Socks5ConnectCommandResult, Socks5ConnectCommandResultStatus, Socks5ConnectCommandType,
-};
+use crate::command::socks5::Socks5ConnectCommandType;
+use crate::service::common::ConnectToProxyService;
 
 #[derive(Debug)]
 pub(crate) struct Socks5ConnectFlowRequest {
@@ -55,9 +54,10 @@ impl Service<Socks5ConnectFlowRequest> for Socks5ConnectCommandService {
             println!("Socks 5 connect: {:#?}", connect_command);
             let connect_command_type = connect_command.request_type;
 
-            let proxy_stream = match connect_command_type {
+            let connect_to_proxy_response = match connect_command_type {
                 Socks5ConnectCommandType::Connect => {
-                    TcpStream::connect(connect_command.dest_address.to_string()).await?
+                    let mut connect_to_proxy_service = ConnectToProxyService::new(3);
+                    connect_to_proxy_service.ready().await?.call(()).await?
                 }
                 Socks5ConnectCommandType::Bind => {
                     todo!()
@@ -66,13 +66,14 @@ impl Service<Socks5ConnectFlowRequest> for Socks5ConnectCommandService {
                     todo!()
                 }
             };
-            let connect_result =
-                Socks5ConnectCommandResult::new(Socks5ConnectCommandResultStatus::Succeeded);
-            framed.send(connect_result).await?;
-            Ok(Socks5ConnectFlowResult {
-                client_stream: request.client_stream,
-                client_address: request.client_address,
-            })
+            // let connect_result =
+            //     Socks5ConnectCommandResult::new(Socks5ConnectCommandResultStatus::Succeeded);
+            // framed.send(connect_result).await?;
+            // Ok(Socks5ConnectFlowResult {
+            //     client_stream: request.client_stream,
+            //     client_address: request.client_address,
+            // })
+            todo!()
         })
     }
 }

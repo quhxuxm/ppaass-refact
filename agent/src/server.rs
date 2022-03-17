@@ -5,7 +5,10 @@ use tokio::runtime::Runtime;
 use tower::{Service, ServiceBuilder, ServiceExt};
 use tracing::{error, info};
 
+use crate::config::SERVER_CONFIG;
 use crate::service::common::{ClientConnectionInfo, HandleClientConnectionService};
+
+const DEFAULT_SERVER_PORT: u16 = 10080;
 
 pub(crate) struct AgentServer {
     runtime: Runtime,
@@ -29,7 +32,7 @@ impl AgentServer {
         self.runtime.block_on(async {
             let listener = match TcpListener::bind(SocketAddrV4::new(
                 Ipv4Addr::new(0, 0, 0, 0),
-                10081,
+                SERVER_CONFIG.port().unwrap_or(DEFAULT_SERVER_PORT)
             ))
             .await
             {

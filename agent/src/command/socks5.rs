@@ -303,20 +303,14 @@ impl Socks5AuthCommandResult {
 pub(crate) struct Socks5ConnectCommand {
     pub version: u8,
     pub request_type: Socks5ConnectCommandType,
-    pub source_address: Socks5Addr,
     pub dest_address: Socks5Addr,
 }
 
 impl Socks5ConnectCommand {
-    pub fn new(
-        request_type: Socks5ConnectCommandType,
-        source_address: Socks5Addr,
-        dest_address: Socks5Addr,
-    ) -> Self {
+    pub fn new(request_type: Socks5ConnectCommandType, dest_address: Socks5Addr) -> Self {
         Socks5ConnectCommand {
             version: 5,
             request_type,
-            source_address,
             dest_address,
         }
     }

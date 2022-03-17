@@ -14,5 +14,8 @@ tower = { version = "0.4.12", features = ["full"] }
 bytes = "1.1.0"
 tokio-util = { version = "0.7.0", features = ["codec"] }
 futures-util = { version = "0.3.21", features = ["sink"] }
-
+serde = "1.0.136"
+serde_derive = "1.0.136"
+toml = "0.5.8"
 anyhow = "1.0.55"
+lazy_static = "1.4.0"
