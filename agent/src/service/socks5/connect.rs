@@ -18,6 +18,8 @@ use crate::command::socks5::{
 use crate::service::common::{ConnectToProxyRequest, ConnectToProxyService};
 use crate::SERVER_CONFIG;
 
+const DEFAULT_RETRY_TIMES: u16 = 3;
+
 #[derive(Debug)]
 pub(crate) struct Socks5ConnectFlowRequest {
     pub client_stream: TcpStream,
@@ -75,7 +77,9 @@ impl Service<Socks5ConnectFlowRequest> for Socks5ConnectCommandService {
             let connect_to_proxy_response = match connect_command_type {
                 Socks5ConnectCommandType::Connect => {
                     let mut connect_to_proxy_service = ConnectToProxyService::new(
-                        SERVER_CONFIG.proxy_connection_retry().unwrap_or(3),
+                        SERVER_CONFIG
+                            .proxy_connection_retry()
+                            .unwrap_or(DEFAULT_RETRY_TIMES),
                     );
                     let connect_to_proxy_service_ready = match connect_to_proxy_service
                         .ready()
