@@ -14,8 +14,8 @@ use tracing::{debug, error};
 use common::CommonError;
 
 use crate::config::SERVER_CONFIG;
-use crate::service::http::flow::{HttpFlowRequest, HttpFlowResult, HttpFlowService};
-use crate::service::socks5::flow::{Socks5FlowRequest, Socks5FlowResult, Socks5FlowService};
+use crate::service::http::{HttpFlowRequest, HttpFlowResult, HttpFlowService};
+use crate::service::socks5::{Socks5FlowRequest, Socks5FlowResult, Socks5FlowService};
 
 const SOCKS5_PROTOCOL_FLAG: u8 = 5;
 const SOCKS4_PROTOCOL_FLAG: u8 = 4;

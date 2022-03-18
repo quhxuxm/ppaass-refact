@@ -6,7 +6,7 @@ use tower::{Service, ServiceBuilder, ServiceExt};
 use tracing::{error, info};
 
 use crate::config::SERVER_CONFIG;
-use crate::service::common::{ClientConnectionInfo, HandleClientConnectionService};
+use crate::service::{AgentConnectionInfo, HandleAgentConnectionService};
 
 const DEFAULT_SERVER_PORT: u16 = 80;
 
@@ -51,7 +51,7 @@ impl ProxyServer {
             let mut handle_agent_connection_service = ServiceBuilder::new()
                 .buffer(100)
                 .concurrency_limit(10)
-                .service(HandleClientConnectionService::new());
+                .service(HandleAgentConnectionService::new());
             loop {
                 let (agent_stream, agent_address) = match listener.accept().await {
                     Err(e) => {
@@ -63,21 +63,21 @@ impl ProxyServer {
                     }
                     Ok((agent_stream, agent_address)) => (agent_stream, agent_address),
                 };
-                match handle_client_connection_service.ready().await {
+                match handle_agent_connection_service.ready().await {
                     Err(e) => {
                         error!(
-                            "Error happen when handle client connection [{}] on poll ready, error:{:#?}",
-                            client_address, e
+                            "Error happen when handle agent connection [{}] on poll ready, error:{:#?}",
+                            agent_address, e
                         );
                         continue;
                     }
                     Ok(s) => {
-                        if let Err(e) = s.call(ClientConnectionInfo{
-                            client_stream, client_address
+                        if let Err(e) = s.call(AgentConnectionInfo{
+                            agent_stream, agent_address
                         }).await {
                             error!(
-                                "Error happen when handle client connection [{}], error:{:#?}",
-                                client_address, e
+                                "Error happen when handle agent connection [{}], error:{:#?}",
+                                agent_address, e
                             )
                         }
                     }
