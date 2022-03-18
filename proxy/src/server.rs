@@ -8,22 +8,22 @@ use tracing::{error, info};
 use crate::config::SERVER_CONFIG;
 use crate::service::common::{ClientConnectionInfo, HandleClientConnectionService};
 
-const DEFAULT_SERVER_PORT: u16 = 10080;
+const DEFAULT_SERVER_PORT: u16 = 80;
 
-pub(crate) struct AgentServer {
+pub(crate) struct ProxyServer {
     runtime: Runtime,
 }
 
-impl AgentServer {
+impl ProxyServer {
     pub(crate) fn new() -> Self {
         let runtime = match tokio::runtime::Runtime::new() {
             Err(e) => {
                 error!(
-                    "Fail to create agent server runtime because of error: {:#?}",
+                    "Fail to create proxy server runtime because of error: {:#?}",
                     e
                 );
                 panic!(
-                    "Fail to create agent server runtime because of error: {:#?}",
+                    "Fail to create proxy server runtime because of error: {:#?}",
                     e
                 );
             }
@@ -41,19 +41,19 @@ impl AgentServer {
             .await
             {
                 Err(e) => {
-                    panic!("Fail to bind agent server port because of error: {:#?}", e);
+                    panic!("Fail to bind proxy server port because of error: {:#?}", e);
                 }
                 Ok(listener) => {
-                    info!("Success to bind agent server port, start listening ... ");
+                    info!("Success to bind proxy server port, start listening ... ");
                     listener
                 }
             };
-            let mut handle_client_connection_service = ServiceBuilder::new()
+            let mut handle_agent_connection_service = ServiceBuilder::new()
                 .buffer(100)
                 .concurrency_limit(10)
                 .service(HandleClientConnectionService::new());
             loop {
-                let (client_stream, client_address) = match listener.accept().await {
+                let (agent_stream, agent_address) = match listener.accept().await {
                     Err(e) => {
                         error!(
                             "Fail to accept client connection because of error: {:#?}",
@@ -61,7 +61,7 @@ impl AgentServer {
                         );
                         continue;
                     }
-                    Ok((client_stream, client_address)) => (client_stream, client_address),
+                    Ok((agent_stream, agent_address)) => (agent_stream, agent_address),
                 };
                 match handle_client_connection_service.ready().await {
                     Err(e) => {

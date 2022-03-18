@@ -20,18 +20,19 @@ rpath = false
 name = "ppaass-proxy"
 path = "src/main.rs"
 [dependencies]
-ppaass_common = { path = "../common", package = "common" }
+common = { path = "../common" }
 tokio = { version = "1.17.0", features = ["full"] }
-tokio-util = { version = "0.7.0", features = ["codec"] }
-thiserror = "1.0.30"
-anyhow = "1.0.51"
-futures = "0.3.21"
-serde = "1.0.132"
-serde_derive = "1.0.132"
-toml = "0.5.8"
+tokio-macros = "1.7.0"
+tracing = "0.1.32"
+tower = { version = "0.4.12", features = ["full"] }
 bytes = "1.1.0"
+tokio-util = { version = "0.7.0", features = ["codec"] }
+futures-util = { version = "0.3.21", features = ["sink"] }
+serde = "1.0.136"
+serde_derive = "1.0.136"
+toml = "0.5.8"
+anyhow = "1.0.55"
 lazy_static = "1.4.0"
-tracing = "0.1.31"
 tracing-subscriber = "0.3.9"
-tracing-appender = "0.2.0"
-chrono = "0.4.19"
+tracing-appender = "0.2.1"
+chrono="0.4.19"
