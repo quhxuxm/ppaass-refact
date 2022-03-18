@@ -7,6 +7,9 @@ use tower::Service;
 
 use common::CommonError;
 
+mod connect;
+mod relay;
+
 #[derive(Debug)]
 pub(crate) struct AgentConnectionInfo {
     pub agent_stream: TcpStream,
