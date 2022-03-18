@@ -14,7 +14,7 @@ const RSA_BIT_SIZE: usize = 2048;
 
 /// The util to do RSA encryption and decryption.
 #[derive(Debug)]
-pub(crate) struct RsaCrypto<T: Rng> {
+pub(crate) struct RsaCrypto<T: Rng + Send> {
     /// The private used to do decryption
     private_key: RsaPrivateKey,
     /// The public used to do encryption
@@ -22,7 +22,7 @@ pub(crate) struct RsaCrypto<T: Rng> {
     rng: T,
 }
 
-impl<T: Rng> RsaCrypto<T> {
+impl<T: Rng + Send> RsaCrypto<T> {
     pub fn new(
         public_key: &'static str,
         private_key: &'static str,

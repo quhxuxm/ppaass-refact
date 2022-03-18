@@ -22,6 +22,36 @@ pub enum NetAddress {
     Domain(String, u16),
 }
 
+impl ToString for NetAddress {
+    fn to_string(&self) -> String {
+        match self {
+            Self::IpV4(ip_content, port) => {
+                format!(
+                    "{}.{}.{}.{}:{}",
+                    ip_content[0], ip_content[1], ip_content[2], ip_content[3], port
+                )
+            }
+            Self::IpV6(ip_content, port) => {
+                let mut ip_content_bytes = Bytes::from(ip_content.to_vec());
+                format!(
+                    "{:x}:{:x}:{:x}:{:x}:{:x}:{:x}:{:x}:{:x}:{}",
+                    ip_content_bytes.get_u16(),
+                    ip_content_bytes.get_u16(),
+                    ip_content_bytes.get_u16(),
+                    ip_content_bytes.get_u16(),
+                    ip_content_bytes.get_u16(),
+                    ip_content_bytes.get_u16(),
+                    ip_content_bytes.get_u16(),
+                    ip_content_bytes.get_u16(),
+                    port
+                )
+            }
+            Self::Domain(host, port) => {
+                format!("{}:{}", host, port)
+            }
+        }
+    }
+}
 impl TryFrom<&mut Bytes> for NetAddress {
     type Error = CommonError;
 
@@ -325,13 +355,13 @@ impl From<PayloadEncryptionType> for Bytes {
 #[derive(Debug)]
 pub struct MessagePayload {
     /// The source address
-    source_address: NetAddress,
+    pub source_address: NetAddress,
     /// The target address
-    target_address: NetAddress,
+    pub target_address: NetAddress,
     /// The payload type
-    payload_type: PayloadType,
+    pub payload_type: PayloadType,
     /// The data
-    data: Bytes,
+    pub data: Bytes,
 }
 
 impl MessagePayload {

@@ -13,6 +13,9 @@ use common::CommonError;
 
 use crate::codec::socks5::Socks5AuthCodec;
 use crate::command::socks5::{Socks5AuthCommandResult, Socks5AuthMethod};
+use crate::SERVER_CONFIG;
+
+const DEFAULT_BUFFER_SIZE: usize = 1024 * 64;
 
 pub(crate) struct Socks5AuthenticateFlowRequest {
     pub client_stream: TcpStream,
@@ -38,8 +41,11 @@ impl Service<Socks5AuthenticateFlowRequest> for Socks5AuthCommandService {
 
     fn call(&mut self, mut request: Socks5AuthenticateFlowRequest) -> Self::Future {
         Box::pin(async move {
-            let mut framed =
-                Framed::with_capacity(&mut request.client_stream, Socks5AuthCodec, 2048);
+            let mut framed = Framed::with_capacity(
+                &mut request.client_stream,
+                Socks5AuthCodec,
+                SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
+            );
             let authenticate_command = match framed.next().await {
                 None => {
                     let authentication_result =

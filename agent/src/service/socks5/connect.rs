@@ -19,7 +19,7 @@ use crate::service::common::{ConnectToProxyRequest, ConnectToProxyService};
 use crate::SERVER_CONFIG;
 
 const DEFAULT_RETRY_TIMES: u16 = 3;
-
+const DEFAULT_BUFFER_SIZE: usize = 1024 * 64;
 #[derive(Debug)]
 pub(crate) struct Socks5ConnectFlowRequest {
     pub client_stream: TcpStream,
@@ -46,8 +46,11 @@ impl Service<Socks5ConnectFlowRequest> for Socks5ConnectCommandService {
 
     fn call(&mut self, mut request: Socks5ConnectFlowRequest) -> Self::Future {
         Box::pin(async move {
-            let mut framed =
-                Framed::with_capacity(&mut request.client_stream, Socks5ConnectCodec, 2048);
+            let mut framed = Framed::with_capacity(
+                &mut request.client_stream,
+                Socks5ConnectCodec,
+                SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
+            );
             let connect_command = match framed.next().await {
                 None => {
                     error!(

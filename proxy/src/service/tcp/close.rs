@@ -5,19 +5,12 @@ use tower::Service;
 
 use common::CommonError;
 
-pub(crate) struct RelayServiceRequest;
-pub(crate) struct RelayServiceResult;
-
-pub(crate) struct RelayService;
-
-impl RelayService {
-    pub(crate) fn new() -> Self {
-        Self {}
-    }
-}
-
-impl Service<RelayServiceRequest> for RelayService {
-    type Response = RelayServiceResult;
+pub(crate) struct TcpCloseServiceRequest;
+pub(crate) struct TcpCloseServiceResult;
+#[derive(Clone)]
+pub(crate) struct TcpCloseService;
+impl Service<TcpCloseServiceRequest> for TcpCloseService {
+    type Response = TcpCloseServiceResult;
     type Error = CommonError;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
@@ -25,7 +18,7 @@ impl Service<RelayServiceRequest> for RelayService {
         todo!()
     }
 
-    fn call(&mut self, req: RelayServiceRequest) -> Self::Future {
+    fn call(&mut self, req: TcpCloseServiceRequest) -> Self::Future {
         todo!()
     }
 }

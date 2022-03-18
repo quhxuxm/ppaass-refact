@@ -1,6 +1,6 @@
 use bytes::{Buf, Bytes, BytesMut};
 use lz4::block::{compress, decompress};
-use rand::rngs::ThreadRng;
+use rand::rngs::{OsRng, ThreadRng};
 use rand::Rng;
 use tokio_util::codec::{Decoder, Encoder, LengthDelimitedCodec};
 use tracing::{debug, error};
@@ -12,13 +12,13 @@ use crate::{CommonError, Message, PayloadEncryptionType};
 
 const LENGTH_DELIMITED_CODEC_LENGTH_FIELD_LENGTH: usize = 8;
 
-pub struct MessageCodec<T: Rng> {
+pub struct MessageCodec<T: Rng + Send> {
     rsa_crypto: RsaCrypto<T>,
     length_delimited_codec: LengthDelimitedCodec,
     compress: bool,
 }
 
-impl MessageCodec<ThreadRng> {
+impl MessageCodec<OsRng> {
     pub fn new(
         public_key: &'static str,
         private_key: &'static str,
@@ -30,7 +30,7 @@ impl MessageCodec<ThreadRng> {
         length_delimited_codec_builder
             .length_field_length(LENGTH_DELIMITED_CODEC_LENGTH_FIELD_LENGTH);
         let length_delimited_codec = length_delimited_codec_builder.new_codec();
-        let rng = rand::thread_rng();
+        let rng = OsRng;
         let rsa_crypto = RsaCrypto::new(public_key, private_key, rng);
         let rsa_crypto = match rsa_crypto {
             Ok(r) => r,
@@ -47,7 +47,7 @@ impl MessageCodec<ThreadRng> {
     }
 }
 
-impl Decoder for MessageCodec<ThreadRng> {
+impl Decoder for MessageCodec<OsRng> {
     type Item = Message;
     type Error = CommonError;
 
@@ -132,7 +132,7 @@ impl Decoder for MessageCodec<ThreadRng> {
     }
 }
 
-impl Encoder<Message> for MessageCodec<ThreadRng> {
+impl Encoder<Message> for MessageCodec<OsRng> {
     type Error = CommonError;
 
     fn encode(&mut self, original_message: Message, dst: &mut BytesMut) -> Result<(), Self::Error> {

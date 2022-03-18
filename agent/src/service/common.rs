@@ -109,11 +109,13 @@ pub(crate) struct ConnectToProxyRequest {
     pub proxy_address: Option<String>,
     pub client_address: SocketAddr,
 }
+
 #[derive(Clone)]
 struct ConcreteConnectToProxyRequest {
     proxy_address: String,
     client_address: SocketAddr,
 }
+
 pub(crate) struct ConnectToProxyResponse {
     pub proxy_stream: TcpStream,
     pub connected_proxy_address: String,
