@@ -2,7 +2,6 @@ use std::net::SocketAddr;
 use std::task::{Context, Poll};
 
 use futures_util::future::BoxFuture;
-use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::net::TcpStream;
 use tower::Service;
 
