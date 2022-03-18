@@ -31,6 +31,8 @@ pub(crate) struct Config {
     thread_timeout: Option<u64>,
     log_dir: Option<String>,
     log_file: Option<String>,
+    max_log_level: Option<String>,
+    proxy_connection_retry: Option<u16>,
     compress: Option<bool>,
 }
 
@@ -67,5 +69,13 @@ impl Config {
     }
     pub fn compress(&self) -> Option<bool> {
         self.compress
+    }
+
+    pub fn max_log_level(&self) -> &Option<String> {
+        &self.max_log_level
+    }
+
+    pub fn proxy_connection_retry(&self) -> Option<u16> {
+        self.proxy_connection_retry
     }
 }

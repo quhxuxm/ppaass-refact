@@ -18,6 +18,10 @@ impl AgentServer {
     pub(crate) fn new() -> Self {
         let runtime = match tokio::runtime::Runtime::new() {
             Err(e) => {
+                error!(
+                    "Fail to create agent server runtime because of error: {:#?}",
+                    e
+                );
                 panic!(
                     "Fail to create agent server runtime because of error: {:#?}",
                     e

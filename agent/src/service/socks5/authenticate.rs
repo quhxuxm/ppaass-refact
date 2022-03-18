@@ -1,3 +1,4 @@
+use std::io::ErrorKind;
 use std::net::SocketAddr;
 use std::task::{Context, Poll};
 
@@ -6,6 +7,7 @@ use futures_util::{SinkExt, StreamExt};
 use tokio::net::TcpStream;
 use tokio_util::codec::Framed;
 use tower::Service;
+use tracing::debug;
 
 use common::CommonError;
 
@@ -20,7 +22,7 @@ pub(crate) struct Socks5AuthenticateFlowRequest {
 pub(crate) struct Socks5AuthenticateFlowResult {
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,
-    pub auth_method: Option<Socks5AuthMethod>,
+    pub auth_method: Socks5AuthMethod,
 }
 #[derive(Clone)]
 pub(crate) struct Socks5AuthCommandService;
@@ -40,15 +42,32 @@ impl Service<Socks5AuthenticateFlowRequest> for Socks5AuthCommandService {
                 Framed::with_capacity(&mut request.client_stream, Socks5AuthCodec, 2048);
             let authenticate_command = match framed.next().await {
                 None => {
-                    return Ok(Socks5AuthenticateFlowResult {
-                        client_stream: request.client_stream,
-                        auth_method: None,
-                        client_address: request.client_address,
-                    })
+                    let authentication_result =
+                        Socks5AuthCommandResult::new(Socks5AuthMethod::NoAcceptableMethods);
+                    framed.send(authentication_result).await?;
+                    framed.flush().await?;
+                    return Err(CommonError::IoError {
+                        source: std::io::Error::new(
+                            ErrorKind::InvalidData,
+                            "No authenticate frame.",
+                        ),
+                    });
                 }
-                Some(v) => v?,
+                Some(v) => match v {
+                    Ok(v) => v,
+                    Err(e) => {
+                        let authentication_result =
+                            Socks5AuthCommandResult::new(Socks5AuthMethod::NoAcceptableMethods);
+                        framed.send(authentication_result).await?;
+                        framed.flush().await?;
+                        return Err(e);
+                    }
+                },
             };
-            println!("Socks 5 authenticate: {:#?}", authenticate_command);
+            debug!(
+                "Client {} start socks 5 authenticate: {:#?}",
+                request.client_address, authenticate_command
+            );
             let authentication_result =
                 Socks5AuthCommandResult::new(Socks5AuthMethod::NoAuthenticationRequired);
             framed.send(authentication_result).await?;
@@ -56,7 +75,7 @@ impl Service<Socks5AuthenticateFlowRequest> for Socks5AuthCommandService {
             Ok(Socks5AuthenticateFlowResult {
                 client_stream: request.client_stream,
                 client_address: request.client_address,
-                auth_method: Some(Socks5AuthMethod::NoAuthenticationRequired),
+                auth_method: Socks5AuthMethod::NoAuthenticationRequired,
             })
         })
     }
