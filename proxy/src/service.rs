@@ -1,14 +1,9 @@
 use std::net::SocketAddr;
-use std::sync::Arc;
 use std::task::{Context, Poll};
 
 use futures_util::future::BoxFuture;
-use futures_util::stream::{SplitSink, SplitStream};
 use futures_util::{future, SinkExt, StreamExt};
-use rand::rngs::OsRng;
-use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpStream;
-use tokio_util::codec::Framed;
 use tower::retry::{Policy, Retry};
 use tower::util::BoxCloneService;
 use tower::{service_fn, Service, ServiceExt};
@@ -21,7 +16,6 @@ use common::{
 };
 
 use crate::config::{AGENT_PUBLIC_KEY, PROXY_PRIVATE_KEY};
-use crate::service::tcp::close::{TcpCloseService, TcpCloseServiceRequest, TcpCloseServiceResult};
 use crate::service::tcp::connect::{
     TcpConnectService, TcpConnectServiceRequest, TcpConnectServiceResult,
 };
