@@ -1,3 +1,4 @@
+extern crate core;
 use std::str::FromStr;
 
 use anyhow::Result;
@@ -10,6 +11,7 @@ use tracing_subscriber::fmt::time::FormatTime;
 use crate::config::SERVER_CONFIG;
 use crate::server::ProxyServer;
 
+pub(crate) mod common;
 pub(crate) mod config;
 pub(crate) mod server;
 pub(crate) mod service;

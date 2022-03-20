@@ -12,7 +12,7 @@ const IPV6_TYPE: u8 = 1;
 const DOMAIN_TYPE: u8 = 2;
 
 /// The net address
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum NetAddress {
     /// Ip v4 net address
     IpV4([u8; 4], u16),

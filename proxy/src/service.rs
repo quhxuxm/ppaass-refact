@@ -1,4 +1,5 @@
 use std::net::SocketAddr;
+use std::sync::Arc;
 use std::task::{Context, Poll};
 
 use futures_util::future::BoxFuture;
@@ -103,9 +104,14 @@ impl Service<AgentConnectionInfo> for HandleAgentConnectionService {
                 .ready()
                 .await?
                 .call(TcpRelayServiceRequest {
-                    agent_stream: tcp_connect_result.agent_stream,
+                    message_frame_read: tcp_connect_result.message_frame_read,
+                    message_frame_write: tcp_connect_result.message_frame_write,
                     agent_address: req.agent_address,
                     target_stream: tcp_connect_result.target_stream,
+                    source_address: tcp_connect_result.source_address,
+                    target_address: tcp_connect_result.target_address,
+                    user_token: tcp_connect_result.user_token,
+                    agent_tcp_connect_message_id: tcp_connect_result.agent_tcp_connect_message_id,
                 })
                 .await?;
             Ok(())
@@ -119,17 +125,17 @@ pub(crate) struct ReadAgentMessageServiceRequest {
 }
 
 pub(crate) struct ReadAgentMessageServiceResult {
-    pub agent_message_payload: Option<MessagePayload>,
+    pub agent_message_payload: MessagePayload,
     pub message_frame_read: MessageFrameRead,
-    pub user_token: Option<String>,
-    pub message_id: Option<String>,
+    pub user_token: String,
+    pub message_id: String,
 }
 
 #[derive(Clone)]
 pub(crate) struct ReadAgentMessageService;
 
 impl Service<ReadAgentMessageServiceRequest> for ReadAgentMessageService {
-    type Response = ReadAgentMessageServiceResult;
+    type Response = Option<ReadAgentMessageServiceResult>;
     type Error = CommonError;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
@@ -142,11 +148,7 @@ impl Service<ReadAgentMessageServiceRequest> for ReadAgentMessageService {
             let agent_message = match req.message_frame_read.next().await {
                 None => {
                     debug!("Agent {}, no message any more.", req.agent_address);
-                    return Ok(ReadAgentMessageServiceResult {
-                        agent_message_payload: None,
-                        message_frame_read: req.message_frame_read,
-                        user_token:
-                    });
+                    return Ok(None);
                 }
                 Some(v) => match v {
                     Ok(v) => v,
@@ -165,10 +167,7 @@ impl Service<ReadAgentMessageServiceRequest> for ReadAgentMessageService {
                         "Agent {}, no payload in the agent message.",
                         req.agent_address
                     );
-                    return Ok(ReadAgentMessageServiceResult {
-                        agent_message_payload: None,
-                        message_frame_read: req.message_frame_read,
-                    });
+                    return Ok(None);
                 }
                 Some(payload_bytes) => match payload_bytes.try_into() {
                     Ok(v) => v,
@@ -191,10 +190,12 @@ impl Service<ReadAgentMessageServiceRequest> for ReadAgentMessageService {
                     return Err(CommonError::CodecError);
                 }
             };
-            Ok(ReadAgentMessageServiceResult {
-                agent_message_payload: Some(payload),
+            Ok(Some(ReadAgentMessageServiceResult {
+                agent_message_payload: payload,
                 message_frame_read: req.message_frame_read,
-            })
+                user_token: agent_message.user_token,
+                message_id: agent_message.id,
+            }))
         })
     }
 }

@@ -4,6 +4,7 @@ pub use error::CommonError;
 pub use message::AgentMessagePayloadTypeValue;
 pub use message::Message;
 pub use message::MessagePayload;
+pub use message::NetAddress;
 pub use message::PayloadEncryptionType;
 pub use message::PayloadType;
 pub use message::ProxyMessagePayloadTypeValue;
