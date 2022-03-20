@@ -2,7 +2,10 @@ use std::net::SocketAddr;
 use std::task::{Context, Poll};
 
 use futures_util::future::BoxFuture;
-use futures_util::{future, StreamExt};
+use futures_util::stream::{SplitSink, SplitStream};
+use futures_util::{future, SinkExt, StreamExt};
+use rand::rngs::OsRng;
+use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpStream;
 use tokio_util::codec::Framed;
 use tower::retry::{Policy, Retry};
@@ -11,7 +14,9 @@ use tower::{service_fn, Service, ServiceExt};
 use tracing::{debug, error};
 
 use common::{
-    AgentMessagePayloadTypeValue, CommonError, MessageCodec, MessagePayload, PayloadType,
+    generate_uuid, AgentMessagePayloadTypeValue, CommonError, Message, MessageCodec,
+    MessageFrameRead, MessageFrameWrite, MessagePayload, PayloadEncryptionType, PayloadType,
+    PrepareMessageFramedResult, PrepareMessageFramedService,
 };
 
 use crate::config::{AGENT_PUBLIC_KEY, PROXY_PRIVATE_KEY};
@@ -37,6 +42,8 @@ pub(crate) struct AgentConnectionInfo {
 }
 
 pub(crate) struct HandleAgentConnectionService {
+    prepare_message_frame_service:
+        BoxCloneService<TcpStream, PrepareMessageFramedResult, CommonError>,
     tcp_connect_service:
         BoxCloneService<TcpConnectServiceRequest, TcpConnectServiceResult, CommonError>,
     tcp_relay_service: BoxCloneService<TcpRelayServiceRequest, TcpRelayServiceResult, CommonError>,
@@ -47,7 +54,15 @@ pub(crate) struct HandleAgentConnectionService {
 
 impl HandleAgentConnectionService {
     pub(crate) fn new() -> Self {
+        let agent_public_key = &(*AGENT_PUBLIC_KEY);
+        let proxy_private_key = &(*PROXY_PRIVATE_KEY);
         Self {
+            prepare_message_frame_service: BoxCloneService::new(PrepareMessageFramedService::new(
+                agent_public_key,
+                proxy_private_key,
+                SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
+                SERVER_CONFIG.compress().unwrap_or(true),
+            )),
             tcp_connect_service: BoxCloneService::new(TcpConnectService::new()),
             tcp_relay_service: BoxCloneService::new(TcpRelayService::new()),
             udp_associate_service: BoxCloneService::new(UdpAssociateService),
@@ -66,14 +81,21 @@ impl Service<AgentConnectionInfo> for HandleAgentConnectionService {
     }
 
     fn call(&mut self, mut req: AgentConnectionInfo) -> Self::Future {
+        let mut prepare_message_frame_service = self.prepare_message_frame_service.clone();
         let mut tcp_connect_service = self.tcp_connect_service.clone();
         let mut tcp_relay_service = self.tcp_relay_service.clone();
         Box::pin(async move {
+            let framed_result = prepare_message_frame_service
+                .ready()
+                .await?
+                .call(req.agent_stream)
+                .await?;
             let tcp_connect_result = tcp_connect_service
                 .ready()
                 .await?
                 .call(TcpConnectServiceRequest {
-                    agent_stream: req.agent_stream,
+                    message_frame_read: framed_result.stream,
+                    message_frame_write: framed_result.sink,
                     agent_address: req.agent_address,
                 })
                 .await?;
@@ -92,13 +114,15 @@ impl Service<AgentConnectionInfo> for HandleAgentConnectionService {
 }
 
 pub(crate) struct ReadAgentMessageServiceRequest {
-    pub agent_stream: TcpStream,
+    pub message_frame_read: MessageFrameRead,
     pub agent_address: SocketAddr,
 }
 
-pub(crate) struct ReadAgentMessageServiceResult<T> {
+pub(crate) struct ReadAgentMessageServiceResult {
     pub agent_message_payload: Option<MessagePayload>,
-    pub agent_stream: Framed<&mut TcpStream, MessageCodec<OsRng>>,
+    pub message_frame_read: MessageFrameRead,
+    pub user_token: Option<String>,
+    pub message_id: Option<String>,
 }
 
 #[derive(Clone)]
@@ -115,22 +139,13 @@ impl Service<ReadAgentMessageServiceRequest> for ReadAgentMessageService {
 
     fn call(&mut self, mut req: ReadAgentMessageServiceRequest) -> Self::Future {
         Box::pin(async move {
-            let mut framed = Framed::with_capacity(
-                &mut req.agent_stream,
-                MessageCodec::new(
-                    &(*AGENT_PUBLIC_KEY),
-                    &(*PROXY_PRIVATE_KEY),
-                    SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
-                    SERVER_CONFIG.compress().unwrap_or(true),
-                ),
-                SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
-            );
-            let agent_message = match framed.next().await {
+            let agent_message = match req.message_frame_read.next().await {
                 None => {
                     debug!("Agent {}, no message any more.", req.agent_address);
                     return Ok(ReadAgentMessageServiceResult {
                         agent_message_payload: None,
-                        agent_stream: req.agent_stream,
+                        message_frame_read: req.message_frame_read,
+                        user_token:
                     });
                 }
                 Some(v) => match v {
@@ -152,7 +167,7 @@ impl Service<ReadAgentMessageServiceRequest> for ReadAgentMessageService {
                     );
                     return Ok(ReadAgentMessageServiceResult {
                         agent_message_payload: None,
-                        agent_stream: req.agent_stream,
+                        message_frame_read: req.message_frame_read,
                     });
                 }
                 Some(payload_bytes) => match payload_bytes.try_into() {
@@ -178,7 +193,59 @@ impl Service<ReadAgentMessageServiceRequest> for ReadAgentMessageService {
             };
             Ok(ReadAgentMessageServiceResult {
                 agent_message_payload: Some(payload),
-                agent_stream: req.agent_stream,
+                message_frame_read: req.message_frame_read,
+            })
+        })
+    }
+}
+
+pub(crate) struct WriteProxyMessageServiceRequest {
+    pub message_frame_write: MessageFrameWrite,
+    pub proxy_message_payload: Option<MessagePayload>,
+    pub ref_id: Option<String>,
+    pub user_token: String,
+    pub payload_encryption_type: PayloadEncryptionType,
+}
+
+pub(crate) struct WriteProxyMessageServiceResult {
+    pub message_frame_write: MessageFrameWrite,
+}
+
+#[derive(Clone)]
+pub(crate) struct WriteProxyMessageService;
+
+impl Service<WriteProxyMessageServiceRequest> for WriteProxyMessageService {
+    type Response = WriteProxyMessageServiceResult;
+    type Error = CommonError;
+    type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
+
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        Poll::Ready(Ok(()))
+    }
+
+    fn call(&mut self, req: WriteProxyMessageServiceRequest) -> Self::Future {
+        Box::pin(async move {
+            let message = match req.proxy_message_payload {
+                None => Message::new(
+                    generate_uuid(),
+                    req.ref_id,
+                    req.user_token,
+                    req.payload_encryption_type,
+                    None,
+                ),
+                Some(payload) => Message::new(
+                    generate_uuid(),
+                    req.ref_id,
+                    req.user_token,
+                    req.payload_encryption_type,
+                    Some(payload.into()),
+                ),
+            };
+            let mut message_frame_write = req.message_frame_write;
+            message_frame_write.send(message).await;
+            message_frame_write.flush().await;
+            Ok(WriteProxyMessageServiceResult {
+                message_frame_write,
             })
         })
     }

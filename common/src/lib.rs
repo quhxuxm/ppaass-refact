@@ -7,9 +7,14 @@ pub use message::MessagePayload;
 pub use message::PayloadEncryptionType;
 pub use message::PayloadType;
 pub use message::ProxyMessagePayloadTypeValue;
-
+pub use service::MessageFrameRead;
+pub use service::MessageFrameWrite;
+pub use service::PrepareMessageFramedResult;
+pub use service::PrepareMessageFramedService;
+pub use util::generate_uuid;
 mod codec;
 mod crypto;
 mod error;
 mod message;
+mod service;
 mod util;
