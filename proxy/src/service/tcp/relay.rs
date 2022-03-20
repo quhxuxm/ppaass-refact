@@ -74,7 +74,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
         let mut message_frame_write = req.message_frame_write;
         let agent_address_for_a2t = req.agent_address.clone();
         let agent_address_for_t2a = req.agent_address.clone();
-        let mut target_stream = req.target_stream;
+        let target_stream = req.target_stream;
         let agent_tcp_connect_message_id = req.agent_tcp_connect_message_id;
         let user_token = req.user_token;
         let agent_connect_message_source_address = req.source_address;
