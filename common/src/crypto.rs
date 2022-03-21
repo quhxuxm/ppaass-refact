@@ -63,7 +63,7 @@ impl<T: Rng + Send> RsaCrypto<T> {
         self.private_key
             .decrypt(PaddingScheme::PKCS1v15Encrypt, target)
             .map_err(|e| {
-                error!("Fail to encrypt data with rsa because of error: {:#?}", e);
+                error!("Fail to decrypt data with rsa because of error: {:#?}", e);
                 CommonError::CodecError
             })
             .map(|v| v.into())

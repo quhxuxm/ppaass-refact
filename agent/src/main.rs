@@ -61,7 +61,6 @@ fn main() -> Result<()> {
         .with_ansi(false)
         .with_line_number(true)
         .with_writer(non_blocking)
-        .with_ansi(true)
         .init();
     let agent_server = AgentServer::new();
     agent_server.run();

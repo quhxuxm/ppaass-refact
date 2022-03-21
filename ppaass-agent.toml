@@ -16,5 +16,5 @@ client_connection_max_idle = 300
 proxy_connection_max_idle = 300
 log_dir = "./log"
 log_file = "ppaass-agent.log"
-max_log_level="DEBUG"
+max_log_level="INFO"
 proxy_connection_retry=3

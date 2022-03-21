@@ -163,40 +163,46 @@ impl Encoder<Message> for MessageCodec<OsRng> {
             payload_encryption_type,
             payload,
         } = original_message;
-        let encrypted_payload = match payload_encryption_type {
-            PayloadEncryptionType::Plain => payload,
+        let (encrypted_payload, encrypted_payload_encryption_type) = match payload_encryption_type {
+            PayloadEncryptionType::Plain => (payload, PayloadEncryptionType::Plain),
             PayloadEncryptionType::Blowfish(ref original_token) => {
-                let payload_encryption_token = match self.rsa_crypto.encrypt(original_token) {
+                let encrypted_payload_encryption_token = match self
+                    .rsa_crypto
+                    .encrypt(original_token)
+                {
                     Ok(r) => r,
                     Err(e) => {
                         error!("Fail the encrypt original message encryption token with rsa crypto for blowfish");
                         return Err(e);
                     }
                 };
-                Some(encrypt_with_blowfish(
-                    &payload_encryption_token,
-                    &payload.unwrap(),
-                ))
+                (
+                    Some(encrypt_with_blowfish(&original_token, &payload.unwrap())),
+                    PayloadEncryptionType::Blowfish(encrypted_payload_encryption_token),
+                )
             }
             PayloadEncryptionType::Aes(ref original_token) => {
-                let payload_encryption_token = match self.rsa_crypto.encrypt(original_token) {
+                let encrypted_payload_encryption_token = match self
+                    .rsa_crypto
+                    .encrypt(original_token)
+                {
                     Ok(r) => r,
                     Err(e) => {
                         error!("Fail the encrypt original message encryption token with rsa crypto for aes");
                         return Err(e);
                     }
                 };
-                Some(encrypt_with_aes(
-                    &payload_encryption_token,
-                    &payload.unwrap(),
-                ))
+                (
+                    Some(encrypt_with_aes(&original_token, &payload.unwrap())),
+                    PayloadEncryptionType::Aes(encrypted_payload_encryption_token),
+                )
             }
         };
         let message_to_encode = Message::new(
             id,
             ref_id,
             user_token,
-            payload_encryption_type,
+            encrypted_payload_encryption_type,
             encrypted_payload,
         );
         let result_bytes: Bytes = message_to_encode.into();

@@ -178,7 +178,7 @@ impl Service<Socks5ConnectCommandServiceRequest> for Socks5ConnectCommandService
                 .call(connect_to_proxy_service_result.proxy_stream)
                 .await?;
 
-            let mut message_framed_write = framed_result.message_framed_write;
+            let message_framed_write = framed_result.message_framed_write;
 
             let write_message_result = write_agent_message_service
                 .ready()
@@ -210,6 +210,7 @@ impl Service<Socks5ConnectCommandServiceRequest> for Socks5ConnectCommandService
 
             Ok(match read_proxy_message_result {
                 None => {
+                    error!("Fail to read proxy connect result because of nothing to read");
                     let connect_result = Socks5ConnectCommandResult::new(
                         Socks5ConnectCommandResultStatus::Failure,
                         None,
