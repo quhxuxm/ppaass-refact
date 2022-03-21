@@ -26,6 +26,7 @@ pub struct PrepareMessageFramedResult {
 pub struct PrepareMessageFramedService {
     public_key: &'static str,
     private_key: &'static str,
+    max_frame_size: usize,
     buffer_size: usize,
     compress: bool,
 }
@@ -34,12 +35,14 @@ impl PrepareMessageFramedService {
     pub fn new(
         public_key: &'static str,
         private_key: &'static str,
+        max_frame_size: usize,
         buffer_size: usize,
         compress: bool,
     ) -> Self {
         Self {
             public_key,
             private_key,
+            max_frame_size,
             buffer_size,
             compress,
         }
@@ -61,7 +64,7 @@ impl Service<TcpStream> for PrepareMessageFramedService {
             MessageCodec::new(
                 &(*self.public_key),
                 &(*self.private_key),
-                self.buffer_size,
+                self.max_frame_size,
                 self.compress,
             ),
             self.buffer_size,

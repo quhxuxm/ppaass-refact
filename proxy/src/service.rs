@@ -29,7 +29,7 @@ use crate::SERVER_CONFIG;
 mod tcp;
 mod udp;
 const DEFAULT_BUFFER_SIZE: usize = 1024 * 64;
-
+const DEFAULT_MAX_FRAME_SIZE: usize = DEFAULT_BUFFER_SIZE * 2;
 #[derive(Debug)]
 pub(crate) struct AgentConnectionInfo {
     pub agent_stream: TcpStream,
@@ -55,6 +55,9 @@ impl HandleAgentConnectionService {
             prepare_message_frame_service: BoxCloneService::new(PrepareMessageFramedService::new(
                 agent_public_key,
                 proxy_private_key,
+                SERVER_CONFIG
+                    .max_frame_size()
+                    .unwrap_or(DEFAULT_MAX_FRAME_SIZE),
                 SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
                 SERVER_CONFIG.compress().unwrap_or(true),
             )),

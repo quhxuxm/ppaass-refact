@@ -67,21 +67,43 @@ impl Service<Socks5RelayServiceRequest> for Socks5RelayService {
             let mut message_framed_write = request.message_framed_write;
             let (mut client_stream_read_half, mut client_stream_write_half) =
                 client_stream.into_split();
+            let client_address_a2t = request.client_address.clone();
+            let source_address_a2t = request.source_address.clone();
+            let target_address_a2t = request.target_address.clone();
+
+            let client_address_t2a = request.client_address.clone();
+            let target_address_t2a = request.target_address.clone();
 
             tokio::spawn(async move {
                 loop {
-                    let mut buf = BytesMut::with_capacity(1024 * 64);
-                    client_stream_read_half.read_buf(&mut buf).await;
+                    let mut buf =
+                        BytesMut::with_capacity(SERVER_CONFIG.buffer_size().unwrap_or(1024 * 64));
+                    match client_stream_read_half.read_buf(&mut buf).await {
+                        Err(e) => {
+                            error!(
+                            "Client {:#?}, fail to read client data from {:#?} because of error: {:#?}",
+                            client_address_a2t, target_address_a2t, e
+                        );
+                            return;
+                        }
+                        Ok(0) => {
+                            return;
+                        }
+                        Ok(_) => {}
+                    }
                     let check_ready_result = write_agent_message_service.ready().await;
                     let service_obj = match check_ready_result {
                         Err(e) => {
+                            error!(
+                            "Client {:#?}, fail to read client data from {:#?} because of error (write service not ready): {:#?}",
+                            client_address_a2t, target_address_a2t, e);
                             return;
                         }
                         Ok(v) => v,
                     };
                     let agent_message_payload = MessagePayload::new(
-                        request.source_address.clone(),
-                        request.target_address.clone(),
+                        source_address_a2t.clone(),
+                        target_address_a2t.clone(),
                         PayloadType::AgentPayload(AgentMessagePayloadTypeValue::TcpData),
                         buf.freeze(),
                     );
@@ -98,6 +120,9 @@ impl Service<Socks5RelayServiceRequest> for Socks5RelayService {
                         .await
                     {
                         Err(e) => {
+                            error!(
+                            "Client {:#?}, fail to read client data from {:#?} because of error (write service error): {:#?}",
+                            client_address_a2t, target_address_a2t, e);
                             return;
                         }
                         Ok(agent_message_write_result) => {
@@ -111,6 +136,9 @@ impl Service<Socks5RelayServiceRequest> for Socks5RelayService {
                     let check_ready_result = read_proxy_message_service.ready().await;
                     let service_obj = match check_ready_result {
                         Err(e) => {
+                            error!(
+                            "Client {:#?}, fail to read proxy data from {:#?} because of error (read service not ready): {:#?}",
+                            client_address_t2a, target_address_t2a, e);
                             return;
                         }
                         Ok(v) => v,
@@ -122,6 +150,9 @@ impl Service<Socks5RelayServiceRequest> for Socks5RelayService {
                         .await
                     {
                         Err(e) => {
+                            error!(
+                            "Client {:#?}, fail to read proxy data from {:#?} because of error (read service error): {:#?}",
+                            client_address_t2a, target_address_t2a, e);
                             return;
                         }
                         Ok(None) => {
@@ -130,10 +161,21 @@ impl Service<Socks5RelayServiceRequest> for Socks5RelayService {
                         Ok(Some(proxy_message_read_result)) => {
                             message_framed_read = proxy_message_read_result.message_framed_read;
                             let proxy_message_payload = proxy_message_read_result.message_payload;
-                            client_stream_write_half
+                            if let Err(e) = client_stream_write_half
                                 .write(proxy_message_payload.data.as_ref())
-                                .await;
-                            client_stream_write_half.flush().await;
+                                .await
+                            {
+                                error!(
+                                "Client {:#?}, fail to write proxy data from {:#?} to client because of error (read service error): {:#?}",
+                                client_address_t2a, target_address_t2a, e);
+                                return;
+                            };
+                            if let Err(e) = client_stream_write_half.flush().await {
+                                error!(
+                                "Client {:#?}, fail to flush proxy data from {:#?} to client because of error (read service error): {:#?}",
+                                client_address_t2a, target_address_t2a, e);
+                                return;
+                            };
                         }
                     }
                 }

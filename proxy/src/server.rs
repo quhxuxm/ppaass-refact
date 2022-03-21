@@ -1,4 +1,5 @@
 use std::net::{Ipv4Addr, SocketAddrV4};
+use std::time::Duration;
 
 use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
@@ -16,7 +17,15 @@ pub(crate) struct ProxyServer {
 
 impl ProxyServer {
     pub(crate) fn new() -> Self {
-        let runtime = match tokio::runtime::Runtime::new() {
+        let mut runtime_builder = tokio::runtime::Builder::new_multi_thread();
+        runtime_builder
+            .enable_all()
+            .thread_keep_alive(Duration::from_secs(
+                SERVER_CONFIG.thread_timeout().unwrap_or(2),
+            ))
+            .max_blocking_threads(SERVER_CONFIG.max_blocking_threads().unwrap_or(32))
+            .worker_threads(SERVER_CONFIG.thread_number().unwrap_or(1024));
+        let runtime = match runtime_builder.build() {
             Err(e) => {
                 error!(
                     "Fail to create proxy server runtime because of error: {:#?}",

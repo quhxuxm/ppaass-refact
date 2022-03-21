@@ -17,6 +17,7 @@ use common::{
 };
 
 use crate::service::tcp::close::{TcpCloseService, TcpCloseServiceRequest, TcpCloseServiceResult};
+use crate::SERVER_CONFIG;
 
 pub(crate) struct TcpRelayServiceRequest {
     pub message_frame_read: MessageFramedRead,
@@ -111,18 +112,32 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                             );
                             message_frame_read = agent_message_read_result.message_framed_read;
                             let agent_message_payload = agent_message_read_result.message_payload;
-                            target_stream_write
+                            if let Err(e) = target_stream_write
                                 .write(agent_message_payload.data.as_ref())
-                                .await;
-                            target_stream_write.flush().await;
+                                .await
+                            {
+                                return;
+                            };
+                            if let Err(e) = target_stream_write.flush().await {
+                                return;
+                            };
                         }
                     }
                 }
             });
             tokio::spawn(async move {
                 loop {
-                    let mut buf = BytesMut::with_capacity(1024 * 64);
-                    target_stream_read.read_buf(&mut buf).await;
+                    let mut buf =
+                        BytesMut::with_capacity(SERVER_CONFIG.buffer_size().unwrap_or(1024 * 64));
+                    match target_stream_read.read_buf(&mut buf).await {
+                        Err(e) => {
+                            return;
+                        }
+                        Ok(0) => {
+                            return;
+                        }
+                        Ok(_) => {}
+                    };
                     let check_ready_result = write_proxy_message_service.ready().await;
                     let service_obj = match check_ready_result {
                         Err(e) => {

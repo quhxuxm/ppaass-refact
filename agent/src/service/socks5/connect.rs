@@ -29,6 +29,7 @@ use crate::SERVER_CONFIG;
 
 const DEFAULT_RETRY_TIMES: u16 = 3;
 const DEFAULT_BUFFER_SIZE: usize = 1024 * 64;
+const DEFAULT_MAX_FRAME_SIZE: usize = DEFAULT_BUFFER_SIZE * 2;
 #[derive(Debug)]
 pub(crate) struct Socks5ConnectCommandServiceRequest {
     pub client_stream: TcpStream,
@@ -62,7 +63,10 @@ impl Socks5ConnectCommandService {
             prepare_message_framed_service: BoxCloneService::new(PrepareMessageFramedService::new(
                 &(*PROXY_PUBLIC_KEY),
                 &(*AGENT_PRIVATE_KEY),
-                SERVER_CONFIG.buffer_size().unwrap_or(1026 * 64),
+                SERVER_CONFIG
+                    .max_frame_size()
+                    .unwrap_or(DEFAULT_MAX_FRAME_SIZE),
+                SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
                 SERVER_CONFIG.compress().unwrap_or(true),
             )),
             write_agent_message_service: BoxCloneService::new(WriteMessageService),
