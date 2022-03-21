@@ -116,9 +116,17 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                                 .write(agent_message_payload.data.as_ref())
                                 .await
                             {
+                                error!(
+                                    "Agent: {}, fail to write from agent to target because of error: {:#?}",
+                                    agent_address_for_a2t, e
+                                );
                                 return;
                             };
                             if let Err(e) = target_stream_write.flush().await {
+                                error!(
+                                    "Agent: {}, fail to flush from agent to target because of error: {:#?}",
+                                    agent_address_for_a2t, e
+                                );
                                 return;
                             };
                         }
@@ -131,9 +139,17 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                         BytesMut::with_capacity(SERVER_CONFIG.buffer_size().unwrap_or(1024 * 64));
                     match target_stream_read.read_buf(&mut buf).await {
                         Err(e) => {
+                            error!(
+                                "Agent: {}, fail to read data from target because of error: {:#?}",
+                                agent_address_for_a2t, e
+                            );
                             return;
                         }
                         Ok(0) => {
+                            debug!(
+                                "Agent: {}, read all data from target",
+                                agent_address_for_a2t
+                            );
                             return;
                         }
                         Ok(_) => {}
