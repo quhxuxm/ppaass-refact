@@ -12,7 +12,6 @@ use tracing::{debug, error};
 
 use crate::{
     generate_uuid, CommonError, Message, MessageCodec, MessagePayload, PayloadEncryptionType,
-    PayloadType,
 };
 
 pub type MessageFramedRead = SplitStream<Framed<TcpStream, MessageCodec<OsRng>>>;
@@ -130,13 +129,12 @@ impl Service<WriteMessageServiceRequest> for WriteMessageService {
 }
 
 pub struct ReadMessageServiceRequest {
-    pub message_frame_read: MessageFramedRead,
-    pub read_from_address: SocketAddr,
+    pub message_framed_read: MessageFramedRead,
 }
 
 pub struct ReadMessageServiceResult {
     pub message_payload: MessagePayload,
-    pub message_frame_read: MessageFramedRead,
+    pub message_framed_read: MessageFramedRead,
     pub user_token: String,
     pub message_id: String,
 }
@@ -155,44 +153,35 @@ impl Service<ReadMessageServiceRequest> for ReadMessageService {
 
     fn call(&mut self, mut req: ReadMessageServiceRequest) -> Self::Future {
         Box::pin(async move {
-            let message = match req.message_frame_read.next().await {
+            let message = match req.message_framed_read.next().await {
                 None => {
-                    debug!("Read from {}, no message any more.", req.read_from_address);
+                    debug!("No message any more.");
                     return Ok(None);
                 }
                 Some(v) => match v {
                     Ok(v) => v,
                     Err(e) => {
-                        error!(
-                            "Read from {}, fail to decode message because of error: {:#?}",
-                            req.read_from_address, e
-                        );
+                        error!("Fail to decode message because of error: {:#?}", e);
                         return Err(e);
                     }
                 },
             };
             let payload: MessagePayload = match message.payload {
                 None => {
-                    debug!(
-                        "Read from {}, no payload in the message.",
-                        req.read_from_address
-                    );
+                    debug!("No payload in the message.",);
                     return Ok(None);
                 }
                 Some(payload_bytes) => match payload_bytes.try_into() {
                     Ok(v) => v,
                     Err(e) => {
-                        error!(
-                            "Read from {}, fail to decode message payload because of error: {:#?}",
-                            req.read_from_address, e
-                        );
+                        error!("Fail to decode message payload because of error: {:#?}", e);
                         return Err(e);
                     }
                 },
             };
             Ok(Some(ReadMessageServiceResult {
                 message_payload: payload,
-                message_frame_read: req.message_frame_read,
+                message_framed_read: req.message_framed_read,
                 user_token: message.user_token,
                 message_id: message.id,
             }))

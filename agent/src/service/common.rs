@@ -107,7 +107,7 @@ impl Service<ClientConnectionInfo> for HandleClientConnectionService {
 }
 
 #[derive(Clone)]
-pub(crate) struct ConnectToProxyRequest {
+pub(crate) struct ConnectToProxyServiceRequest {
     pub proxy_address: Option<String>,
     pub client_address: SocketAddr,
 }
@@ -118,7 +118,7 @@ struct ConcreteConnectToProxyRequest {
     client_address: SocketAddr,
 }
 
-pub(crate) struct ConnectToProxyResponse {
+pub(crate) struct ConnectToProxyServiceResult {
     pub proxy_stream: TcpStream,
     pub connected_proxy_address: String,
 }
@@ -130,7 +130,7 @@ struct ConnectToProxyAttempts {
 
 pub(crate) struct ConnectToProxyService {
     concrete_service:
-        BoxCloneService<ConcreteConnectToProxyRequest, ConnectToProxyResponse, CommonError>,
+        BoxCloneService<ConcreteConnectToProxyRequest, ConnectToProxyServiceResult, CommonError>,
 }
 
 impl ConnectToProxyService {
@@ -149,7 +149,7 @@ impl ConnectToProxyService {
                     "Client {}, success connect to proxy: {}",
                     request.client_address, request.proxy_address
                 );
-                Ok(ConnectToProxyResponse {
+                Ok(ConnectToProxyServiceResult {
                     proxy_stream,
                     connected_proxy_address: request.proxy_address,
                 })
@@ -161,7 +161,7 @@ impl ConnectToProxyService {
     }
 }
 
-impl Policy<ConcreteConnectToProxyRequest, ConnectToProxyResponse, CommonError>
+impl Policy<ConcreteConnectToProxyRequest, ConnectToProxyServiceResult, CommonError>
     for ConnectToProxyAttempts
 {
     type Future = futures_util::future::Ready<Self>;
@@ -169,7 +169,7 @@ impl Policy<ConcreteConnectToProxyRequest, ConnectToProxyResponse, CommonError>
     fn retry(
         &self,
         req: &ConcreteConnectToProxyRequest,
-        result: Result<&ConnectToProxyResponse, &CommonError>,
+        result: Result<&ConnectToProxyServiceResult, &CommonError>,
     ) -> Option<Self::Future> {
         match result {
             Ok(_) => {
@@ -200,16 +200,16 @@ impl Policy<ConcreteConnectToProxyRequest, ConnectToProxyResponse, CommonError>
     }
 }
 
-impl Service<ConnectToProxyRequest> for ConnectToProxyService {
-    type Response = ConnectToProxyResponse;
+impl Service<ConnectToProxyServiceRequest> for ConnectToProxyService {
+    type Response = ConnectToProxyServiceResult;
     type Error = CommonError;
-    type Future = BoxFuture<'static, Result<ConnectToProxyResponse, Self::Error>>;
+    type Future = BoxFuture<'static, Result<ConnectToProxyServiceResult, Self::Error>>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         Poll::Ready(Ok(()))
     }
 
-    fn call(&mut self, request: ConnectToProxyRequest) -> Self::Future {
+    fn call(&mut self, request: ConnectToProxyServiceRequest) -> Self::Future {
         let proxy_addresses = SERVER_CONFIG
             .proxy_addresses()
             .as_ref()

@@ -1,3 +1,5 @@
+use std::net::{IpAddr, SocketAddr};
+
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use tracing::error;
 
@@ -133,6 +135,16 @@ impl TryFrom<Bytes> for NetAddress {
     fn try_from(mut value: Bytes) -> Result<Self, Self::Error> {
         let value_mut_ref: &mut Bytes = &mut value;
         value_mut_ref.try_into()
+    }
+}
+
+impl From<SocketAddr> for NetAddress {
+    fn from(value: SocketAddr) -> Self {
+        let ip_address = value.ip();
+        match ip_address {
+            IpAddr::V4(addr) => Self::IpV4(addr.octets(), value.port()),
+            IpAddr::V6(addr) => Self::IpV6(addr.octets(), value.port()),
+        }
     }
 }
 

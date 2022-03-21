@@ -88,8 +88,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                     };
                     match service_obj
                         .call(ReadMessageServiceRequest {
-                            message_frame_read,
-                            read_from_address: agent_address_for_a2t,
+                            message_framed_read: message_frame_read,
                         })
                         .await
                     {
@@ -110,7 +109,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                                 agent_address_for_a2t,
                                 agent_message_read_result.message_payload
                             );
-                            message_frame_read = agent_message_read_result.message_frame_read;
+                            message_frame_read = agent_message_read_result.message_framed_read;
                             let agent_message_payload = agent_message_read_result.message_payload;
                             target_stream_write
                                 .write(agent_message_payload.data.as_ref())

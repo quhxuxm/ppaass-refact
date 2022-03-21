@@ -76,8 +76,7 @@ impl Service<TcpConnectServiceRequest> for TcpConnectService {
                 .ready()
                 .await?
                 .call(ReadMessageServiceRequest {
-                    read_from_address: req.agent_address,
-                    message_frame_read: req.message_frame_read,
+                    message_framed_read: req.message_frame_read,
                 })
                 .await?
             {
@@ -155,7 +154,7 @@ impl Service<TcpConnectServiceRequest> for TcpConnectService {
                         .await?;
                     return Ok(TcpConnectServiceResult {
                         message_frame_write: write_proxy_message_result.message_framed_write,
-                        message_frame_read: read_result.message_frame_read,
+                        message_frame_read: read_result.message_framed_read,
                         target_stream: connect_result.target_stream,
                         agent_tcp_connect_message_id: read_result.message_id,
                         source_address: agent_message_payload.source_address,

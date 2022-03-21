@@ -12,10 +12,11 @@ use crate::service::socks5::authenticate::{
     Socks5AuthCommandService, Socks5AuthenticateFlowRequest, Socks5AuthenticateFlowResult,
 };
 use crate::service::socks5::connect::{
-    Socks5ConnectCommandService, Socks5ConnectFlowRequest, Socks5ConnectFlowResult,
+    Socks5ConnectCommandService, Socks5ConnectCommandServiceRequest,
+    Socks5ConnectCommandServiceResult,
 };
 use crate::service::socks5::relay::{
-    Socks5RelayFlowRequest, Socks5RelayFlowResult, Socks5RelayService,
+    Socks5RelayService, Socks5RelayServiceRequest, Socks5RelayServiceResult,
 };
 
 mod authenticate;
@@ -33,9 +34,13 @@ pub(crate) struct Socks5FlowResult {
 pub(crate) struct Socks5FlowService {
     authenticate_service:
         BoxCloneService<Socks5AuthenticateFlowRequest, Socks5AuthenticateFlowResult, CommonError>,
-    connect_service:
-        BoxCloneService<Socks5ConnectFlowRequest, Socks5ConnectFlowResult, CommonError>,
-    relay_service: BoxCloneService<Socks5RelayFlowRequest, Socks5RelayFlowResult, CommonError>,
+    connect_service: BoxCloneService<
+        Socks5ConnectCommandServiceRequest,
+        Socks5ConnectCommandServiceResult,
+        CommonError,
+    >,
+    relay_service:
+        BoxCloneService<Socks5RelayServiceRequest, Socks5RelayServiceResult, CommonError>,
 }
 
 impl Socks5FlowService {
@@ -43,7 +48,7 @@ impl Socks5FlowService {
         Self {
             authenticate_service: BoxCloneService::new(Socks5AuthCommandService),
             connect_service: BoxCloneService::new(Socks5ConnectCommandService::new()),
-            relay_service: BoxCloneService::new(Socks5RelayService),
+            relay_service: BoxCloneService::new(Socks5RelayService::new()),
         }
     }
 }
@@ -74,7 +79,7 @@ impl Service<Socks5FlowRequest> for Socks5FlowService {
             let connect_flow_result = connect_service
                 .ready()
                 .await?
-                .call(Socks5ConnectFlowRequest {
+                .call(Socks5ConnectCommandServiceRequest {
                     client_stream: authenticate_result.client_stream,
                     client_address: authenticate_result.client_address,
                 })
@@ -83,11 +88,15 @@ impl Service<Socks5FlowRequest> for Socks5FlowService {
             let relay_flow_result = relay_service
                 .ready()
                 .await?
-                .call(Socks5RelayFlowRequest {
+                .call(Socks5RelayServiceRequest {
                     client_address: connect_flow_result.client_address,
                     client_stream: connect_flow_result.client_stream,
                     message_framed_write: connect_flow_result.message_framed_write,
                     message_framed_read: connect_flow_result.message_framed_read,
+                    connect_response_message_id: connect_flow_result.connect_response_message_id,
+                    proxy_address_string: connect_flow_result.proxy_address_string,
+                    source_address: connect_flow_result.source_address,
+                    target_address: connect_flow_result.target_address,
                 })
                 .await?;
             Ok(Socks5FlowResult {

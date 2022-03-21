@@ -1,5 +1,5 @@
-port = 80
-#port = 9999
+#port = 80
+port = 9999
 buffer_size = 131072
 max_frame_size = 262144
 thread_number = 2048

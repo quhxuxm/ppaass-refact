@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use tracing::error;
 
-use common::CommonError;
+use common::{CommonError, NetAddress};
 
 #[derive(Debug)]
 pub(crate) enum Socks5AuthMethod {
@@ -122,7 +122,7 @@ impl From<Socks5ConnectCommandResultStatus> for u8 {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) enum Socks5Addr {
     IpV4([u8; 4], u16),
     IpV6([u8; 16], u16),
@@ -266,7 +266,15 @@ impl From<Socks5Addr> for Bytes {
         result.into()
     }
 }
-
+impl From<Socks5Addr> for NetAddress {
+    fn from(value: Socks5Addr) -> Self {
+        match value {
+            Socks5Addr::IpV4(ip_bytes, port) => NetAddress::IpV4(ip_bytes, port),
+            Socks5Addr::IpV6(ip_bytes, port) => NetAddress::IpV6(ip_bytes, port),
+            Socks5Addr::Domain(host, port) => NetAddress::Domain(host, port),
+        }
+    }
+}
 #[derive(Debug)]
 pub(crate) struct Socks5AuthCommand {
     pub version: u8,

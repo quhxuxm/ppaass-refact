@@ -54,6 +54,7 @@ impl AgentServer {
                 .service(HandleClientConnectionService::new());
             loop {
                 let (client_stream, client_address) = match listener.accept().await {
+
                     Err(e) => {
                         error!(
                             "Fail to accept client connection because of error: {:#?}",
@@ -71,6 +72,7 @@ impl AgentServer {
                         );
                         continue;
                     }
+
                     Ok(s) => {
                         if let Err(e) = s.call(ClientConnectionInfo{
                             client_stream, client_address

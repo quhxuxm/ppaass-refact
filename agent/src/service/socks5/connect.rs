@@ -2,6 +2,7 @@ use std::io::ErrorKind;
 use std::net::SocketAddr;
 use std::task::{Context, Poll};
 
+use bytes::Bytes;
 use futures_util::future::BoxFuture;
 use futures_util::{SinkExt, StreamExt};
 use tokio::net::TcpStream;
@@ -11,9 +12,11 @@ use tower::{Service, ServiceExt};
 use tracing::log::{debug, error};
 
 use common::{
-    generate_uuid, CommonError, MessageFramedRead, MessageFramedWrite, MessagePayload,
-    PayloadEncryptionType, PrepareMessageFramedResult, PrepareMessageFramedService,
-    WriteMessageService, WriteMessageServiceRequest, WriteMessageServiceResult,
+    generate_uuid, AgentMessagePayloadTypeValue, CommonError, MessageFramedRead,
+    MessageFramedWrite, MessagePayload, NetAddress, PayloadEncryptionType, PayloadType,
+    PrepareMessageFramedResult, PrepareMessageFramedService, ProxyMessagePayloadTypeValue,
+    ReadMessageService, ReadMessageServiceRequest, ReadMessageServiceResult, WriteMessageService,
+    WriteMessageServiceRequest, WriteMessageServiceResult,
 };
 
 use crate::codec::socks5::Socks5ConnectCodec;
@@ -21,30 +24,36 @@ use crate::command::socks5::{
     Socks5ConnectCommandResult, Socks5ConnectCommandResultStatus, Socks5ConnectCommandType,
 };
 use crate::config::{AGENT_PRIVATE_KEY, PROXY_PUBLIC_KEY};
-use crate::service::common::{ConnectToProxyRequest, ConnectToProxyService};
+use crate::service::common::{ConnectToProxyService, ConnectToProxyServiceRequest};
 use crate::SERVER_CONFIG;
 
 const DEFAULT_RETRY_TIMES: u16 = 3;
 const DEFAULT_BUFFER_SIZE: usize = 1024 * 64;
 #[derive(Debug)]
-pub(crate) struct Socks5ConnectFlowRequest {
+pub(crate) struct Socks5ConnectCommandServiceRequest {
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,
 }
 
-pub(crate) struct Socks5ConnectFlowResult {
+pub(crate) struct Socks5ConnectCommandServiceResult {
     pub client_stream: TcpStream,
     pub message_framed_read: MessageFramedRead,
     pub message_framed_write: MessageFramedWrite,
     pub client_address: SocketAddr,
+    pub source_address: NetAddress,
+    pub target_address: NetAddress,
+    pub proxy_address_string: String,
+    pub connect_response_message_id: String,
 }
 
 #[derive(Clone)]
 pub(crate) struct Socks5ConnectCommandService {
     prepare_message_framed_service:
         BoxCloneService<TcpStream, PrepareMessageFramedResult, CommonError>,
-    write_proxy_message_service:
+    write_agent_message_service:
         BoxCloneService<WriteMessageServiceRequest, WriteMessageServiceResult, CommonError>,
+    read_proxy_message_service:
+        BoxCloneService<ReadMessageServiceRequest, Option<ReadMessageServiceResult>, CommonError>,
 }
 
 impl Socks5ConnectCommandService {
@@ -56,13 +65,14 @@ impl Socks5ConnectCommandService {
                 SERVER_CONFIG.buffer_size().unwrap_or(1026 * 64),
                 SERVER_CONFIG.compress().unwrap_or(true),
             )),
-            write_proxy_message_service: BoxCloneService::new(WriteMessageService),
+            write_agent_message_service: BoxCloneService::new(WriteMessageService),
+            read_proxy_message_service: BoxCloneService::new(ReadMessageService),
         }
     }
 }
 
-impl Service<Socks5ConnectFlowRequest> for Socks5ConnectCommandService {
-    type Response = Socks5ConnectFlowResult;
+impl Service<Socks5ConnectCommandServiceRequest> for Socks5ConnectCommandService {
+    type Response = Socks5ConnectCommandServiceResult;
     type Error = CommonError;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
@@ -70,9 +80,10 @@ impl Service<Socks5ConnectFlowRequest> for Socks5ConnectCommandService {
         Poll::Ready(Ok(()))
     }
 
-    fn call(&mut self, mut request: Socks5ConnectFlowRequest) -> Self::Future {
+    fn call(&mut self, mut request: Socks5ConnectCommandServiceRequest) -> Self::Future {
         let mut prepare_message_framed_service = self.prepare_message_framed_service.clone();
-        let mut write_proxy_message_service = self.write_proxy_message_service.clone();
+        let mut write_agent_message_service = self.write_agent_message_service.clone();
+        let mut read_proxy_message_service = self.read_proxy_message_service.clone();
         Box::pin(async move {
             let mut framed = Framed::with_capacity(
                 &mut request.client_stream,
@@ -105,7 +116,7 @@ impl Service<Socks5ConnectFlowRequest> for Socks5ConnectCommandService {
             );
             let connect_command_type = connect_command.request_type;
 
-            let connect_to_proxy_response = match connect_command_type {
+            let connect_to_proxy_service_result = match connect_command_type {
                 Socks5ConnectCommandType::Connect => {
                     let mut connect_to_proxy_service = ConnectToProxyService::new(
                         SERVER_CONFIG
@@ -132,7 +143,7 @@ impl Service<Socks5ConnectFlowRequest> for Socks5ConnectCommandService {
                     };
 
                     match connect_to_proxy_service_ready
-                        .call(ConnectToProxyRequest {
+                        .call(ConnectToProxyServiceRequest {
                             proxy_address: None,
                             client_address: request.client_address,
                         })
@@ -164,12 +175,12 @@ impl Service<Socks5ConnectFlowRequest> for Socks5ConnectCommandService {
             let framed_result = prepare_message_framed_service
                 .ready()
                 .await?
-                .call(connect_to_proxy_response.proxy_stream)
+                .call(connect_to_proxy_service_result.proxy_stream)
                 .await?;
 
             let mut message_framed_write = framed_result.message_framed_write;
 
-            write_proxy_message_service
+            let write_message_result = write_agent_message_service
                 .ready()
                 .await?
                 .call(WriteMessageServiceRequest {
@@ -179,22 +190,78 @@ impl Service<Socks5ConnectFlowRequest> for Socks5ConnectCommandService {
                     ),
                     user_token: SERVER_CONFIG.user_token().clone().unwrap(),
                     ref_id: None,
-                    message_payload: MessagePayload::new(),
+                    message_payload: Some(MessagePayload::new(
+                        request.client_address.into(),
+                        connect_command.dest_address.clone().into(),
+                        PayloadType::AgentPayload(AgentMessagePayloadTypeValue::TcpConnect),
+                        Bytes::new(),
+                    )),
                 })
                 .await?;
 
             let mut message_framed_read = framed_result.message_framed_read;
+            let read_proxy_message_result = read_proxy_message_service
+                .ready()
+                .await?
+                .call(ReadMessageServiceRequest {
+                    message_framed_read,
+                })
+                .await?;
 
-            let connect_result = Socks5ConnectCommandResult::new(
-                Socks5ConnectCommandResultStatus::Succeeded,
-                Some(connect_command.dest_address),
-            );
-            framed.send(connect_result).await?;
-            Ok(Socks5ConnectFlowResult {
-                client_stream: request.client_stream,
-                client_address: request.client_address,
-                message_framed_read,
-                message_framed_write,
+            Ok(match read_proxy_message_result {
+                None => {
+                    let connect_result = Socks5ConnectCommandResult::new(
+                        Socks5ConnectCommandResultStatus::Failure,
+                        None,
+                    );
+                    framed.send(connect_result).await?;
+                    return Err(CommonError::CodecError);
+                }
+                Some(result) => {
+                    let result_payload_type = result.message_payload.payload_type;
+                    match result_payload_type {
+                        PayloadType::ProxyPayload(v) => {
+                            match v {
+                                ProxyMessagePayloadTypeValue::TcpConnectSuccess => {
+                                    //Response for socks5 connect command
+                                    let connect_result = Socks5ConnectCommandResult::new(
+                                        Socks5ConnectCommandResultStatus::Succeeded,
+                                        Some(connect_command.dest_address),
+                                    );
+                                    framed.send(connect_result).await?;
+                                    Socks5ConnectCommandServiceResult {
+                                        client_stream: request.client_stream,
+                                        client_address: request.client_address,
+                                        message_framed_read: result.message_framed_read,
+                                        message_framed_write: write_message_result
+                                            .message_framed_write,
+                                        source_address: result.message_payload.source_address,
+                                        target_address: result.message_payload.target_address,
+                                        proxy_address_string: connect_to_proxy_service_result
+                                            .connected_proxy_address,
+                                        connect_response_message_id: result.message_id,
+                                    }
+                                }
+                                _ => {
+                                    let connect_result = Socks5ConnectCommandResult::new(
+                                        Socks5ConnectCommandResultStatus::Failure,
+                                        None,
+                                    );
+                                    framed.send(connect_result).await?;
+                                    return Err(CommonError::CodecError);
+                                }
+                            }
+                        }
+                        _ => {
+                            let connect_result = Socks5ConnectCommandResult::new(
+                                Socks5ConnectCommandResultStatus::Failure,
+                                None,
+                            );
+                            framed.send(connect_result).await?;
+                            return Err(CommonError::CodecError);
+                        }
+                    }
+                }
             })
         })
     }
