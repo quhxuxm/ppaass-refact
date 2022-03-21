@@ -5,12 +5,13 @@ use futures_util::future::BoxFuture;
 use tokio::net::TcpStream;
 use tower::Service;
 
-use common::CommonError;
+use common::{CommonError, MessageFramedRead, MessageFramedWrite};
 
 pub(crate) struct Socks5RelayFlowRequest {
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,
-    pub proxy_stream: TcpStream,
+    pub message_framed_write: MessageFramedWrite,
+    pub message_framed_read: MessageFramedRead,
 }
 
 pub(crate) struct Socks5RelayFlowResult {

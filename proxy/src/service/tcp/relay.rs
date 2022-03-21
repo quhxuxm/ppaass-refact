@@ -10,19 +10,17 @@ use tower::{Service, ServiceExt};
 use tracing::{debug, error, trace};
 
 use common::{
-    generate_uuid, CommonError, MessageFrameRead, MessageFrameWrite, MessagePayload, NetAddress,
-    PayloadEncryptionType, PayloadType, ProxyMessagePayloadTypeValue,
+    generate_uuid, CommonError, MessageFramedRead, MessageFramedWrite, MessagePayload, NetAddress,
+    PayloadEncryptionType, PayloadType, ProxyMessagePayloadTypeValue, ReadMessageService,
+    ReadMessageServiceRequest, ReadMessageServiceResult, WriteMessageService,
+    WriteMessageServiceRequest, WriteMessageServiceResult,
 };
 
 use crate::service::tcp::close::{TcpCloseService, TcpCloseServiceRequest, TcpCloseServiceResult};
-use crate::service::{
-    ReadAgentMessageService, ReadAgentMessageServiceRequest, ReadAgentMessageServiceResult,
-    WriteProxyMessageService, WriteProxyMessageServiceRequest, WriteProxyMessageServiceResult,
-};
 
 pub(crate) struct TcpRelayServiceRequest {
-    pub message_frame_read: MessageFrameRead,
-    pub message_frame_write: MessageFrameWrite,
+    pub message_frame_read: MessageFramedRead,
+    pub message_frame_write: MessageFramedWrite,
     pub agent_address: SocketAddr,
     pub target_stream: TcpStream,
     pub agent_tcp_connect_message_id: String,
@@ -35,16 +33,10 @@ pub(crate) struct TcpRelayServiceResult {
 }
 #[derive(Clone)]
 pub(crate) struct TcpRelayService {
-    read_agent_message_service: BoxCloneService<
-        ReadAgentMessageServiceRequest,
-        Option<ReadAgentMessageServiceResult>,
-        CommonError,
-    >,
-    write_proxy_message_service: BoxCloneService<
-        WriteProxyMessageServiceRequest,
-        WriteProxyMessageServiceResult,
-        CommonError,
-    >,
+    read_agent_message_service:
+        BoxCloneService<ReadMessageServiceRequest, Option<ReadMessageServiceResult>, CommonError>,
+    write_proxy_message_service:
+        BoxCloneService<WriteMessageServiceRequest, WriteMessageServiceResult, CommonError>,
     tcp_close_service: BoxCloneService<TcpCloseServiceRequest, TcpCloseServiceResult, CommonError>,
 }
 
@@ -52,8 +44,8 @@ impl TcpRelayService {
     pub(crate) fn new() -> Self {
         Self {
             tcp_close_service: BoxCloneService::new(TcpCloseService),
-            read_agent_message_service: BoxCloneService::new(ReadAgentMessageService),
-            write_proxy_message_service: BoxCloneService::new(WriteProxyMessageService),
+            read_agent_message_service: BoxCloneService::new(ReadMessageService),
+            write_proxy_message_service: BoxCloneService::new(WriteMessageService),
         }
     }
 }
@@ -95,9 +87,9 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                         Ok(v) => v,
                     };
                     match service_obj
-                        .call(ReadAgentMessageServiceRequest {
+                        .call(ReadMessageServiceRequest {
                             message_frame_read,
-                            agent_address: agent_address_for_a2t,
+                            read_from_address: agent_address_for_a2t,
                         })
                         .await
                     {
@@ -116,11 +108,10 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                             trace!(
                                 "Agent: {}, success read message from agent, agent message payload:\n{:#?}\n",
                                 agent_address_for_a2t,
-                                agent_message_read_result.agent_message_payload
+                                agent_message_read_result.message_payload
                             );
                             message_frame_read = agent_message_read_result.message_frame_read;
-                            let agent_message_payload =
-                                agent_message_read_result.agent_message_payload;
+                            let agent_message_payload = agent_message_read_result.message_payload;
                             target_stream_write
                                 .write(agent_message_payload.data.as_ref())
                                 .await;
@@ -151,14 +142,14 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                         buf.freeze(),
                     );
                     match service_obj
-                        .call(WriteProxyMessageServiceRequest {
-                            message_frame_write,
+                        .call(WriteMessageServiceRequest {
+                            message_framed_write: message_frame_write,
                             ref_id: Some(agent_tcp_connect_message_id.clone()),
                             user_token: user_token.clone(),
                             payload_encryption_type: PayloadEncryptionType::Blowfish(
                                 generate_uuid().into(),
                             ),
-                            proxy_message_payload: Some(proxy_message_payload),
+                            message_payload: Some(proxy_message_payload),
                         })
                         .await
                     {
@@ -170,7 +161,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                             return;
                         }
                         Ok(proxy_message_write_result) => {
-                            message_frame_write = proxy_message_write_result.message_frame_write;
+                            message_frame_write = proxy_message_write_result.message_framed_write;
                         }
                     }
                 }

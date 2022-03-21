@@ -11,7 +11,7 @@ use tracing::{debug, error};
 
 use common::{
     generate_uuid, AgentMessagePayloadTypeValue, CommonError, Message, MessageCodec,
-    MessageFrameRead, MessageFrameWrite, MessagePayload, PayloadEncryptionType, PayloadType,
+    MessageFramedRead, MessageFramedWrite, MessagePayload, PayloadEncryptionType, PayloadType,
     PrepareMessageFramedResult, PrepareMessageFramedService,
 };
 
@@ -89,8 +89,8 @@ impl Service<AgentConnectionInfo> for HandleAgentConnectionService {
                 .ready()
                 .await?
                 .call(TcpConnectServiceRequest {
-                    message_frame_read: framed_result.stream,
-                    message_frame_write: framed_result.sink,
+                    message_frame_read: framed_result.message_framed_read,
+                    message_frame_write: framed_result.message_framed_write,
                     agent_address: req.agent_address,
                 })
                 .await?;
@@ -109,139 +109,6 @@ impl Service<AgentConnectionInfo> for HandleAgentConnectionService {
                 })
                 .await?;
             Ok(())
-        })
-    }
-}
-
-pub(crate) struct ReadAgentMessageServiceRequest {
-    pub message_frame_read: MessageFrameRead,
-    pub agent_address: SocketAddr,
-}
-
-pub(crate) struct ReadAgentMessageServiceResult {
-    pub agent_message_payload: MessagePayload,
-    pub message_frame_read: MessageFrameRead,
-    pub user_token: String,
-    pub message_id: String,
-}
-
-#[derive(Clone)]
-pub(crate) struct ReadAgentMessageService;
-
-impl Service<ReadAgentMessageServiceRequest> for ReadAgentMessageService {
-    type Response = Option<ReadAgentMessageServiceResult>;
-    type Error = CommonError;
-    type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
-
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        Poll::Ready(Ok(()))
-    }
-
-    fn call(&mut self, mut req: ReadAgentMessageServiceRequest) -> Self::Future {
-        Box::pin(async move {
-            let agent_message = match req.message_frame_read.next().await {
-                None => {
-                    debug!("Agent {}, no message any more.", req.agent_address);
-                    return Ok(None);
-                }
-                Some(v) => match v {
-                    Ok(v) => v,
-                    Err(e) => {
-                        error!(
-                            "Agent {}, fail to decode message because of error: {:#?}",
-                            req.agent_address, e
-                        );
-                        return Err(e);
-                    }
-                },
-            };
-            let payload: MessagePayload = match agent_message.payload {
-                None => {
-                    debug!(
-                        "Agent {}, no payload in the agent message.",
-                        req.agent_address
-                    );
-                    return Ok(None);
-                }
-                Some(payload_bytes) => match payload_bytes.try_into() {
-                    Ok(v) => v,
-                    Err(e) => {
-                        error!(
-                            "Agent {}, fail to decode message payload because of error: {:#?}",
-                            req.agent_address, e
-                        );
-                        return Err(e);
-                    }
-                },
-            };
-            let payload = match payload.payload_type {
-                PayloadType::AgentPayload(_) => payload,
-                _ => {
-                    error!(
-                        "Agent {}, receive invalid agent message payload",
-                        req.agent_address
-                    );
-                    return Err(CommonError::CodecError);
-                }
-            };
-            Ok(Some(ReadAgentMessageServiceResult {
-                agent_message_payload: payload,
-                message_frame_read: req.message_frame_read,
-                user_token: agent_message.user_token,
-                message_id: agent_message.id,
-            }))
-        })
-    }
-}
-
-pub(crate) struct WriteProxyMessageServiceRequest {
-    pub message_frame_write: MessageFrameWrite,
-    pub proxy_message_payload: Option<MessagePayload>,
-    pub ref_id: Option<String>,
-    pub user_token: String,
-    pub payload_encryption_type: PayloadEncryptionType,
-}
-
-pub(crate) struct WriteProxyMessageServiceResult {
-    pub message_frame_write: MessageFrameWrite,
-}
-
-#[derive(Clone)]
-pub(crate) struct WriteProxyMessageService;
-
-impl Service<WriteProxyMessageServiceRequest> for WriteProxyMessageService {
-    type Response = WriteProxyMessageServiceResult;
-    type Error = CommonError;
-    type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
-
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        Poll::Ready(Ok(()))
-    }
-
-    fn call(&mut self, req: WriteProxyMessageServiceRequest) -> Self::Future {
-        Box::pin(async move {
-            let message = match req.proxy_message_payload {
-                None => Message::new(
-                    generate_uuid(),
-                    req.ref_id,
-                    req.user_token,
-                    req.payload_encryption_type,
-                    None,
-                ),
-                Some(payload) => Message::new(
-                    generate_uuid(),
-                    req.ref_id,
-                    req.user_token,
-                    req.payload_encryption_type,
-                    Some(payload.into()),
-                ),
-            };
-            let mut message_frame_write = req.message_frame_write;
-            message_frame_write.send(message).await;
-            message_frame_write.flush().await;
-            Ok(WriteProxyMessageServiceResult {
-                message_frame_write,
-            })
         })
     }
 }

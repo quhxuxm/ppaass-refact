@@ -12,25 +12,26 @@ use tracing::error;
 use tracing::log::debug;
 
 use common::{
-    generate_uuid, AgentMessagePayloadTypeValue, CommonError, MessageFrameRead, MessageFrameWrite,
-    MessagePayload, NetAddress, PayloadEncryptionType, PayloadType, ProxyMessagePayloadTypeValue,
+    generate_uuid, AgentMessagePayloadTypeValue, CommonError, MessageFramedRead,
+    MessageFramedWrite, MessagePayload, NetAddress, PayloadEncryptionType, PayloadType,
+    ProxyMessagePayloadTypeValue, ReadMessageService, ReadMessageServiceRequest,
+    ReadMessageServiceResult, WriteMessageService, WriteMessageServiceRequest,
+    WriteMessageServiceResult,
 };
 
 use crate::service::{
     ConnectToTargetService, ConnectToTargetServiceRequest, ConnectToTargetServiceResult,
-    ReadAgentMessageService, ReadAgentMessageServiceRequest, ReadAgentMessageServiceResult,
-    WriteProxyMessageService, WriteProxyMessageServiceRequest, WriteProxyMessageServiceResult,
 };
 
 pub(crate) struct TcpConnectServiceRequest {
-    pub message_frame_read: MessageFrameRead,
-    pub message_frame_write: MessageFrameWrite,
+    pub message_frame_read: MessageFramedRead,
+    pub message_frame_write: MessageFramedWrite,
     pub agent_address: SocketAddr,
 }
 pub(crate) struct TcpConnectServiceResult {
     pub target_stream: TcpStream,
-    pub message_frame_read: MessageFrameRead,
-    pub message_frame_write: MessageFrameWrite,
+    pub message_frame_read: MessageFramedRead,
+    pub message_frame_write: MessageFramedWrite,
     pub agent_tcp_connect_message_id: String,
     pub source_address: NetAddress,
     pub target_address: NetAddress,
@@ -39,16 +40,10 @@ pub(crate) struct TcpConnectServiceResult {
 
 #[derive(Clone)]
 pub(crate) struct TcpConnectService {
-    read_agent_message_service: BoxCloneService<
-        ReadAgentMessageServiceRequest,
-        Option<ReadAgentMessageServiceResult>,
-        CommonError,
-    >,
-    write_proxy_message_service: BoxCloneService<
-        WriteProxyMessageServiceRequest,
-        WriteProxyMessageServiceResult,
-        CommonError,
-    >,
+    read_agent_message_service:
+        BoxCloneService<ReadMessageServiceRequest, Option<ReadMessageServiceResult>, CommonError>,
+    write_proxy_message_service:
+        BoxCloneService<WriteMessageServiceRequest, WriteMessageServiceResult, CommonError>,
     connect_to_target_service:
         BoxCloneService<ConnectToTargetServiceRequest, ConnectToTargetServiceResult, CommonError>,
 }
@@ -56,8 +51,8 @@ pub(crate) struct TcpConnectService {
 impl TcpConnectService {
     pub(crate) fn new() -> Self {
         Self {
-            read_agent_message_service: BoxCloneService::new(ReadAgentMessageService),
-            write_proxy_message_service: BoxCloneService::new(WriteProxyMessageService),
+            read_agent_message_service: BoxCloneService::new(ReadMessageService),
+            write_proxy_message_service: BoxCloneService::new(WriteMessageService),
             connect_to_target_service: BoxCloneService::new(ConnectToTargetService::new(3)),
         }
     }
@@ -80,8 +75,8 @@ impl Service<TcpConnectServiceRequest> for TcpConnectService {
             let read_result = match read_agent_message_service
                 .ready()
                 .await?
-                .call(ReadAgentMessageServiceRequest {
-                    agent_address: req.agent_address,
+                .call(ReadMessageServiceRequest {
+                    read_from_address: req.agent_address,
                     message_frame_read: req.message_frame_read,
                 })
                 .await?
@@ -89,7 +84,7 @@ impl Service<TcpConnectServiceRequest> for TcpConnectService {
                 None => return Err(CommonError::CodecError),
                 Some(r) => r,
             };
-            let agent_message_payload = read_result.agent_message_payload;
+            let agent_message_payload = read_result.message_payload;
             if let PayloadType::ProxyPayload(_) = agent_message_payload.payload_type {
                 return Err(CommonError::CodecError);
             }
@@ -121,9 +116,9 @@ impl Service<TcpConnectServiceRequest> for TcpConnectService {
                             write_proxy_message_service
                                 .ready()
                                 .await?
-                                .call(WriteProxyMessageServiceRequest {
-                                    message_frame_write: req.message_frame_write,
-                                    proxy_message_payload: Some(connect_fail_payload),
+                                .call(WriteMessageServiceRequest {
+                                    message_framed_write: req.message_frame_write,
+                                    message_payload: Some(connect_fail_payload),
                                     payload_encryption_type: PayloadEncryptionType::Blowfish(
                                         generate_uuid().into(),
                                     ),
@@ -148,9 +143,9 @@ impl Service<TcpConnectServiceRequest> for TcpConnectService {
                     let write_proxy_message_result = write_proxy_message_service
                         .ready()
                         .await?
-                        .call(WriteProxyMessageServiceRequest {
-                            message_frame_write: req.message_frame_write,
-                            proxy_message_payload: Some(connect_success_payload),
+                        .call(WriteMessageServiceRequest {
+                            message_framed_write: req.message_frame_write,
+                            message_payload: Some(connect_success_payload),
                             payload_encryption_type: PayloadEncryptionType::Blowfish(
                                 generate_uuid().into(),
                             ),
@@ -159,7 +154,7 @@ impl Service<TcpConnectServiceRequest> for TcpConnectService {
                         })
                         .await?;
                     return Ok(TcpConnectServiceResult {
-                        message_frame_write: write_proxy_message_result.message_frame_write,
+                        message_frame_write: write_proxy_message_result.message_framed_write,
                         message_frame_read: read_result.message_frame_read,
                         target_stream: connect_result.target_stream,
                         agent_tcp_connect_message_id: read_result.message_id,

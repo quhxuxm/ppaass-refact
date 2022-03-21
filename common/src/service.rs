@@ -1,21 +1,26 @@
+use std::net::SocketAddr;
 use std::task::{Context, Poll};
 
 use futures_util::future::BoxFuture;
 use futures_util::stream::{SplitSink, SplitStream};
-use futures_util::StreamExt;
+use futures_util::{SinkExt, StreamExt};
 use rand::rngs::OsRng;
 use tokio::net::TcpStream;
 use tokio_util::codec::Framed;
 use tower::Service;
+use tracing::{debug, error};
 
-use crate::{CommonError, Message, MessageCodec};
+use crate::{
+    generate_uuid, CommonError, Message, MessageCodec, MessagePayload, PayloadEncryptionType,
+    PayloadType,
+};
 
-pub type MessageFrameRead = SplitStream<Framed<TcpStream, MessageCodec<OsRng>>>;
-pub type MessageFrameWrite = SplitSink<Framed<TcpStream, MessageCodec<OsRng>>, Message>;
+pub type MessageFramedRead = SplitStream<Framed<TcpStream, MessageCodec<OsRng>>>;
+pub type MessageFramedWrite = SplitSink<Framed<TcpStream, MessageCodec<OsRng>>, Message>;
 
 pub struct PrepareMessageFramedResult {
-    pub sink: MessageFrameWrite,
-    pub stream: MessageFrameRead,
+    pub message_framed_write: MessageFramedWrite,
+    pub message_framed_read: MessageFramedRead,
 }
 
 #[derive(Clone)]
@@ -63,6 +68,134 @@ impl Service<TcpStream> for PrepareMessageFramedService {
             self.buffer_size,
         );
         let (sink, stream) = framed.split();
-        Box::pin(async move { Ok(PrepareMessageFramedResult { sink, stream }) })
+        Box::pin(async move {
+            Ok(PrepareMessageFramedResult {
+                message_framed_write: sink,
+                message_framed_read: stream,
+            })
+        })
+    }
+}
+
+pub struct WriteMessageServiceRequest {
+    pub message_framed_write: MessageFramedWrite,
+    pub message_payload: Option<MessagePayload>,
+    pub ref_id: Option<String>,
+    pub user_token: String,
+    pub payload_encryption_type: PayloadEncryptionType,
+}
+
+pub struct WriteMessageServiceResult {
+    pub message_framed_write: MessageFramedWrite,
+}
+
+#[derive(Clone)]
+pub struct WriteMessageService;
+
+impl Service<WriteMessageServiceRequest> for WriteMessageService {
+    type Response = WriteMessageServiceResult;
+    type Error = CommonError;
+    type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
+
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        Poll::Ready(Ok(()))
+    }
+
+    fn call(&mut self, req: WriteMessageServiceRequest) -> Self::Future {
+        Box::pin(async move {
+            let message = match req.message_payload {
+                None => Message::new(
+                    generate_uuid(),
+                    req.ref_id,
+                    req.user_token,
+                    req.payload_encryption_type,
+                    None,
+                ),
+                Some(payload) => Message::new(
+                    generate_uuid(),
+                    req.ref_id,
+                    req.user_token,
+                    req.payload_encryption_type,
+                    Some(payload.into()),
+                ),
+            };
+            let mut message_frame_write = req.message_framed_write;
+            message_frame_write.send(message).await;
+            message_frame_write.flush().await;
+            Ok(WriteMessageServiceResult {
+                message_framed_write: message_frame_write,
+            })
+        })
+    }
+}
+
+pub struct ReadMessageServiceRequest {
+    pub message_frame_read: MessageFramedRead,
+    pub read_from_address: SocketAddr,
+}
+
+pub struct ReadMessageServiceResult {
+    pub message_payload: MessagePayload,
+    pub message_frame_read: MessageFramedRead,
+    pub user_token: String,
+    pub message_id: String,
+}
+
+#[derive(Clone)]
+pub struct ReadMessageService;
+
+impl Service<ReadMessageServiceRequest> for ReadMessageService {
+    type Response = Option<ReadMessageServiceResult>;
+    type Error = CommonError;
+    type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
+
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        Poll::Ready(Ok(()))
+    }
+
+    fn call(&mut self, mut req: ReadMessageServiceRequest) -> Self::Future {
+        Box::pin(async move {
+            let message = match req.message_frame_read.next().await {
+                None => {
+                    debug!("Read from {}, no message any more.", req.read_from_address);
+                    return Ok(None);
+                }
+                Some(v) => match v {
+                    Ok(v) => v,
+                    Err(e) => {
+                        error!(
+                            "Read from {}, fail to decode message because of error: {:#?}",
+                            req.read_from_address, e
+                        );
+                        return Err(e);
+                    }
+                },
+            };
+            let payload: MessagePayload = match message.payload {
+                None => {
+                    debug!(
+                        "Read from {}, no payload in the message.",
+                        req.read_from_address
+                    );
+                    return Ok(None);
+                }
+                Some(payload_bytes) => match payload_bytes.try_into() {
+                    Ok(v) => v,
+                    Err(e) => {
+                        error!(
+                            "Read from {}, fail to decode message payload because of error: {:#?}",
+                            req.read_from_address, e
+                        );
+                        return Err(e);
+                    }
+                },
+            };
+            Ok(Some(ReadMessageServiceResult {
+                message_payload: payload,
+                message_frame_read: req.message_frame_read,
+                user_token: message.user_token,
+                message_id: message.id,
+            }))
+        })
     }
 }

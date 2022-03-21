@@ -42,7 +42,7 @@ impl Socks5FlowService {
     pub(crate) fn new() -> Self {
         Self {
             authenticate_service: BoxCloneService::new(Socks5AuthCommandService),
-            connect_service: BoxCloneService::new(Socks5ConnectCommandService),
+            connect_service: BoxCloneService::new(Socks5ConnectCommandService::new()),
             relay_service: BoxCloneService::new(Socks5RelayService),
         }
     }
@@ -86,7 +86,8 @@ impl Service<Socks5FlowRequest> for Socks5FlowService {
                 .call(Socks5RelayFlowRequest {
                     client_address: connect_flow_result.client_address,
                     client_stream: connect_flow_result.client_stream,
-                    proxy_stream: connect_flow_result.proxy_stream,
+                    message_framed_write: connect_flow_result.message_framed_write,
+                    message_framed_read: connect_flow_result.message_framed_read,
                 })
                 .await?;
             Ok(Socks5FlowResult {
