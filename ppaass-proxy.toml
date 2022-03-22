@@ -6,7 +6,5 @@ thread_number = 2048
 max_blocking_threads = 32
 thread_timeout = 5
 target_connect_timeout = 20
-agent_connection_max_idle = 300
-target_connection_max_idle = 300
 log_dir = "./log"
 log_file = "ppaass-proxy.log"

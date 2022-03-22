@@ -91,7 +91,7 @@ pub struct WriteMessageServiceResult {
     pub message_framed_write: MessageFramedWrite,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct WriteMessageService;
 
 impl Service<WriteMessageServiceRequest> for WriteMessageService {
@@ -142,7 +142,7 @@ pub struct ReadMessageServiceResult {
     pub message_id: String,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct ReadMessageService;
 
 impl Service<ReadMessageServiceRequest> for ReadMessageService {
