@@ -54,9 +54,6 @@ fn main() -> Result<()> {
         .with_line_number(true)
         .with_writer(non_blocking)
         .init();
-    if let Err(e) = test1() {
-        error!("Receive error: {:#?}", e);
-    };
     let proxy_server = ProxyServer::new();
     proxy_server.run();
     Ok(())
