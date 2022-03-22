@@ -41,8 +41,8 @@ pub(crate) struct TcpRelayService {
     tcp_close_service: BoxCloneService<TcpCloseServiceRequest, TcpCloseServiceResult, CommonError>,
 }
 
-impl TcpRelayService {
-    pub(crate) fn new() -> Self {
+impl Default for TcpRelayService {
+    fn default() -> Self {
         Self {
             tcp_close_service: BoxCloneService::new(TcpCloseService),
             read_agent_message_service: BoxCloneService::new(ReadMessageService),
@@ -65,8 +65,6 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
         let mut write_proxy_message_service = self.write_proxy_message_service.clone();
         let mut message_frame_read = req.message_frame_read;
         let mut message_frame_write = req.message_frame_write;
-        let agent_address_for_a2t = req.agent_address.clone();
-        let agent_address_for_t2a = req.agent_address.clone();
         let target_stream = req.target_stream;
         let agent_tcp_connect_message_id = req.agent_tcp_connect_message_id;
         let user_token = req.user_token;
@@ -81,7 +79,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                         Err(e) => {
                             error!(
                                 "Agent: {}, fail to read from agent because of error(ready): {:#?}",
-                                agent_address_for_a2t, e
+                                req.agent_address, e
                             );
                             return;
                         }
@@ -96,18 +94,18 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                         Err(e) => {
                             error!(
                                 "Agent: {}, fail to read from agent because of error: {:#?}",
-                                agent_address_for_a2t, e
+                                req.agent_address, e
                             );
                             return;
                         }
                         Ok(None) => {
-                            debug!("Agent: {}, nothing read from agent.", agent_address_for_a2t);
+                            debug!("Agent: {}, nothing read from agent.", req.agent_address);
                             return;
                         }
                         Ok(Some(agent_message_read_result)) => {
                             trace!(
                                 "Agent: {}, success read message from agent, agent message payload:\n{:#?}\n",
-                                agent_address_for_a2t,
+                                req.agent_address,
                                 agent_message_read_result.message_payload
                             );
                             message_frame_read = agent_message_read_result.message_framed_read;
@@ -118,14 +116,14 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                             {
                                 error!(
                                     "Agent: {}, fail to write from agent to target because of error: {:#?}",
-                                    agent_address_for_a2t, e
+                                    req.agent_address, e
                                 );
                                 return;
                             };
                             if let Err(e) = target_stream_write.flush().await {
                                 error!(
                                     "Agent: {}, fail to flush from agent to target because of error: {:#?}",
-                                    agent_address_for_a2t, e
+                                    req.agent_address, e
                                 );
                                 return;
                             };
@@ -141,15 +139,12 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                         Err(e) => {
                             error!(
                                 "Agent: {}, fail to read data from target because of error: {:#?}",
-                                agent_address_for_a2t, e
+                                req.agent_address, e
                             );
                             return;
                         }
                         Ok(0) => {
-                            debug!(
-                                "Agent: {}, read all data from target",
-                                agent_address_for_a2t
-                            );
+                            debug!("Agent: {}, read all data from target", req.agent_address);
                             return;
                         }
                         Ok(_) => {}
@@ -159,7 +154,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                         Err(e) => {
                             error!(
                                 "Agent: {}, fail to read from target because of error(ready): {:#?}",
-                                agent_address_for_a2t, e
+                                req.agent_address, e
                             );
                             return;
                         }
@@ -186,7 +181,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                         Err(e) => {
                             error!(
                             "Agent: {}, fail to read from target because of error(ready): {:#?}",
-                            agent_address_for_t2a, e
+                            req.agent_address, e
                             );
                             return;
                         }

@@ -22,6 +22,7 @@ use common::{
 use crate::service::{
     ConnectToTargetService, ConnectToTargetServiceRequest, ConnectToTargetServiceResult,
 };
+use crate::SERVER_CONFIG;
 
 pub(crate) struct TcpConnectServiceRequest {
     pub message_frame_read: MessageFramedRead,
@@ -48,12 +49,14 @@ pub(crate) struct TcpConnectService {
         BoxCloneService<ConnectToTargetServiceRequest, ConnectToTargetServiceResult, CommonError>,
 }
 
-impl TcpConnectService {
-    pub(crate) fn new() -> Self {
+impl Default for TcpConnectService {
+    fn default() -> Self {
         Self {
             read_agent_message_service: BoxCloneService::new(ReadMessageService),
             write_proxy_message_service: BoxCloneService::new(WriteMessageService),
-            connect_to_target_service: BoxCloneService::new(ConnectToTargetService::new(3)),
+            connect_to_target_service: BoxCloneService::new(ConnectToTargetService::new(
+                SERVER_CONFIG.target_connection_retry().unwrap_or(3),
+            )),
         }
     }
 }

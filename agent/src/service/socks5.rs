@@ -43,12 +43,14 @@ pub(crate) struct Socks5FlowService {
         BoxCloneService<Socks5RelayServiceRequest, Socks5RelayServiceResult, CommonError>,
 }
 
-impl Socks5FlowService {
-    pub(crate) fn new() -> Self {
+impl Default for Socks5FlowService {
+    fn default() -> Self {
         Self {
-            authenticate_service: BoxCloneService::new(Socks5AuthCommandService),
-            connect_service: BoxCloneService::new(Socks5ConnectCommandService::new()),
-            relay_service: BoxCloneService::new(Socks5RelayService::new()),
+            authenticate_service: BoxCloneService::new::<Socks5AuthCommandService>(
+                Default::default(),
+            ),
+            connect_service: BoxCloneService::new::<Socks5ConnectCommandService>(Default::default()),
+            relay_service: BoxCloneService::new::<Socks5RelayService>(Default::default()),
         }
     }
 }

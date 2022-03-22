@@ -57,8 +57,8 @@ pub(crate) struct Socks5ConnectCommandService {
         BoxCloneService<ReadMessageServiceRequest, Option<ReadMessageServiceResult>, CommonError>,
 }
 
-impl Socks5ConnectCommandService {
-    pub(crate) fn new() -> Self {
+impl Default for Socks5ConnectCommandService {
+    fn default() -> Self {
         Socks5ConnectCommandService {
             prepare_message_framed_service: BoxCloneService::new(PrepareMessageFramedService::new(
                 &(*PROXY_PUBLIC_KEY),

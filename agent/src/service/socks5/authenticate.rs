@@ -27,7 +27,8 @@ pub(crate) struct Socks5AuthenticateFlowResult {
     pub client_address: SocketAddr,
     pub auth_method: Socks5AuthMethod,
 }
-#[derive(Clone)]
+
+#[derive(Clone, Default)]
 pub(crate) struct Socks5AuthCommandService;
 
 impl Service<Socks5AuthenticateFlowRequest> for Socks5AuthCommandService {

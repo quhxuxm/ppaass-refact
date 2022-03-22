@@ -32,10 +32,10 @@ pub(crate) struct HandleClientConnectionService {
     http_flow_service: BoxCloneService<HttpFlowRequest, HttpFlowResult, CommonError>,
 }
 
-impl HandleClientConnectionService {
-    pub fn new() -> Self {
+impl Default for HandleClientConnectionService {
+    fn default() -> Self {
         Self {
-            socks5_flow_service: BoxCloneService::new(Socks5FlowService::new()),
+            socks5_flow_service: BoxCloneService::new::<Socks5FlowService>(Default::default()),
             http_flow_service: BoxCloneService::new(HttpFlowService::new()),
         }
     }

@@ -47,8 +47,8 @@ pub(crate) struct HandleAgentConnectionService {
     udp_relay_service: BoxCloneService<UdpRelayServiceRequest, UdpRelayServiceResult, CommonError>,
 }
 
-impl HandleAgentConnectionService {
-    pub(crate) fn new() -> Self {
+impl Default for HandleAgentConnectionService {
+    fn default() -> Self {
         let agent_public_key = &(*AGENT_PUBLIC_KEY);
         let proxy_private_key = &(*PROXY_PRIVATE_KEY);
         Self {
@@ -61,8 +61,8 @@ impl HandleAgentConnectionService {
                 SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
                 SERVER_CONFIG.compress().unwrap_or(true),
             )),
-            tcp_connect_service: BoxCloneService::new(TcpConnectService::new()),
-            tcp_relay_service: BoxCloneService::new(TcpRelayService::new()),
+            tcp_connect_service: BoxCloneService::new::<TcpConnectService>(Default::default()),
+            tcp_relay_service: BoxCloneService::new::<TcpRelayService>(Default::default()),
             udp_associate_service: BoxCloneService::new(UdpAssociateService),
             udp_relay_service: BoxCloneService::new(UdpRelayService),
         }

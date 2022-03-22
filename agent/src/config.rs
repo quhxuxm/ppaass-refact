@@ -34,6 +34,8 @@ pub(crate) struct Config {
     max_log_level: Option<String>,
     proxy_connection_retry: Option<u16>,
     compress: Option<bool>,
+    buffered_connection_number: Option<usize>,
+    concurrent_connection_number: Option<usize>,
 }
 
 impl Config {
@@ -77,5 +79,12 @@ impl Config {
 
     pub fn proxy_connection_retry(&self) -> Option<u16> {
         self.proxy_connection_retry
+    }
+
+    pub fn buffered_connection_number(&self) -> Option<usize> {
+        self.buffered_connection_number
+    }
+    pub fn concurrent_connection_number(&self) -> Option<usize> {
+        self.concurrent_connection_number
     }
 }

@@ -58,9 +58,9 @@ impl AgentServer {
                 }
             };
             let mut handle_client_connection_service = ServiceBuilder::new()
-                .buffer(100)
-                .concurrency_limit(10)
-                .service(HandleClientConnectionService::new());
+                .buffer(SERVER_CONFIG.buffered_connection_number().unwrap_or(1024))
+                .concurrency_limit(SERVER_CONFIG.concurrent_connection_number().unwrap_or(1024))
+                .service::<HandleClientConnectionService>(Default::default());
             loop {
                 let (client_stream, client_address) = match listener.accept().await {
 
