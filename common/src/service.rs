@@ -1,4 +1,3 @@
-use std::net::SocketAddr;
 use std::task::{Context, Poll};
 
 use futures_util::future::BoxFuture;
@@ -122,8 +121,14 @@ impl Service<WriteMessageServiceRequest> for WriteMessageService {
                 ),
             };
             let mut message_frame_write = req.message_framed_write;
-            message_frame_write.send(message).await;
-            message_frame_write.flush().await;
+            if let Err(e) = message_frame_write.send(message).await {
+                error!("Fail to write message because of error: {:#?}", e);
+                return Err(e);
+            }
+            if let Err(e) = message_frame_write.flush().await {
+                error!("Fail to flash message because of error: {:#?}", e);
+                return Err(e);
+            }
             Ok(WriteMessageServiceResult {
                 message_framed_write: message_frame_write,
             })

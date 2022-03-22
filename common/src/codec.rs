@@ -1,6 +1,6 @@
 use bytes::{Buf, Bytes, BytesMut};
 use lz4::block::{compress, decompress};
-use rand::rngs::{OsRng, ThreadRng};
+use rand::rngs::OsRng;
 use rand::Rng;
 use tokio_util::codec::{Decoder, Encoder, LengthDelimitedCodec};
 use tracing::{debug, error};
@@ -177,7 +177,7 @@ impl Encoder<Message> for MessageCodec<OsRng> {
                     }
                 };
                 (
-                    Some(encrypt_with_blowfish(&original_token, &payload.unwrap())),
+                    Some(encrypt_with_blowfish(original_token, &payload.unwrap())),
                     PayloadEncryptionType::Blowfish(encrypted_payload_encryption_token),
                 )
             }
@@ -193,7 +193,7 @@ impl Encoder<Message> for MessageCodec<OsRng> {
                     }
                 };
                 (
-                    Some(encrypt_with_aes(&original_token, &payload.unwrap())),
+                    Some(encrypt_with_aes(original_token, &payload.unwrap())),
                     PayloadEncryptionType::Aes(encrypted_payload_encryption_token),
                 )
             }
