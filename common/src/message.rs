@@ -183,7 +183,6 @@ pub enum PayloadEncryptionType {
 #[derive(Debug)]
 pub enum AgentMessagePayloadTypeValue {
     TcpConnect,
-    TcpConnectionClose,
     TcpData,
     UdpAssociate,
     UdpData,
@@ -194,7 +193,6 @@ impl From<AgentMessagePayloadTypeValue> for u8 {
         match value {
             AgentMessagePayloadTypeValue::TcpConnect => 110,
             AgentMessagePayloadTypeValue::TcpData => 111,
-            AgentMessagePayloadTypeValue::TcpConnectionClose => 112,
             AgentMessagePayloadTypeValue::UdpAssociate => 120,
             AgentMessagePayloadTypeValue::UdpData => 121,
         }
@@ -205,7 +203,6 @@ impl From<AgentMessagePayloadTypeValue> for u8 {
 pub enum ProxyMessagePayloadTypeValue {
     TcpConnectSuccess,
     TcpConnectFail,
-    TcpConnectionClose,
     TcpData,
     TcpDataRelayFail,
     UdpAssociateSuccess,
@@ -221,7 +218,6 @@ impl From<ProxyMessagePayloadTypeValue> for u8 {
             ProxyMessagePayloadTypeValue::TcpConnectFail => 211,
             ProxyMessagePayloadTypeValue::TcpData => 212,
             ProxyMessagePayloadTypeValue::TcpDataRelayFail => 213,
-            ProxyMessagePayloadTypeValue::TcpConnectionClose => 214,
             ProxyMessagePayloadTypeValue::UdpAssociateSuccess => 221,
             ProxyMessagePayloadTypeValue::UdpAssociateFail => 222,
             ProxyMessagePayloadTypeValue::UdpDataRelayFail => 223,
@@ -262,9 +258,6 @@ impl TryFrom<u8> for PayloadType {
             213 => Ok(PayloadType::ProxyPayload(
                 ProxyMessagePayloadTypeValue::TcpDataRelayFail,
             )),
-            214 => Ok(PayloadType::ProxyPayload(
-                ProxyMessagePayloadTypeValue::TcpConnectionClose,
-            )),
             221 => Ok(PayloadType::ProxyPayload(
                 ProxyMessagePayloadTypeValue::UdpAssociateSuccess,
             )),
@@ -283,9 +276,6 @@ impl TryFrom<u8> for PayloadType {
             )),
             111 => Ok(PayloadType::AgentPayload(
                 AgentMessagePayloadTypeValue::TcpData,
-            )),
-            112 => Ok(PayloadType::AgentPayload(
-                AgentMessagePayloadTypeValue::TcpConnectionClose,
             )),
             120 => Ok(PayloadType::AgentPayload(
                 AgentMessagePayloadTypeValue::UdpAssociate,

@@ -4,9 +4,11 @@ use std::str::FromStr;
 use anyhow::Result;
 use chrono::Local;
 use tracing::level_filters::LevelFilter;
-use tracing::log::Level;
+use tracing::log::{error, Level};
 use tracing_subscriber::fmt::format::Writer;
 use tracing_subscriber::fmt::time::FormatTime;
+
+use common::CommonError;
 
 use crate::config::SERVER_CONFIG;
 use crate::server::ProxyServer;
@@ -52,6 +54,9 @@ fn main() -> Result<()> {
         .with_line_number(true)
         .with_writer(non_blocking)
         .init();
+    if let Err(e) = test1() {
+        error!("Receive error: {:#?}", e);
+    };
     let proxy_server = ProxyServer::new();
     proxy_server.run();
     Ok(())
