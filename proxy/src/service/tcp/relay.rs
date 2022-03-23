@@ -6,12 +6,12 @@ use bytes::{Bytes, BytesMut};
 use futures_util::future::BoxFuture;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
-use tower::util::BoxCloneService;
 use tower::{Service, ServiceExt};
+use tower::util::BoxCloneService;
 use tracing::{debug, error, trace};
 
 use common::{
-    generate_uuid, AgentMessagePayloadTypeValue, CommonError, MessageFramedRead,
+    AgentMessagePayloadTypeValue, CommonError, generate_uuid, MessageFramedRead,
     MessageFramedWrite, MessagePayload, NetAddress, PayloadEncryptionType, PayloadType,
     ProxyMessagePayloadTypeValue, ReadMessageService, ReadMessageServiceRequest,
     ReadMessageServiceResult, WriteMessageService, WriteMessageServiceRequest,
@@ -39,10 +39,8 @@ pub(crate) struct TcpRelayServiceResult {
 
 #[derive(Clone)]
 pub(crate) struct TcpRelayService {
-    read_agent_message_service:
-        BoxCloneService<ReadMessageServiceRequest, Option<ReadMessageServiceResult>, CommonError>,
-    write_proxy_message_service:
-        BoxCloneService<WriteMessageServiceRequest, WriteMessageServiceResult, CommonError>,
+    read_agent_message_service: BoxCloneService<ReadMessageServiceRequest, Option<ReadMessageServiceResult>, CommonError>,
+    write_proxy_message_service: BoxCloneService<WriteMessageServiceRequest, WriteMessageServiceResult, CommonError>,
 }
 
 impl Default for TcpRelayService {
@@ -74,7 +72,6 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
         let agent_connect_message_source_address = req.source_address;
         let agent_connect_message_target_address = req.target_address;
         let (mut target_stream_read, mut target_stream_write) = target_stream.into_split();
-
         Box::pin(async move {
             tokio::spawn(async move {
                 loop {
@@ -85,12 +82,9 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                         }
                         Ok(v) => v,
                     };
-                    match service_obj
-                        .call(ReadMessageServiceRequest {
-                            message_framed_read: message_frame_read,
-                        })
-                        .await
-                    {
+                    match service_obj.call(ReadMessageServiceRequest {
+                        message_framed_read: message_frame_read,
+                    }).await {
                         Err(e) => {
                             error!("Fail to read from agent because of error: {:#?}", e);
                             return;
@@ -110,10 +104,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                                 PayloadType::AgentPayload(
                                     AgentMessagePayloadTypeValue::TcpData,
                                 ) => {
-                                    if let Err(e) = target_stream_write
-                                        .write(agent_message_payload.data.as_ref())
-                                        .await
-                                    {
+                                    if let Err(e) = target_stream_write.write(agent_message_payload.data.as_ref()).await {
                                         error!("Fail to write from agent to target because of error: {:#?}",e);
                                         return;
                                     };
@@ -162,18 +153,15 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                         PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::TcpData),
                         buf.freeze(),
                     );
-                    match service_obj
-                        .call(WriteMessageServiceRequest {
-                            message_framed_write: message_frame_write,
-                            ref_id: Some(agent_tcp_connect_message_id.clone()),
-                            user_token: user_token.clone(),
-                            payload_encryption_type: PayloadEncryptionType::Blowfish(
-                                generate_uuid().into(),
-                            ),
-                            message_payload: Some(proxy_message_payload),
-                        })
-                        .await
-                    {
+                    match service_obj.call(WriteMessageServiceRequest {
+                        message_framed_write: message_frame_write,
+                        ref_id: Some(agent_tcp_connect_message_id.clone()),
+                        user_token: user_token.clone(),
+                        payload_encryption_type: PayloadEncryptionType::Blowfish(
+                            generate_uuid().into(),
+                        ),
+                        message_payload: Some(proxy_message_payload),
+                    }).await {
                         Err(e) => {
                             error!("Fail to read from target because of error(ready): {:#?}", e);
                             return;

@@ -18,13 +18,9 @@ pub(crate) struct AgentServer {
 impl AgentServer {
     pub(crate) fn new() -> Self {
         let mut runtime_builder = tokio::runtime::Builder::new_multi_thread();
-        runtime_builder
-            .enable_all()
-            .thread_keep_alive(Duration::from_secs(
-                SERVER_CONFIG.thread_timeout().unwrap_or(2),
-            ))
-            .max_blocking_threads(SERVER_CONFIG.max_blocking_threads().unwrap_or(32))
-            .worker_threads(SERVER_CONFIG.thread_number().unwrap_or(1024));
+        runtime_builder.enable_all().thread_keep_alive(Duration::from_secs(
+            SERVER_CONFIG.thread_timeout().unwrap_or(2),
+        )).max_blocking_threads(SERVER_CONFIG.max_blocking_threads().unwrap_or(32)).worker_threads(SERVER_CONFIG.thread_number().unwrap_or(1024));
         let runtime = match runtime_builder.build() {
             Err(e) => {
                 error!(
@@ -45,10 +41,8 @@ impl AgentServer {
         self.runtime.block_on(async {
             let listener = match TcpListener::bind(SocketAddrV4::new(
                 Ipv4Addr::new(0, 0, 0, 0),
-                SERVER_CONFIG.port().unwrap_or(DEFAULT_SERVER_PORT)
-            ))
-            .await
-            {
+                SERVER_CONFIG.port().unwrap_or(DEFAULT_SERVER_PORT),
+            )).await {
                 Err(e) => {
                     panic!("Fail to bind agent server port because of error: {:#?}", e);
                 }
@@ -57,13 +51,9 @@ impl AgentServer {
                     listener
                 }
             };
-            let mut handle_client_connection_service = ServiceBuilder::new()
-                .buffer(SERVER_CONFIG.buffered_connection_number().unwrap_or(1024))
-                .concurrency_limit(SERVER_CONFIG.concurrent_connection_number().unwrap_or(1024))
-                .service::<HandleClientConnectionService>(Default::default());
+            let mut handle_client_connection_service = ServiceBuilder::new().buffer(SERVER_CONFIG.buffered_connection_number().unwrap_or(1024)).concurrency_limit(SERVER_CONFIG.concurrent_connection_number().unwrap_or(1024)).service::<HandleClientConnectionService>(Default::default());
             loop {
                 let (client_stream, client_address) = match listener.accept().await {
-
                     Err(e) => {
                         error!(
                             "Fail to accept client connection because of error: {:#?}",
@@ -83,8 +73,9 @@ impl AgentServer {
                     }
 
                     Ok(s) => {
-                        if let Err(e) = s.call(ClientConnectionInfo{
-                            client_stream, client_address
+                        if let Err(e) = s.call(ClientConnectionInfo {
+                            client_stream,
+                            client_address,
                         }).await {
                             error!(
                                 "Error happen when handle client connection [{}], error:{:#?}",

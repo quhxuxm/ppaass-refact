@@ -1,21 +1,22 @@
 use std::net::SocketAddr;
 use std::task::{Context, Poll};
 
-use futures_util::future::BoxFuture;
 use futures_util::{future, SinkExt, StreamExt};
+use futures_util::future::BoxFuture;
 use tokio::net::TcpStream;
+use tower::{Service, service_fn, ServiceExt};
 use tower::retry::{Policy, Retry};
 use tower::util::BoxCloneService;
-use tower::{service_fn, Service, ServiceExt};
 use tracing::{debug, error};
 
 use common::{
-    generate_uuid, AgentMessagePayloadTypeValue, CommonError, Message, MessageCodec,
+    AgentMessagePayloadTypeValue, CommonError, generate_uuid, Message, MessageCodec,
     MessageFramedRead, MessageFramedWrite, MessagePayload, PayloadEncryptionType, PayloadType,
     PrepareMessageFramedResult, PrepareMessageFramedService,
 };
 
 use crate::config::{AGENT_PUBLIC_KEY, PROXY_PRIVATE_KEY};
+use crate::SERVER_CONFIG;
 use crate::service::tcp::connect::{
     TcpConnectService, TcpConnectServiceRequest, TcpConnectServiceResult,
 };
@@ -24,7 +25,6 @@ use crate::service::udp::associate::{
     UdpAssociateService, UdpAssociateServiceRequest, UdpAssociateServiceResult,
 };
 use crate::service::udp::relay::{UdpRelayService, UdpRelayServiceRequest, UdpRelayServiceResult};
-use crate::SERVER_CONFIG;
 
 mod tcp;
 mod udp;
@@ -37,13 +37,10 @@ pub(crate) struct AgentConnectionInfo {
 }
 
 pub(crate) struct HandleAgentConnectionService {
-    prepare_message_frame_service:
-        BoxCloneService<TcpStream, PrepareMessageFramedResult, CommonError>,
-    tcp_connect_service:
-        BoxCloneService<TcpConnectServiceRequest, TcpConnectServiceResult, CommonError>,
+    prepare_message_frame_service: BoxCloneService<TcpStream, PrepareMessageFramedResult, CommonError>,
+    tcp_connect_service: BoxCloneService<TcpConnectServiceRequest, TcpConnectServiceResult, CommonError>,
     tcp_relay_service: BoxCloneService<TcpRelayServiceRequest, TcpRelayServiceResult, CommonError>,
-    udp_associate_service:
-        BoxCloneService<UdpAssociateServiceRequest, UdpAssociateServiceResult, CommonError>,
+    udp_associate_service: BoxCloneService<UdpAssociateServiceRequest, UdpAssociateServiceResult, CommonError>,
     udp_relay_service: BoxCloneService<UdpRelayServiceRequest, UdpRelayServiceResult, CommonError>,
 }
 
@@ -55,9 +52,7 @@ impl Default for HandleAgentConnectionService {
             prepare_message_frame_service: BoxCloneService::new(PrepareMessageFramedService::new(
                 agent_public_key,
                 proxy_private_key,
-                SERVER_CONFIG
-                    .max_frame_size()
-                    .unwrap_or(DEFAULT_MAX_FRAME_SIZE),
+                SERVER_CONFIG.max_frame_size().unwrap_or(DEFAULT_MAX_FRAME_SIZE),
                 SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
                 SERVER_CONFIG.compress().unwrap_or(true),
             )),
@@ -83,34 +78,22 @@ impl Service<AgentConnectionInfo> for HandleAgentConnectionService {
         let mut tcp_connect_service = self.tcp_connect_service.clone();
         let mut tcp_relay_service = self.tcp_relay_service.clone();
         Box::pin(async move {
-            let framed_result = prepare_message_frame_service
-                .ready()
-                .await?
-                .call(req.agent_stream)
-                .await?;
-            let tcp_connect_result = tcp_connect_service
-                .ready()
-                .await?
-                .call(TcpConnectServiceRequest {
-                    message_frame_read: framed_result.message_framed_read,
-                    message_frame_write: framed_result.message_framed_write,
-                    agent_address: req.agent_address,
-                })
-                .await?;
-            tcp_relay_service
-                .ready()
-                .await?
-                .call(TcpRelayServiceRequest {
-                    message_frame_read: tcp_connect_result.message_frame_read,
-                    message_frame_write: tcp_connect_result.message_frame_write,
-                    agent_address: req.agent_address,
-                    target_stream: tcp_connect_result.target_stream,
-                    source_address: tcp_connect_result.source_address,
-                    target_address: tcp_connect_result.target_address,
-                    user_token: tcp_connect_result.user_token,
-                    agent_tcp_connect_message_id: tcp_connect_result.agent_tcp_connect_message_id,
-                })
-                .await?;
+            let framed_result = prepare_message_frame_service.ready().await?.call(req.agent_stream).await?;
+            let tcp_connect_result = tcp_connect_service.ready().await?.call(TcpConnectServiceRequest {
+                message_framed_read: framed_result.message_framed_read,
+                message_framed_write: framed_result.message_framed_write,
+                agent_address: req.agent_address,
+            }).await?;
+            tcp_relay_service.ready().await?.call(TcpRelayServiceRequest {
+                message_frame_read: tcp_connect_result.message_framed_read,
+                message_frame_write: tcp_connect_result.message_framed_write,
+                agent_address: req.agent_address,
+                target_stream: tcp_connect_result.target_stream,
+                source_address: tcp_connect_result.source_address,
+                target_address: tcp_connect_result.target_address,
+                user_token: tcp_connect_result.user_token,
+                agent_tcp_connect_message_id: tcp_connect_result.agent_tcp_connect_message_id,
+            }).await?;
             Ok(())
         })
     }
@@ -133,8 +116,7 @@ struct ConnectToTargetAttempts {
 
 #[derive(Clone)]
 pub(crate) struct ConnectToTargetService {
-    concrete_service:
-        BoxCloneService<ConnectToTargetServiceRequest, ConnectToTargetServiceResult, CommonError>,
+    concrete_service: BoxCloneService<ConnectToTargetServiceRequest, ConnectToTargetServiceResult, CommonError>,
 }
 
 impl ConnectToTargetService {
@@ -146,9 +128,7 @@ impl ConnectToTargetService {
                     "Agent {}, begin connect to target: {}",
                     request.agent_address, request.target_address
                 );
-                let target_stream = TcpStream::connect(&request.target_address)
-                    .await
-                    .map_err(|e| CommonError::IoError { source: e })?;
+                let target_stream = TcpStream::connect(&request.target_address).await.map_err(|e| CommonError::IoError { source: e })?;
                 debug!(
                     "Agent {}, success connect to target: {}",
                     request.agent_address, request.target_address
@@ -162,9 +142,7 @@ impl ConnectToTargetService {
     }
 }
 
-impl Policy<ConnectToTargetServiceRequest, ConnectToTargetServiceResult, CommonError>
-    for ConnectToTargetAttempts
-{
+impl Policy<ConnectToTargetServiceRequest, ConnectToTargetServiceResult, CommonError> for ConnectToTargetAttempts {
     type Future = futures_util::future::Ready<Self>;
 
     fn retry(
@@ -213,11 +191,7 @@ impl Service<ConnectToTargetServiceRequest> for ConnectToTargetService {
     fn call(&mut self, request: ConnectToTargetServiceRequest) -> Self::Future {
         let mut concrete_connect_service = self.concrete_service.clone();
         Box::pin(async move {
-            let concrete_connect_result = concrete_connect_service
-                .ready()
-                .await?
-                .call(request.clone())
-                .await;
+            let concrete_connect_result = concrete_connect_service.ready().await?.call(request.clone()).await;
             match concrete_connect_result {
                 Ok(r) => Ok(r),
                 Err(e) => {

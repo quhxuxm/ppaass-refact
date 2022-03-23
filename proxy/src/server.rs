@@ -20,11 +20,10 @@ impl ProxyServer {
         let mut runtime_builder = tokio::runtime::Builder::new_multi_thread();
         runtime_builder
             .enable_all()
-            .thread_keep_alive(Duration::from_secs(
-                SERVER_CONFIG.thread_timeout().unwrap_or(2),
-            ))
+            .thread_keep_alive(Duration::from_secs(SERVER_CONFIG.thread_timeout().unwrap_or(2), ))
             .max_blocking_threads(SERVER_CONFIG.max_blocking_threads().unwrap_or(32))
-            .worker_threads(SERVER_CONFIG.thread_number().unwrap_or(1024));
+            .worker_threads(SERVER_CONFIG.thread_number()
+                .unwrap_or(1024));
         let runtime = match runtime_builder.build() {
             Err(e) => {
                 error!(
@@ -45,10 +44,8 @@ impl ProxyServer {
         self.runtime.block_on(async {
             let listener = match TcpListener::bind(SocketAddrV4::new(
                 Ipv4Addr::new(0, 0, 0, 0),
-                SERVER_CONFIG.port().unwrap_or(DEFAULT_SERVER_PORT)
-            ))
-            .await
-            {
+                SERVER_CONFIG.port().unwrap_or(DEFAULT_SERVER_PORT),
+            )).await {
                 Err(e) => {
                     panic!("Fail to bind proxy server port because of error: {:#?}", e);
                 }
@@ -57,10 +54,7 @@ impl ProxyServer {
                     listener
                 }
             };
-            let mut handle_agent_connection_service = ServiceBuilder::new()
-                .buffer(SERVER_CONFIG.buffered_connection_number().unwrap_or(1024))
-                .concurrency_limit(SERVER_CONFIG.concurrent_connection_number().unwrap_or(1024))
-                .service::<HandleAgentConnectionService>(Default::default());
+            let mut handle_agent_connection_service = ServiceBuilder::new().buffer(SERVER_CONFIG.buffered_connection_number().unwrap_or(1024)).concurrency_limit(SERVER_CONFIG.concurrent_connection_number().unwrap_or(1024)).service::<HandleAgentConnectionService>(Default::default());
             loop {
                 let (agent_stream, agent_address) = match listener.accept().await {
                     Err(e) => {
@@ -81,8 +75,9 @@ impl ProxyServer {
                         continue;
                     }
                     Ok(s) => {
-                        if let Err(e) = s.call(AgentConnectionInfo{
-                            agent_stream, agent_address
+                        if let Err(e) = s.call(AgentConnectionInfo {
+                            agent_stream,
+                            agent_address,
                         }).await {
                             error!(
                                 "Error happen when handle agent connection [{}], error:{:#?}",

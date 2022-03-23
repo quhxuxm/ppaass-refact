@@ -12,10 +12,11 @@ use tower::util::BoxCloneService;
 use tracing::{debug, error};
 
 use common::{
-    AgentMessagePayloadTypeValue, call_service, CommonError, generate_uuid, MessageFramedRead,
-    MessageFramedWrite, MessagePayload, NetAddress, PayloadEncryptionType, PayloadType,
-    ReadMessageService, ReadMessageServiceRequest, ReadMessageServiceResult, WriteMessageService,
-    WriteMessageServiceRequest, WriteMessageServiceResult,
+    AgentMessagePayloadTypeValue, CallServiceResult, CommonError, general_call_service,
+    generate_uuid, MessageFramedRead, MessageFramedWrite, MessagePayload, NetAddress,
+    PayloadEncryptionType, PayloadType, ReadMessageService, ReadMessageServiceRequest,
+    ReadMessageServiceResult, WriteMessageService, WriteMessageServiceRequest,
+    WriteMessageServiceResult,
 };
 
 use crate::SERVER_CONFIG;
@@ -37,10 +38,8 @@ pub(crate) struct Socks5RelayServiceResult {
 }
 #[derive(Clone)]
 pub(crate) struct Socks5RelayService {
-    write_agent_message_service:
-        BoxCloneService<WriteMessageServiceRequest, WriteMessageServiceResult, CommonError>,
-    read_proxy_message_service:
-        BoxCloneService<ReadMessageServiceRequest, Option<ReadMessageServiceResult>, CommonError>,
+    write_agent_message_service: BoxCloneService<WriteMessageServiceRequest, WriteMessageServiceResult, CommonError>,
+    read_proxy_message_service: BoxCloneService<ReadMessageServiceRequest, Option<ReadMessageServiceResult>, CommonError>,
 }
 
 impl Default for Socks5RelayService {
@@ -60,9 +59,7 @@ impl Service<Socks5RelayServiceRequest> for Socks5RelayService {
     fn poll_ready(&mut self, ctx: &mut Context) -> Poll<Result<(), Self::Error>> {
         let write_agent_message_service_ready = self.write_agent_message_service.poll_ready(ctx);
         let read_proxy_message_service_ready = self.read_proxy_message_service.poll_ready(ctx);
-        if write_agent_message_service_ready.is_ready()
-            && read_proxy_message_service_ready.is_ready()
-        {
+        if write_agent_message_service_ready.is_ready() && read_proxy_message_service_ready.is_ready() {
             return Poll::Ready(Ok(()));
         }
         Poll::Pending
@@ -71,13 +68,11 @@ impl Service<Socks5RelayServiceRequest> for Socks5RelayService {
     fn call(&mut self, request: Socks5RelayServiceRequest) -> Self::Future {
         let mut write_agent_message_service = self.write_agent_message_service.clone();
         let mut read_proxy_message_service = self.read_proxy_message_service.clone();
-
         Box::pin(async move {
             let client_stream = request.client_stream;
             let mut message_framed_read = request.message_framed_read;
             let mut message_framed_write = request.message_framed_write;
-            let (mut client_stream_read_half, mut client_stream_write_half) =
-                client_stream.into_split();
+            let (mut client_stream_read_half, mut client_stream_write_half) = client_stream.into_split();
             let source_address_a2t = request.source_address.clone();
             let target_address_a2t = request.target_address.clone();
             let target_address_t2a = request.target_address.clone();
@@ -101,7 +96,7 @@ impl Service<Socks5RelayServiceRequest> for Socks5RelayService {
                             debug!("Read {} bytes from client", size);
                         }
                     }
-                    match call_service<U=WriteMessageServiceResult>(
+                    match general_call_service(
                         write_agent_message_service,
                         WriteMessageServiceRequest {
                             message_framed_write,
@@ -117,62 +112,46 @@ impl Service<Socks5RelayServiceRequest> for Socks5RelayService {
                                 buf.freeze(),
                             )),
                         },
-                    )
-                    .await
-                    {
-                        Err(e) => {
+                    ).await {
+                        Err(_) => {
                             return;
                         }
-                        Ok(v) => {
-                            write_agent_message_service = v.service;
-                            message_framed_write = v.result.message_framed_write;
+                        Ok(CallServiceResult {
+                            result: WriteMessageServiceResult {
+                                message_framed_write: message_framed_write_in_result,
+                            },
+                            service,
+                            ..
+                        }) => {
+                            write_agent_message_service = service;
+                            message_framed_write = message_framed_write_in_result;
                         }
                     };
                 }
             });
             tokio::spawn(async move {
                 loop {
-
-                    match call_service<U=Option<ReadMessageServiceResult>>(read_proxy_message_service, ReadMessageServiceRequest {
-                        message_framed_read,
-                    }).await{
-                        Err(e)=>{
-                            return;
-                        }
-                        Ok(v)=>{
-                            read_proxy_message_service=v.service;
-                            if v.result.
-                        }
-                    }
-                    let service_obj = match read_proxy_message_service.ready().await {
-                        Err(e) => {
-                            error!(
-                            "Fail to read proxy data from {:#?} because of error (read service not ready): {:#?}",target_address_t2a, e);
-                            return;
-                        }
-                        Ok(v) => v,
-                    };
-                    match service_obj
-                        .call(ReadMessageServiceRequest {
+                    match general_call_service(
+                        read_proxy_message_service,
+                        ReadMessageServiceRequest {
                             message_framed_read,
-                        })
-                        .await
-                    {
-                        Err(e) => {
-                            error!(
-                            "Fail to read proxy data from {:#?} because of error (read service error): {:#?}", target_address_t2a, e);
+                        },
+                    ).await {
+                        Err(_) => {
                             return;
                         }
-                        Ok(None) => {
-                            return;
-                        }
-                        Ok(Some(proxy_message_read_result)) => {
-                            message_framed_read = proxy_message_read_result.message_framed_read;
-                            let proxy_message_payload = proxy_message_read_result.message_payload;
-                            if let Err(e) = client_stream_write_half
-                                .write(proxy_message_payload.data.as_ref())
-                                .await
-                            {
+                        Ok(CallServiceResult {
+                            service,
+                            result: Some(ReadMessageServiceResult {
+                                message_framed_read: message_framed_read_in_result,
+                                message_payload,
+                                ..
+                            }),
+                            ..
+                        }) => {
+                            read_proxy_message_service = service;
+                            message_framed_read = message_framed_read_in_result;
+                            if let Err(e) = client_stream_write_half.write(message_payload.data.as_ref()).await {
                                 error!(
                                 "Fail to write proxy data from {:#?} to client because of error: {:#?}", target_address_t2a, e);
                                 return;
@@ -182,6 +161,10 @@ impl Service<Socks5RelayServiceRequest> for Socks5RelayService {
                                 "Fail to flush proxy data from {:#?} to client because of error: {:#?}", target_address_t2a, e);
                                 return;
                             };
+                        }
+                        _ => {
+                            //Nothing to read
+                            return;
                         }
                     }
                 }

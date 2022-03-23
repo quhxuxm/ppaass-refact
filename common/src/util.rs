@@ -13,21 +13,17 @@ pub fn generate_uuid() -> String {
 }
 
 pub struct CallServiceResult<S, T, U>
-where
-    S: Service<T, Response = U, Error = CommonError> + Debug + ServiceExt<T>,
-{
+where S: Service<T, Response = U, Error = CommonError> + Debug + ServiceExt<T>, {
     pub service: S,
     pub result: U,
     _mark: PhantomData<T>,
 }
 
-pub async fn call_service<T, U, S>(
+pub async fn general_call_service<T, U, S>(
     mut service: S,
     request: T,
 ) -> Result<CallServiceResult<S, T, U>, S::Error>
-where
-    S: Service<T, Response = U, Error = CommonError> + Debug + ServiceExt<T>,
-{
+where S: Service<T, Response = U, Error = CommonError> + Debug + ServiceExt<T>, {
     let service_ready = match service.ready().await {
         Ok(v) => v,
         Err(e) => {

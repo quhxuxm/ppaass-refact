@@ -35,21 +35,12 @@ impl FormatTime for LogTimer {
 
 fn main() -> Result<()> {
     let file_appender = tracing_appender::rolling::daily(
-        SERVER_CONFIG
-            .log_dir()
-            .as_ref()
-            .expect("No log directory given."),
-        SERVER_CONFIG
-            .log_file()
-            .as_ref()
-            .expect("No log file name given."),
+        SERVER_CONFIG.log_dir().as_ref().expect("No log directory given."),
+        SERVER_CONFIG.log_file().as_ref().expect("No log file name given."),
     );
     let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
     let log_level_filter = LevelFilter::from_str(
-        SERVER_CONFIG
-            .max_log_level()
-            .as_ref()
-            .unwrap_or(&Level::Error.to_string()),
+        SERVER_CONFIG.max_log_level().as_ref().unwrap_or(&Level::Error.to_string()),
     )?;
     tracing_subscriber::fmt()
         .with_max_level(log_level_filter)

@@ -592,7 +592,6 @@ impl From<Message> for Bytes {
         result.put_u64(value.user_token.len() as u64);
         result.put_slice(value.user_token.as_bytes());
         result.put::<Bytes>(value.payload_encryption_type.into());
-
         match value.payload {
             None => {
                 result.put_u64(0);
