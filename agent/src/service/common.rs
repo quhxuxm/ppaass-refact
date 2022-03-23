@@ -21,6 +21,7 @@ use crate::service::socks5::{Socks5FlowRequest, Socks5FlowResult, Socks5FlowServ
 
 const SOCKS5_PROTOCOL_FLAG: u8 = 5;
 const SOCKS4_PROTOCOL_FLAG: u8 = 4;
+
 #[derive(Debug)]
 pub(crate) struct ClientConnectionInfo {
     pub client_stream: TcpStream,
@@ -128,6 +129,7 @@ struct ConnectToProxyAttempts {
     retry: u16,
 }
 
+#[derive(Clone)]
 pub(crate) struct ConnectToProxyService {
     concrete_service:
         BoxCloneService<ConcreteConnectToProxyRequest, ConnectToProxyServiceResult, CommonError>,

@@ -8,7 +8,6 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tower::util::BoxCloneService;
 use tower::{Service, ServiceExt};
-use tracing::instrument;
 use tracing::{debug, error, trace};
 
 use common::{
@@ -79,10 +78,13 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
         Box::pin(async move {
             tokio::spawn(async move {
                 loop {
-                    let service_obj = read_agent_message_service.ready().await.map_err(|e| {
-                        error!("Fail to read from agent because of error: {:#?}", e);
-                        Ok(())
-                    })?;
+                    let service_obj = match read_agent_message_service.ready().await {
+                        Err(e) => {
+                            error!("Fail to read from agent because of error: {:#?}", e);
+                            return;
+                        }
+                        Ok(v) => v,
+                    };
                     match service_obj
                         .call(ReadMessageServiceRequest {
                             message_framed_read: message_frame_read,
