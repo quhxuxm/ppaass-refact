@@ -59,7 +59,13 @@ impl Service<Socks5FlowRequest> for Socks5FlowService {
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        Poll::Ready(Ok(()))
+        let authenticate_service_ready = self.authenticate_service.poll_ready(cx);
+        let connect_service_ready = self.connect_service.poll_ready(cx);
+        let relay_service_ready = self.relay_service.poll_ready(cx);
+        if authenticate_service_ready.is_ready() && connect_service_ready.is_ready() && relay_service_ready.is_ready() {
+            return Poll::Ready(Ok(()))
+        }
+        Poll::Pending
     }
 
     fn call(&mut self, req: Socks5FlowRequest) -> Self::Future {
