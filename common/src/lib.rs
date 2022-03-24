@@ -18,9 +18,8 @@ pub use service::ReadMessageServiceResult;
 pub use service::WriteMessageService;
 pub use service::WriteMessageServiceRequest;
 pub use service::WriteMessageServiceResult;
-pub use util::CallServiceResult;
-pub use util::general_call_service;
 pub use util::generate_uuid;
+pub use util::ready_and_call_service;
 
 mod codec;
 mod crypto;

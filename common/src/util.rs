@@ -1,6 +1,11 @@
 use std::fmt::Debug;
+use std::future::Future;
 use std::marker::PhantomData;
+use std::pin::Pin;
+use std::task::{Context, Poll};
 
+use async_trait::async_trait;
+use futures_util::future::BoxFuture;
 use tower::{Service, ServiceExt};
 use tracing::error;
 use uuid::Uuid;
@@ -12,18 +17,14 @@ pub fn generate_uuid() -> String {
     uuid_str.replace('-', "")
 }
 
-pub struct CallServiceResult<S, T, U>
-where S: Service<T, Response = U, Error = CommonError> + Debug + ServiceExt<T>, {
-    pub service: S,
-    pub result: U,
-    _mark: PhantomData<T>,
-}
-
-pub async fn general_call_service<T, U, S>(
-    mut service: S,
+pub async fn ready_and_call_service<T, S>(
+    service: &mut S,
     request: T,
-) -> Result<CallServiceResult<S, T, U>, S::Error>
-where S: Service<T, Response = U, Error = CommonError> + Debug + ServiceExt<T>, {
+) -> Result<S::Response, S::Error>
+where
+    S: Service<T> + Debug,
+    S::Error: Debug,
+{
     let service_ready = match service.ready().await {
         Ok(v) => v,
         Err(e) => {
@@ -32,11 +33,7 @@ where S: Service<T, Response = U, Error = CommonError> + Debug + ServiceExt<T>, 
         }
     };
     match service_ready.call(request).await {
-        Ok(v) => Ok(CallServiceResult {
-            service,
-            result: v,
-            _mark: PhantomData,
-        }),
+        Ok(v) => Ok(v),
         Err(e) => {
             error!("Fail to service {:#?} because of error: {:#?}", service, e);
             return Err(e);
