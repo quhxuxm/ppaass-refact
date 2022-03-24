@@ -10,9 +10,9 @@ use tower::{service_fn, Service, ServiceExt};
 use tracing::{debug, error};
 
 use common::{
-    generate_uuid, AgentMessagePayloadTypeValue, CommonError, Message, MessageCodec,
-    MessageFramedRead, MessageFramedWrite, MessagePayload, PayloadEncryptionType, PayloadType,
-    PrepareMessageFramedResult, PrepareMessageFramedService,
+    generate_uuid, ready_and_call_service, AgentMessagePayloadTypeValue, CommonError, Message,
+    MessageCodec, MessageFramedRead, MessageFramedWrite, MessagePayload, PayloadEncryptionType,
+    PayloadType, PrepareMessageFramedResult, PrepareMessageFramedService,
 };
 
 use crate::config::{AGENT_PUBLIC_KEY, PROXY_PRIVATE_KEY};
@@ -93,24 +93,22 @@ impl Service<AgentConnectionInfo> for HandleAgentConnectionService {
         let mut tcp_connect_service = self.tcp_connect_service.clone();
         let mut tcp_relay_service = self.tcp_relay_service.clone();
         Box::pin(async move {
-            let framed_result = prepare_message_frame_service
-                .ready()
-                .await?
-                .call(req.agent_stream)
-                .await?;
-            let tcp_connect_result = tcp_connect_service
-                .ready()
-                .await?
-                .call(TcpConnectServiceRequest {
+            let framed_result =
+                ready_and_call_service(&mut prepare_message_frame_service, req.agent_stream)
+                    .await?;
+            let tcp_connect_result = ready_and_call_service(
+                &mut tcp_connect_service,
+                TcpConnectServiceRequest {
                     message_framed_read: framed_result.message_framed_read,
                     message_framed_write: framed_result.message_framed_write,
                     agent_address: req.agent_address,
-                })
-                .await?;
-            tcp_relay_service
-                .ready()
-                .await?
-                .call(TcpRelayServiceRequest {
+                },
+            )
+            .await?;
+
+            let _tcp_connect_result = ready_and_call_service(
+                &mut tcp_relay_service,
+                TcpRelayServiceRequest {
                     message_frame_read: tcp_connect_result.message_framed_read,
                     message_frame_write: tcp_connect_result.message_framed_write,
                     agent_address: req.agent_address,
@@ -119,8 +117,10 @@ impl Service<AgentConnectionInfo> for HandleAgentConnectionService {
                     target_address: tcp_connect_result.target_address,
                     user_token: tcp_connect_result.user_token,
                     agent_tcp_connect_message_id: tcp_connect_result.agent_tcp_connect_message_id,
-                })
-                .await?;
+                },
+            )
+            .await?;
+
             Ok(())
         })
     }
