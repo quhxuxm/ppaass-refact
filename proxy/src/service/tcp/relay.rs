@@ -60,7 +60,14 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        Poll::Ready(Ok(()))
+        let read_agent_message_service_ready = self.read_agent_message_service.poll_ready(cx);
+        let write_proxy_message_service_ready = self.write_proxy_message_service.poll_ready(cx);
+        if read_agent_message_service_ready.is_ready()
+            && write_proxy_message_service_ready.is_ready()
+        {
+            return Poll::Ready(Ok(()));
+        }
+        Poll::Pending
     }
 
     fn call(&mut self, req: TcpRelayServiceRequest) -> Self::Future {
