@@ -20,7 +20,6 @@ use common::{
 };
 
 use crate::codec::socks5::Socks5ConnectCodec;
-use crate::command::socks5::Socks5ConnectCommandType::Connect;
 use crate::command::socks5::{
     Socks5ConnectCommand, Socks5ConnectCommandResult, Socks5ConnectCommandResultStatus,
     Socks5ConnectCommandType,

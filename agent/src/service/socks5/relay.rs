@@ -1,6 +1,4 @@
-use std::fmt::Debug;
 use std::net::SocketAddr;
-use std::process::Output;
 use std::task::{Context, Poll};
 
 use bytes::BytesMut;
