@@ -4,6 +4,7 @@ use bytecodec::io::IoDecodeExt;
 use bytes::{Buf, BufMut, BytesMut};
 use httpcodec::{BodyDecoder, BodyEncoder, Request, RequestDecoder, Response, ResponseEncoder};
 use tokio_util::codec::{Decoder, Encoder};
+use tracing::error;
 
 use common::CommonError;
 
@@ -30,7 +31,10 @@ impl Decoder for HttpCodec {
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
         let decode_result = self.request_decoder.decode_exact(src.chunk());
         let decode_result = match decode_result {
-            Err(e) => return Err(CommonError::CodecError),
+            Err(e) => {
+                error!("Fail to decode http protocol because of error: {:#?}", e);
+                return Err(CommonError::CodecError)
+            }
             Ok(v) => v
         };
         Ok(Some(decode_result))
@@ -43,7 +47,10 @@ impl Encoder<Response<Vec<u8>>> for HttpCodec {
     fn encode(&mut self, item: Response<Vec<u8>>, dst: &mut BytesMut) -> Result<(), Self::Error> {
         let encode_result = self.response_encoder.encode_into_bytes(item);
         let encode_result = match encode_result {
-            Err(e) => return Err(CommonError::CodecError),
+            Err(e) => return {
+                error!("Fail to encode http protocol because of error: {:#?}", e);
+                Err(CommonError::CodecError)
+            },
             Ok(v) => v
         };
         dst.put_slice(encode_result.as_slice());
