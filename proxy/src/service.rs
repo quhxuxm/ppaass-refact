@@ -1,21 +1,22 @@
 use std::net::SocketAddr;
 use std::task::{Context, Poll};
 
-use futures_util::future::BoxFuture;
 use futures_util::{future, SinkExt, StreamExt};
+use futures_util::future::BoxFuture;
 use tokio::net::TcpStream;
+use tower::{Service, service_fn, ServiceExt};
 use tower::retry::{Policy, Retry};
 use tower::util::BoxCloneService;
-use tower::{service_fn, Service, ServiceExt};
 use tracing::{debug, error};
 
 use common::{
-    generate_uuid, ready_and_call_service, AgentMessagePayloadTypeValue, CommonError, Message,
-    MessageCodec, MessageFramedRead, MessageFramedWrite, MessagePayload, PayloadEncryptionType,
-    PayloadType, PrepareMessageFramedResult, PrepareMessageFramedService,
+    AgentMessagePayloadTypeValue, CommonError, generate_uuid, Message, MessageCodec,
+    MessageFramedRead, MessageFramedWrite, MessagePayload, PayloadEncryptionType, PayloadType,
+    PrepareMessageFramedResult, PrepareMessageFramedService, ready_and_call_service,
 };
 
 use crate::config::{AGENT_PUBLIC_KEY, PROXY_PRIVATE_KEY};
+use crate::SERVER_CONFIG;
 use crate::service::tcp::connect::{
     TcpConnectService, TcpConnectServiceRequest, TcpConnectServiceResult,
 };
@@ -24,7 +25,6 @@ use crate::service::udp::associate::{
     UdpAssociateService, UdpAssociateServiceRequest, UdpAssociateServiceResult,
 };
 use crate::service::udp::relay::{UdpRelayService, UdpRelayServiceRequest, UdpRelayServiceResult};
-use crate::SERVER_CONFIG;
 
 mod tcp;
 mod udp;
@@ -38,12 +38,12 @@ pub(crate) struct AgentConnectionInfo {
 
 pub(crate) struct HandleAgentConnectionService {
     prepare_message_frame_service:
-        BoxCloneService<TcpStream, PrepareMessageFramedResult, CommonError>,
+    BoxCloneService<TcpStream, PrepareMessageFramedResult, CommonError>,
     tcp_connect_service:
-        BoxCloneService<TcpConnectServiceRequest, TcpConnectServiceResult, CommonError>,
+    BoxCloneService<TcpConnectServiceRequest, TcpConnectServiceResult, CommonError>,
     tcp_relay_service: BoxCloneService<TcpRelayServiceRequest, TcpRelayServiceResult, CommonError>,
     udp_associate_service:
-        BoxCloneService<UdpAssociateServiceRequest, UdpAssociateServiceResult, CommonError>,
+    BoxCloneService<UdpAssociateServiceRequest, UdpAssociateServiceResult, CommonError>,
     udp_relay_service: BoxCloneService<UdpRelayServiceRequest, UdpRelayServiceResult, CommonError>,
 }
 
@@ -78,7 +78,6 @@ impl Service<AgentConnectionInfo> for HandleAgentConnectionService {
         let tcp_connect_service_ready = self.tcp_connect_service.poll_ready(cx);
         let prepare_message_frame_service_ready = self.prepare_message_frame_service.poll_ready(cx);
         let tcp_relay_service_ready = self.tcp_relay_service.poll_ready(cx);
-
         if tcp_connect_service_ready.is_ready()
             && prepare_message_frame_service_ready.is_ready()
             && tcp_relay_service_ready.is_ready()
@@ -104,8 +103,7 @@ impl Service<AgentConnectionInfo> for HandleAgentConnectionService {
                     agent_address: req.agent_address,
                 },
             )
-            .await?;
-
+                .await?;
             let _tcp_connect_result = ready_and_call_service(
                 &mut tcp_relay_service,
                 TcpRelayServiceRequest {
@@ -119,8 +117,7 @@ impl Service<AgentConnectionInfo> for HandleAgentConnectionService {
                     agent_tcp_connect_message_id: tcp_connect_result.agent_tcp_connect_message_id,
                 },
             )
-            .await?;
-
+                .await?;
             Ok(())
         })
     }
@@ -144,7 +141,7 @@ struct ConnectToTargetAttempts {
 #[derive(Clone)]
 pub(crate) struct ConnectToTargetService {
     concrete_service:
-        BoxCloneService<ConnectToTargetServiceRequest, ConnectToTargetServiceResult, CommonError>,
+    BoxCloneService<ConnectToTargetServiceRequest, ConnectToTargetServiceResult, CommonError>,
 }
 
 impl ConnectToTargetService {
@@ -173,7 +170,7 @@ impl ConnectToTargetService {
 }
 
 impl Policy<ConnectToTargetServiceRequest, ConnectToTargetServiceResult, CommonError>
-    for ConnectToTargetAttempts
+for ConnectToTargetAttempts
 {
     type Future = futures_util::future::Ready<Self>;
 
@@ -217,17 +214,13 @@ impl Service<ConnectToTargetServiceRequest> for ConnectToTargetService {
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        Poll::Ready(Ok(()))
+        self.concrete_service.poll_ready(cx)
     }
 
     fn call(&mut self, request: ConnectToTargetServiceRequest) -> Self::Future {
         let mut concrete_connect_service = self.concrete_service.clone();
         Box::pin(async move {
-            let concrete_connect_result = concrete_connect_service
-                .ready()
-                .await?
-                .call(request.clone())
-                .await;
+            let concrete_connect_result = ready_and_call_service(&mut concrete_connect_service, request.clone()).await;
             match concrete_connect_result {
                 Ok(r) => Ok(r),
                 Err(e) => {

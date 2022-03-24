@@ -6,6 +6,8 @@ use tokio::runtime::Runtime;
 use tower::{Service, ServiceBuilder, ServiceExt};
 use tracing::{error, info};
 
+use common::ready_and_call_service;
+
 use crate::config::SERVER_CONFIG;
 use crate::service::common::{ClientConnectionInfo, HandleClientConnectionService};
 
@@ -51,7 +53,10 @@ impl AgentServer {
                     listener
                 }
             };
-            let mut handle_client_connection_service = ServiceBuilder::new().buffer(SERVER_CONFIG.buffered_connection_number().unwrap_or(1024)).concurrency_limit(SERVER_CONFIG.concurrent_connection_number().unwrap_or(1024)).service::<HandleClientConnectionService>(Default::default());
+            let mut handle_client_connection_service = ServiceBuilder::new()
+                .buffer(SERVER_CONFIG.buffered_connection_number().unwrap_or(1024))
+                .concurrency_limit(SERVER_CONFIG.concurrent_connection_number().unwrap_or(1024))
+                .service::<HandleClientConnectionService>(Default::default());
             loop {
                 let (client_stream, client_address) = match listener.accept().await {
                     Err(e) => {
@@ -63,26 +68,15 @@ impl AgentServer {
                     }
                     Ok((client_stream, client_address)) => (client_stream, client_address),
                 };
-                match handle_client_connection_service.ready().await {
-                    Err(e) => {
-                        error!(
+                let handle_client_connection_service = ready_and_call_service(&mut handle_client_connection_service, ClientConnectionInfo {
+                    client_stream,
+                    client_address,
+                }).await;
+                if let Err(e) = handle_client_connection_service {
+                    error!(
                             "Error happen when handle client connection [{}] on poll ready, error:{:#?}",
                             client_address, e
                         );
-                        continue;
-                    }
-
-                    Ok(s) => {
-                        if let Err(e) = s.call(ClientConnectionInfo {
-                            client_stream,
-                            client_address,
-                        }).await {
-                            error!(
-                                "Error happen when handle client connection [{}], error:{:#?}",
-                                client_address, e
-                            )
-                        }
-                    }
                 }
             }
         });

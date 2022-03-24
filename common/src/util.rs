@@ -22,20 +22,18 @@ pub async fn ready_and_call_service<T, S>(
     request: T,
 ) -> Result<S::Response, S::Error>
 where
-    S: Service<T> + Debug,
+    S: Service<T>,
     S::Error: Debug,
 {
     let service_ready = match service.ready().await {
         Ok(v) => v,
         Err(e) => {
-            error!("Fail to service {:#?} because of error: {:#?}", service, e);
             return Err(e);
         }
     };
     match service_ready.call(request).await {
         Ok(v) => Ok(v),
         Err(e) => {
-            error!("Fail to service {:#?} because of error: {:#?}", service, e);
             return Err(e);
         }
     }

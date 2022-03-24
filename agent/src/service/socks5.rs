@@ -6,7 +6,7 @@ use tokio::net::TcpStream;
 use tower::{Service, ServiceExt};
 use tower::util::BoxCloneService;
 
-use common::CommonError;
+use common::{CommonError, ready_and_call_service};
 
 use crate::service::socks5::authenticate::{
     Socks5AuthCommandService, Socks5AuthenticateFlowRequest, Socks5AuthenticateFlowResult,
@@ -67,15 +67,15 @@ impl Service<Socks5FlowRequest> for Socks5FlowService {
         let mut connect_service = self.connect_service.clone();
         let mut relay_service = self.relay_service.clone();
         Box::pin(async move {
-            let authenticate_result = authenticate_service.ready().await?.call(Socks5AuthenticateFlowRequest {
+            let authenticate_result = ready_and_call_service(&mut authenticate_service, Socks5AuthenticateFlowRequest {
                 client_stream: req.client_stream,
                 client_address: req.client_address,
             }).await?;
-            let connect_flow_result = connect_service.ready().await?.call(Socks5ConnectCommandServiceRequest {
+            let connect_flow_result = ready_and_call_service(&mut connect_service, Socks5ConnectCommandServiceRequest {
                 client_stream: authenticate_result.client_stream,
                 client_address: authenticate_result.client_address,
             }).await?;
-            let relay_flow_result = relay_service.ready().await?.call(Socks5RelayServiceRequest {
+            let relay_flow_result = ready_and_call_service(&mut relay_service, Socks5RelayServiceRequest {
                 client_address: connect_flow_result.client_address,
                 client_stream: connect_flow_result.client_stream,
                 message_framed_write: connect_flow_result.message_framed_write,

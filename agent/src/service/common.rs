@@ -11,9 +11,7 @@ use tower::retry::{Policy, Retry};
 use tower::util::BoxCloneService;
 use tracing::{debug, error};
 
-use common::{
-    CommonError, generate_uuid, Message, MessageFramedWrite, MessagePayload, PayloadEncryptionType,
-};
+use common::{CommonError, generate_uuid, Message, MessageFramedWrite, MessagePayload, PayloadEncryptionType, ready_and_call_service};
 
 use crate::config::SERVER_CONFIG;
 use crate::service::http::{HttpFlowRequest, HttpFlowResult, HttpFlowService};
@@ -78,7 +76,7 @@ impl Service<ClientConnectionInfo> for HandleClientConnectionService {
             }
             if protocol == SOCKS5_PROTOCOL_FLAG {
                 debug!("Incoming request is for socks5 protocol.");
-                let mut flow_result = socks5_flow_service.ready().await?.call(Socks5FlowRequest {
+                let flow_result = ready_and_call_service(&mut socks5_flow_service, Socks5FlowRequest {
                     client_stream: req.client_stream,
                     client_address: req.client_address,
                 }).await?;
@@ -89,11 +87,10 @@ impl Service<ClientConnectionInfo> for HandleClientConnectionService {
                 return Ok(());
             }
             debug!("Incoming request is for http protocol.");
-            let mut client_connection = http_flow_service.ready().await?.call(HttpFlowRequest {
+            let _flow_result = ready_and_call_service(&mut http_flow_service, HttpFlowRequest {
                 client_stream: req.client_stream,
                 client_address: req.client_address,
             }).await?;
-            client_connection.client_stream.shutdown().await?;
             return Ok(());
         })
     }
@@ -200,14 +197,13 @@ impl Service<ConnectToProxyServiceRequest> for ConnectToProxyService {
         let mut concrete_connect_service = self.concrete_service.clone();
         let connect_future = async move {
             if let Some(proxy_address) = request.proxy_address {
-                let concrete_connect_result = concrete_connect_service.ready().await?.call(ConcreteConnectToProxyRequest {
-                    proxy_address: proxy_address,
+                return ready_and_call_service(&mut concrete_connect_service, ConcreteConnectToProxyRequest {
+                    proxy_address,
                     client_address: request.client_address,
                 }).await;
-                return concrete_connect_result;
             }
             for address in proxy_addresses.into_iter() {
-                let concrete_connect_result = concrete_connect_service.ready().await?.call(ConcreteConnectToProxyRequest {
+                let concrete_connect_result = ready_and_call_service(&mut concrete_connect_service, ConcreteConnectToProxyRequest {
                     proxy_address: address.clone(),
                     client_address: request.client_address,
                 }).await;
