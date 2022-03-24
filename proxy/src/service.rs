@@ -107,8 +107,8 @@ impl Service<AgentConnectionInfo> for HandleAgentConnectionService {
             let _tcp_connect_result = ready_and_call_service(
                 &mut tcp_relay_service,
                 TcpRelayServiceRequest {
-                    message_frame_read: tcp_connect_result.message_framed_read,
-                    message_frame_write: tcp_connect_result.message_framed_write,
+                    message_framed_read: tcp_connect_result.message_framed_read,
+                    message_framed_write: tcp_connect_result.message_framed_write,
                     agent_address: req.agent_address,
                     target_stream: tcp_connect_result.target_stream,
                     source_address: tcp_connect_result.source_address,
