@@ -19,6 +19,7 @@ pub(crate) mod server;
 
 pub(crate) mod codec {
     pub(crate) mod socks5;
+    pub(crate) mod http;
 }
 
 pub(crate) mod service;
