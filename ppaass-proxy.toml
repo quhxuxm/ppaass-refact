@@ -8,3 +8,6 @@ thread_timeout = 5
 target_connect_timeout = 20
 log_dir = "./log"
 log_file = "ppaass-proxy.log"
+buffered_connection_number=5
+concurrent_connection_number=1024
+target_connection_retry=2
