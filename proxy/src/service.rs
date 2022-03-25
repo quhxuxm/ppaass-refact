@@ -149,17 +149,13 @@ impl ConnectToTargetService {
         let concrete_service = Retry::new(
             ConnectToTargetAttempts { retry },
             service_fn(|request: ConnectToTargetServiceRequest| async move {
-                debug!(
-                    "Agent {}, begin connect to target: {}",
-                    request.agent_address, request.target_address
-                );
+                debug!("Begin connect to target: {}", request.target_address);
                 let target_stream = TcpStream::connect(&request.target_address)
-                    .await
-                    .map_err(|e| CommonError::IoError { source: e })?;
-                debug!(
-                    "Agent {}, success connect to target: {}",
-                    request.agent_address, request.target_address
-                );
+                    .await.map_err(|e| {
+                    error!("Fail connect to target because of error: {:#?}", e);
+                    CommonError::IoError { source: e }
+                })?;
+                debug!("Success connect to target: {}", request.target_address);
                 Ok(ConnectToTargetServiceResult { target_stream })
             }),
         );
