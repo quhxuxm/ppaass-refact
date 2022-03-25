@@ -6,6 +6,8 @@ use tokio::runtime::Runtime;
 use tower::{Service, ServiceBuilder, ServiceExt};
 use tracing::{error, info};
 
+use common::ready_and_call_service;
+
 use crate::config::SERVER_CONFIG;
 use crate::service::{AgentConnectionInfo, HandleAgentConnectionService};
 
@@ -69,25 +71,11 @@ impl ProxyServer {
                     }
                     Ok((agent_stream, agent_address)) => (agent_stream, agent_address),
                 };
-                match handle_agent_connection_service.ready().await {
-                    Err(e) => {
-                        error!(
-                            "Error happen when handle agent connection [{}] on poll ready, error:{:#?}",
-                            agent_address, e
-                        );
-                        continue;
-                    }
-                    Ok(s) => {
-                        if let Err(e) = s.call(AgentConnectionInfo {
-                            agent_stream,
-                            agent_address,
-                        }).await {
-                            error!(
-                                "Error happen when handle agent connection [{}], error:{:#?}",
-                                agent_address, e
-                            )
-                        }
-                    }
+                if let Err(e) = ready_and_call_service(&mut handle_agent_connection_service, AgentConnectionInfo {
+                    agent_stream,
+                    agent_address,
+                }).await {
+                    error!( "Error happen when handle agent connection [{}], error:{:#?}",agent_address, e)
                 }
             }
         });

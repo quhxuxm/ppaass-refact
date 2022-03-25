@@ -68,13 +68,12 @@ impl AgentServer {
                     }
                     Ok((client_stream, client_address)) => (client_stream, client_address),
                 };
-                let handle_client_connection_service = ready_and_call_service(&mut handle_client_connection_service, ClientConnectionInfo {
+                if let Err(e) = ready_and_call_service(&mut handle_client_connection_service, ClientConnectionInfo {
                     client_stream,
                     client_address,
-                }).await;
-                if let Err(e) = handle_client_connection_service {
+                }).await {
                     error!(
-                            "Error happen when handle client connection [{}] on poll ready, error:{:#?}",
+                            "Error happen when handle client connection [{}], error:{:#?}",
                             client_address, e
                         );
                 }
