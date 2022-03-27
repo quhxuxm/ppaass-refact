@@ -41,9 +41,9 @@ pub(crate) struct HandleAgentConnectionService {
     tcp_connect_service:
         BoxCloneService<TcpConnectServiceRequest, TcpConnectServiceResult, CommonError>,
     tcp_relay_service: BoxCloneService<TcpRelayServiceRequest, TcpRelayServiceResult, CommonError>,
-    udp_associate_service:
+    _udp_associate_service:
         BoxCloneService<UdpAssociateServiceRequest, UdpAssociateServiceResult, CommonError>,
-    udp_relay_service: BoxCloneService<UdpRelayServiceRequest, UdpRelayServiceResult, CommonError>,
+    _udp_relay_service: BoxCloneService<UdpRelayServiceRequest, UdpRelayServiceResult, CommonError>,
 }
 
 impl Default for HandleAgentConnectionService {
@@ -62,8 +62,8 @@ impl Default for HandleAgentConnectionService {
             )),
             tcp_connect_service: BoxCloneService::new::<TcpConnectService>(Default::default()),
             tcp_relay_service: BoxCloneService::new::<TcpRelayService>(Default::default()),
-            udp_associate_service: BoxCloneService::new(UdpAssociateService),
-            udp_relay_service: BoxCloneService::new(UdpRelayService),
+            _udp_associate_service: BoxCloneService::new(UdpAssociateService),
+            _udp_relay_service: BoxCloneService::new(UdpRelayService),
         }
     }
 }
