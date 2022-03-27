@@ -5,7 +5,7 @@ use bytes::Bytes;
 use futures_util::{future::BoxFuture, StreamExt};
 use tokio::net::TcpStream;
 use tower::util::BoxCloneService;
-use tower::{Service, ServiceExt};
+use tower::Service;
 use tracing::error;
 use tracing::log::debug;
 
@@ -124,10 +124,9 @@ impl Service<TcpConnectServiceRequest> for TcpConnectService {
                             PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::TcpConnectFail),
                             Bytes::new(),
                         );
-                        write_proxy_message_service
-                            .ready()
-                            .await?
-                            .call(WriteMessageServiceRequest {
+                        ready_and_call_service(
+                            &mut write_proxy_message_service,
+                            WriteMessageServiceRequest {
                                 message_framed_write: req.message_framed_write,
                                 message_payload: Some(connect_fail_payload),
                                 payload_encryption_type: PayloadEncryptionType::Blowfish(
@@ -135,8 +134,9 @@ impl Service<TcpConnectServiceRequest> for TcpConnectService {
                                 ),
                                 user_token,
                                 ref_id: Some(message_id),
-                            })
-                            .await?;
+                            },
+                        )
+                        .await?;
                         return Err(e);
                     }
                     Ok(v) => v,

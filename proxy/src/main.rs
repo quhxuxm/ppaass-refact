@@ -4,11 +4,9 @@ use std::str::FromStr;
 use anyhow::Result;
 use chrono::Local;
 use tracing::level_filters::LevelFilter;
-use tracing::log::{error, Level};
+use tracing::log::Level;
 use tracing_subscriber::fmt::format::Writer;
 use tracing_subscriber::fmt::time::FormatTime;
-
-use common::CommonError;
 
 use crate::config::SERVER_CONFIG;
 use crate::server::ProxyServer;

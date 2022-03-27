@@ -1,20 +1,19 @@
-use std::fmt::{Debug, Formatter};
 use std::net::SocketAddr;
 use std::task::{Context, Poll};
 
-use bytes::{Bytes, BytesMut};
+use bytes::BytesMut;
 use futures_util::future::BoxFuture;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
-use tower::{Service, ServiceExt};
 use tower::util::BoxCloneService;
+use tower::{Service, ServiceExt};
 use tracing::{debug, error};
 
 use common::{
-    AgentMessagePayloadTypeValue, CommonError, generate_uuid, MessageFramedRead,
-    MessageFramedWrite, MessagePayload, NetAddress, PayloadEncryptionType, PayloadType,
-    ProxyMessagePayloadTypeValue, ReadMessageService, ReadMessageServiceRequest, ReadMessageServiceResult,
-    ready_and_call_service, WriteMessageService, WriteMessageServiceRequest,
+    generate_uuid, ready_and_call_service, AgentMessagePayloadTypeValue, CommonError,
+    MessageFramedRead, MessageFramedWrite, MessagePayload, NetAddress, PayloadEncryptionType,
+    PayloadType, ProxyMessagePayloadTypeValue, ReadMessageService, ReadMessageServiceRequest,
+    ReadMessageServiceResult, WriteMessageService, WriteMessageServiceRequest,
     WriteMessageServiceResult,
 };
 
@@ -40,9 +39,9 @@ pub(crate) struct TcpRelayServiceResult {
 #[derive(Clone)]
 pub(crate) struct TcpRelayService {
     read_agent_message_service:
-    BoxCloneService<ReadMessageServiceRequest, Option<ReadMessageServiceResult>, CommonError>,
+        BoxCloneService<ReadMessageServiceRequest, Option<ReadMessageServiceResult>, CommonError>,
     write_proxy_message_service:
-    BoxCloneService<WriteMessageServiceRequest, WriteMessageServiceResult, CommonError>,
+        BoxCloneService<WriteMessageServiceRequest, WriteMessageServiceResult, CommonError>,
 }
 
 impl Default for TcpRelayService {
@@ -90,7 +89,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                             message_framed_read,
                         },
                     )
-                        .await;
+                    .await;
                     let ReadMessageServiceResult {
                         message_payload: MessagePayload { data, .. },
                         message_framed_read: message_framed_read_from_read_agent_result,
@@ -100,13 +99,13 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                         Ok(Some(
                             v @ ReadMessageServiceResult {
                                 message_payload:
-                                MessagePayload {
-                                    payload_type:
-                                    PayloadType::AgentPayload(
-                                        AgentMessagePayloadTypeValue::TcpData,
-                                    ),
-                                    ..
-                                },
+                                    MessagePayload {
+                                        payload_type:
+                                            PayloadType::AgentPayload(
+                                                AgentMessagePayloadTypeValue::TcpData,
+                                            ),
+                                        ..
+                                    },
                                 ..
                             },
                         )) => v,
@@ -172,7 +171,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                             message_payload: Some(proxy_message_payload),
                         },
                     )
-                        .await;
+                    .await;
                     match write_proxy_message_result {
                         Err(e) => {
                             error!("Fail to read from target because of error(ready): {:#?}", e);
