@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::{any::type_name, fmt::Debug};
 
 use tower::{Service, ServiceExt};
 use tracing::error;
@@ -14,15 +14,16 @@ pub async fn ready_and_call_service<T, S>(
     request: T,
 ) -> Result<S::Response, S::Error>
 where
-    S: Service<T> + Debug,
+    S: Service<T>,
     S::Error: Debug,
 {
+    let service_type_name = type_name::<S>();
     let service_ready = match service.ready().await {
         Ok(v) => v,
         Err(e) => {
             error!(
                 "Fail to invoke service: {:#?}\nErrors(not ready): {:#?}",
-                service, e
+                service_type_name, e
             );
             return Err(e);
         }
@@ -32,7 +33,7 @@ where
         Err(e) => {
             error!(
                 "Fail to invoke service: {:#?}\nErrors(on call): {:#?}",
-                service, e
+                service_type_name, e
             );
             return Err(e);
         }
