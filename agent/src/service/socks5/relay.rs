@@ -12,8 +12,9 @@ use tracing::{debug, error};
 use common::{
     generate_uuid, ready_and_call_service, AgentMessagePayloadTypeValue, CommonError,
     MessageFramedRead, MessageFramedWrite, MessagePayload, NetAddress, PayloadEncryptionType,
-    PayloadType, ReadMessageService, ReadMessageServiceRequest, ReadMessageServiceResult,
-    WriteMessageService, WriteMessageServiceRequest, WriteMessageServiceResult,
+    PayloadType, ProxyMessagePayloadTypeValue, ReadMessageService, ReadMessageServiceRequest,
+    ReadMessageServiceResult, WriteMessageService, WriteMessageServiceRequest,
+    WriteMessageServiceResult,
 };
 
 use crate::SERVER_CONFIG;
@@ -135,16 +136,32 @@ impl Service<Socks5RelayServiceRequest> for Socks5RelayService {
                     .await;
                     let ReadMessageServiceResult {
                         message_framed_read: message_framed_read_in_result,
-                        message_payload,
+                        message_payload:
+                            MessagePayload {
+                                data: proxy_raw_data,
+                                ..
+                            },
                         ..
                     } = match read_proxy_message_result {
                         Err(_) => return,
-                        Ok(None) => return,
-                        Ok(Some(v)) => v,
+                        Ok(Some(
+                            value @ ReadMessageServiceResult {
+                                message_payload:
+                                    MessagePayload {
+                                        payload_type:
+                                            PayloadType::ProxyPayload(
+                                                ProxyMessagePayloadTypeValue::TcpData,
+                                            ),
+                                        ..
+                                    },
+                                ..
+                            },
+                        )) => value,
+                        Ok(_) => return,
                     };
                     message_framed_read = message_framed_read_in_result;
                     if let Err(e) = client_stream_write_half
-                        .write(message_payload.data.as_ref())
+                        .write_all(proxy_raw_data.as_ref())
                         .await
                     {
                         error!(

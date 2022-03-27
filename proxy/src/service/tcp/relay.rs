@@ -80,6 +80,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
         let agent_connect_message_source_address = req.source_address;
         let agent_connect_message_target_address = req.target_address;
         let (mut target_stream_read, mut target_stream_write) = target_stream.into_split();
+
         Box::pin(async move {
             tokio::spawn(async move {
                 loop {
@@ -95,7 +96,10 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                         message_framed_read: message_framed_read_from_read_agent_result,
                         ..
                     } = match read_agent_message_result {
-                        Ok(None) => return,
+                        Ok(None) => {
+                            debug!("Read all data from agent");
+                            return;
+                        }
                         Ok(Some(
                             v @ ReadMessageServiceResult {
                                 message_payload:
@@ -119,7 +123,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                         }
                     };
                     message_framed_read = message_framed_read_from_read_agent_result;
-                    if let Err(e) = target_stream_write.write(data.as_ref()).await {
+                    if let Err(e) = target_stream_write.write_all(data.as_ref()).await {
                         error!(
                             "Fail to write from agent to target because of error: {:#?}",
                             e
