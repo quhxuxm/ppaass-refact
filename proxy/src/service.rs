@@ -153,7 +153,10 @@ impl ConnectToTargetService {
                     TcpStream::connect(&request.target_address)
                         .await
                         .map_err(|e| {
-                            error!("Fail connect to target because of error: {:#?}", e);
+                            error!(
+                                "Fail connect to target {} because of error: {:#?}",
+                                &request.target_address, e
+                            );
                             CommonError::IoError { source: e }
                         })?;
                 debug!("Success connect to target: {}", request.target_address);

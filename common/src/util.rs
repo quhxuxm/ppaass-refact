@@ -21,7 +21,7 @@ where
         Ok(v) => v,
         Err(e) => {
             error!(
-                "Fail to invoke service: {:#?} because of error(not ready): {:#?}",
+                "Fail to invoke service: {:#?}\nErrors(not ready): {:#?}",
                 service, e
             );
             return Err(e);
@@ -31,7 +31,7 @@ where
         Ok(v) => Ok(v),
         Err(e) => {
             error!(
-                "Fail to invoke service: {:#?} because of error(on call): {:#?}",
+                "Fail to invoke service: {:#?}\nErrors(on call): {:#?}",
                 service, e
             );
             return Err(e);
