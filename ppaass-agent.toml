@@ -1,10 +1,9 @@
-#port = 10080
-port = 10081
+port = 10080
+#port = 10081
 user_token = "ppaass-rust"
 #proxy_addresses = ["8.214.90.87:80", "43.153.16.81:80"]
-#proxy_addresses = ["43.135.166.168:80"]
-#proxy_addresses = ["104.238.144.228:80"]
-proxy_addresses = ["127.0.0.1:9999"]
+proxy_addresses = ["104.207.156.87:80"]
+#proxy_addresses = ["127.0.0.1:9999"]
 buffer_size = 131072
 max_frame_size = 262144
 thread_number = 2048
