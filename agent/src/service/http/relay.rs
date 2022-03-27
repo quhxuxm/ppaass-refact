@@ -54,8 +54,8 @@ impl Service<HttpRelayServiceRequest> for HttpRelayService {
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        let write_agent_message_service_ready = self.write_agent_message_service.poll_ready(cx);
-        let read_proxy_message_service_ready = self.read_proxy_message_service.poll_ready(cx);
+        let write_agent_message_service_ready = self.write_agent_message_service.poll_ready(cx)?;
+        let read_proxy_message_service_ready = self.read_proxy_message_service.poll_ready(cx)?;
         if write_agent_message_service_ready.is_ready()
             && read_proxy_message_service_ready.is_ready()
         {

@@ -125,10 +125,10 @@ impl Service<HttpConnectServiceRequest> for HttpConnectService {
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         let prepare_message_framed_service_ready =
-            self.prepare_message_framed_service.poll_ready(cx);
-        let write_agent_message_service_ready = self.write_agent_message_service.poll_ready(cx);
-        let read_proxy_message_service_ready = self.read_proxy_message_service.poll_ready(cx);
-        let connect_to_proxy_service_ready = self.connect_to_proxy_service.poll_ready(cx);
+            self.prepare_message_framed_service.poll_ready(cx)?;
+        let write_agent_message_service_ready = self.write_agent_message_service.poll_ready(cx)?;
+        let read_proxy_message_service_ready = self.read_proxy_message_service.poll_ready(cx)?;
+        let connect_to_proxy_service_ready = self.connect_to_proxy_service.poll_ready(cx)?;
         if prepare_message_framed_service_ready.is_ready()
             && write_agent_message_service_ready.is_ready()
             && read_proxy_message_service_ready.is_ready()

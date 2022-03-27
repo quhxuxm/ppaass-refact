@@ -50,8 +50,8 @@ impl Service<HttpFlowRequest> for HttpFlowService {
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        let connect_service_ready = self.connect_service.poll_ready(cx);
-        let relay_service = self.relay_service.poll_ready(cx);
+        let connect_service_ready = self.connect_service.poll_ready(cx)?;
+        let relay_service = self.relay_service.poll_ready(cx)?;
         if connect_service_ready.is_ready() && relay_service.is_ready() {
             return Poll::Ready(Ok(()));
         }

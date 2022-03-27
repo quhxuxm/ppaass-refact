@@ -56,8 +56,8 @@ impl Service<Socks5RelayServiceRequest> for Socks5RelayService {
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, ctx: &mut Context) -> Poll<Result<(), Self::Error>> {
-        let write_agent_message_service_ready = self.write_agent_message_service.poll_ready(ctx);
-        let read_proxy_message_service_ready = self.read_proxy_message_service.poll_ready(ctx);
+        let write_agent_message_service_ready = self.write_agent_message_service.poll_ready(ctx)?;
+        let read_proxy_message_service_ready = self.read_proxy_message_service.poll_ready(ctx)?;
         if write_agent_message_service_ready.is_ready()
             && read_proxy_message_service_ready.is_ready()
         {

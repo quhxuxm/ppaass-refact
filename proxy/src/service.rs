@@ -74,9 +74,10 @@ impl Service<AgentConnectionInfo> for HandleAgentConnectionService {
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        let tcp_connect_service_ready = self.tcp_connect_service.poll_ready(cx);
-        let prepare_message_frame_service_ready = self.prepare_message_frame_service.poll_ready(cx);
-        let tcp_relay_service_ready = self.tcp_relay_service.poll_ready(cx);
+        let tcp_connect_service_ready = self.tcp_connect_service.poll_ready(cx)?;
+        let prepare_message_frame_service_ready =
+            self.prepare_message_frame_service.poll_ready(cx)?;
+        let tcp_relay_service_ready = self.tcp_relay_service.poll_ready(cx)?;
         if tcp_connect_service_ready.is_ready()
             && prepare_message_frame_service_ready.is_ready()
             && tcp_relay_service_ready.is_ready()

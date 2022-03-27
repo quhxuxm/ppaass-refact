@@ -205,8 +205,8 @@ impl Service<ConnectToProxyServiceRequest> for ConnectToProxyService {
     type Error = CommonError;
     type Future = BoxFuture<'static, Result<ConnectToProxyServiceResult, Self::Error>>;
 
-    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        Poll::Ready(Ok(()))
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        self.concrete_service.poll_ready(cx)
     }
 
     fn call(&mut self, request: ConnectToProxyServiceRequest) -> Self::Future {
