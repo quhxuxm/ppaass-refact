@@ -59,10 +59,7 @@ impl AgentServer {
                     listener
                 }
             };
-            let mut handle_client_connection_service = ServiceBuilder::new()
-                .buffer(SERVER_CONFIG.buffered_connection_number().unwrap_or(1024))
-                .concurrency_limit(SERVER_CONFIG.concurrent_connection_number().unwrap_or(1024))
-                .service::<HandleClientConnectionService>(Default::default());
+
             loop {
                 let (client_stream, client_address) = match listener.accept().await {
                     Err(e) => {
@@ -74,20 +71,26 @@ impl AgentServer {
                     }
                     Ok((client_stream, client_address)) => (client_stream, client_address),
                 };
-                if let Err(e) = ready_and_call_service(
-                    &mut handle_client_connection_service,
-                    ClientConnectionInfo {
-                        client_stream,
-                        client_address,
-                    },
-                )
-                .await
-                {
-                    error!(
-                        "Error happen when handle client connection [{}], error:{:#?}",
-                        client_address, e
-                    );
-                }
+                let mut handle_client_connection_service = ServiceBuilder::new()
+                    .buffer(SERVER_CONFIG.buffered_connection_number().unwrap_or(1024))
+                    .concurrency_limit(SERVER_CONFIG.concurrent_connection_number().unwrap_or(1024))
+                    .service::<HandleClientConnectionService>(Default::default());
+                tokio::spawn(async move {
+                    if let Err(e) = ready_and_call_service(
+                        &mut handle_client_connection_service,
+                        ClientConnectionInfo {
+                            client_stream,
+                            client_address,
+                        },
+                    )
+                    .await
+                    {
+                        error!(
+                            "Error happen when handle client connection [{}], error:{:#?}",
+                            client_address, e
+                        );
+                    }
+                });
             }
         });
     }

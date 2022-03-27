@@ -59,10 +59,7 @@ impl ProxyServer {
                     listener
                 }
             };
-            let mut handle_agent_connection_service = ServiceBuilder::new()
-                .buffer(SERVER_CONFIG.buffered_connection_number().unwrap_or(1024))
-                .concurrency_limit(SERVER_CONFIG.concurrent_connection_number().unwrap_or(1024))
-                .service::<HandleAgentConnectionService>(Default::default());
+
             loop {
                 let (agent_stream, agent_address) = match listener.accept().await {
                     Err(e) => {
@@ -74,20 +71,26 @@ impl ProxyServer {
                     }
                     Ok((agent_stream, agent_address)) => (agent_stream, agent_address),
                 };
-                if let Err(e) = ready_and_call_service(
-                    &mut handle_agent_connection_service,
-                    AgentConnectionInfo {
-                        agent_stream,
-                        agent_address,
-                    },
-                )
-                .await
-                {
-                    error!(
-                        "Error happen when handle agent connection [{}], error:{:#?}",
-                        agent_address, e
+                let mut handle_agent_connection_service = ServiceBuilder::new()
+                    .buffer(SERVER_CONFIG.buffered_connection_number().unwrap_or(1024))
+                    .concurrency_limit(SERVER_CONFIG.concurrent_connection_number().unwrap_or(1024))
+                    .service::<HandleAgentConnectionService>(Default::default());
+                tokio::spawn(async move {
+                    if let Err(e) = ready_and_call_service(
+                        &mut handle_agent_connection_service,
+                        AgentConnectionInfo {
+                            agent_stream,
+                            agent_address,
+                        },
                     )
-                }
+                    .await
+                    {
+                        error!(
+                            "Error happen when handle agent connection [{}], error:{:#?}",
+                            agent_address, e
+                        )
+                    }
+                });
             }
         });
     }
