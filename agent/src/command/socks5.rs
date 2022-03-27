@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use std::fmt::Debug;
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};

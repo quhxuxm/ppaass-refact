@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 use std::task::{Context, Poll};
 
 use bytes::Bytes;
-use futures_util::{future::BoxFuture, StreamExt};
+use futures_util::future::BoxFuture;
 use tokio::net::TcpStream;
 use tower::util::BoxCloneService;
 use tower::Service;

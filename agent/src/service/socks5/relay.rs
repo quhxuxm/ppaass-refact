@@ -6,7 +6,7 @@ use futures_util::future::BoxFuture;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tower::util::BoxCloneService;
-use tower::{Service, ServiceExt};
+use tower::Service;
 use tracing::{debug, error};
 
 use common::{

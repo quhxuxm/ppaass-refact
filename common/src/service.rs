@@ -1,8 +1,8 @@
 use std::task::{Context, Poll};
 
-use futures_util::{SinkExt, StreamExt};
 use futures_util::future::BoxFuture;
 use futures_util::stream::{SplitSink, SplitStream};
+use futures_util::{SinkExt, StreamExt};
 use rand::rngs::OsRng;
 use tokio::net::TcpStream;
 use tokio_util::codec::Framed;
@@ -10,7 +10,7 @@ use tower::Service;
 use tracing::{debug, error};
 
 use crate::{
-    CommonError, generate_uuid, Message, MessageCodec, MessagePayload, PayloadEncryptionType,
+    generate_uuid, CommonError, Message, MessageCodec, MessagePayload, PayloadEncryptionType,
 };
 
 pub type MessageFramedRead = SplitStream<Framed<TcpStream, MessageCodec<OsRng>>>;
@@ -53,7 +53,7 @@ impl Service<TcpStream> for PrepareMessageFramedService {
     type Error = CommonError;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         Poll::Ready(Ok(()))
     }
 
@@ -98,7 +98,7 @@ impl Service<WriteMessageServiceRequest> for WriteMessageService {
     type Error = CommonError;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         Poll::Ready(Ok(()))
     }
 
@@ -155,7 +155,7 @@ impl Service<ReadMessageServiceRequest> for ReadMessageService {
     type Error = CommonError;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         Poll::Ready(Ok(()))
     }
 

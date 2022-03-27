@@ -1,12 +1,12 @@
 use std::net::SocketAddr;
 use std::task::{Context, Poll};
 
+use futures_util::future;
 use futures_util::future::BoxFuture;
-use futures_util::{future, StreamExt};
 use tokio::net::TcpStream;
 use tower::retry::{Policy, Retry};
 use tower::util::BoxCloneService;
-use tower::{service_fn, Service, ServiceExt};
+use tower::{service_fn, Service};
 use tracing::{debug, error};
 
 use common::{
@@ -34,6 +34,7 @@ pub(crate) struct AgentConnectionInfo {
     pub agent_address: SocketAddr,
 }
 
+#[derive(Debug)]
 pub(crate) struct HandleAgentConnectionService {
     prepare_message_frame_service:
         BoxCloneService<TcpStream, PrepareMessageFramedResult, CommonError>,
@@ -85,7 +86,7 @@ impl Service<AgentConnectionInfo> for HandleAgentConnectionService {
         Poll::Pending
     }
 
-    fn call(&mut self, mut req: AgentConnectionInfo) -> Self::Future {
+    fn call(&mut self, req: AgentConnectionInfo) -> Self::Future {
         let mut prepare_message_frame_service = self.prepare_message_frame_service.clone();
         let mut tcp_connect_service = self.tcp_connect_service.clone();
         let mut tcp_relay_service = self.tcp_relay_service.clone();
@@ -172,7 +173,7 @@ impl Policy<ConnectToTargetServiceRequest, ConnectToTargetServiceResult, CommonE
 
     fn retry(
         &self,
-        req: &ConnectToTargetServiceRequest,
+        _req: &ConnectToTargetServiceRequest,
         result: Result<&ConnectToTargetServiceResult, &CommonError>,
     ) -> Option<Self::Future> {
         match result {

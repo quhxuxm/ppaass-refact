@@ -1,16 +1,15 @@
 use bytes::{BufMut, Bytes, BytesMut};
-use crypto::{aessafe, blowfish};
 use crypto::symmetriccipher::{BlockDecryptor, BlockEncryptor};
+use crypto::{aessafe, blowfish};
 use rand::Rng;
-use rsa::{PaddingScheme, PublicKey, RsaPrivateKey, RsaPublicKey};
 use rsa::pkcs8::{FromPrivateKey, FromPublicKey};
+use rsa::{PaddingScheme, PublicKey, RsaPrivateKey, RsaPublicKey};
 use tracing::error;
 
 use crate::CommonError;
 
 const BLOWFISH_CHUNK_LENGTH: usize = 8;
 const AES_CHUNK_LENGTH: usize = 16;
-const RSA_BIT_SIZE: usize = 2048;
 
 /// The util to do RSA encryption and decryption.
 #[derive(Debug)]
@@ -50,17 +49,23 @@ impl<T: Rng + Send> RsaCrypto<T> {
     }
 
     pub(crate) fn encrypt(&mut self, target: &Bytes) -> Result<Bytes, CommonError> {
-        self.public_key.encrypt(&mut self.rng, PaddingScheme::PKCS1v15Encrypt, target).map_err(|e| {
-            error!("Fail to encrypt data with rsa because of error: {:#?}", e);
-            CommonError::CodecError
-        }).map(|v| v.into())
+        self.public_key
+            .encrypt(&mut self.rng, PaddingScheme::PKCS1v15Encrypt, target)
+            .map_err(|e| {
+                error!("Fail to encrypt data with rsa because of error: {:#?}", e);
+                CommonError::CodecError
+            })
+            .map(|v| v.into())
     }
 
     pub(crate) fn decrypt(&self, target: &Bytes) -> Result<Bytes, CommonError> {
-        self.private_key.decrypt(PaddingScheme::PKCS1v15Encrypt, target).map_err(|e| {
-            error!("Fail to decrypt data with rsa because of error: {:#?}", e);
-            CommonError::CodecError
-        }).map(|v| v.into())
+        self.private_key
+            .decrypt(PaddingScheme::PKCS1v15Encrypt, target)
+            .map_err(|e| {
+                error!("Fail to decrypt data with rsa because of error: {:#?}", e);
+                CommonError::CodecError
+            })
+            .map(|v| v.into())
     }
 }
 

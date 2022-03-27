@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
-use tower::{Service, ServiceBuilder, ServiceExt};
+use tower::ServiceBuilder;
 use tracing::{error, info};
 
 use common::ready_and_call_service;
@@ -20,9 +20,13 @@ pub(crate) struct AgentServer {
 impl AgentServer {
     pub(crate) fn new() -> Self {
         let mut runtime_builder = tokio::runtime::Builder::new_multi_thread();
-        runtime_builder.enable_all().thread_keep_alive(Duration::from_secs(
-            SERVER_CONFIG.thread_timeout().unwrap_or(2),
-        )).max_blocking_threads(SERVER_CONFIG.max_blocking_threads().unwrap_or(32)).worker_threads(SERVER_CONFIG.thread_number().unwrap_or(1024));
+        runtime_builder
+            .enable_all()
+            .thread_keep_alive(Duration::from_secs(
+                SERVER_CONFIG.thread_timeout().unwrap_or(2),
+            ))
+            .max_blocking_threads(SERVER_CONFIG.max_blocking_threads().unwrap_or(32))
+            .worker_threads(SERVER_CONFIG.thread_number().unwrap_or(1024));
         let runtime = match runtime_builder.build() {
             Err(e) => {
                 error!(
@@ -44,7 +48,9 @@ impl AgentServer {
             let listener = match TcpListener::bind(SocketAddrV4::new(
                 Ipv4Addr::new(0, 0, 0, 0),
                 SERVER_CONFIG.port().unwrap_or(DEFAULT_SERVER_PORT),
-            )).await {
+            ))
+            .await
+            {
                 Err(e) => {
                     panic!("Fail to bind agent server port because of error: {:#?}", e);
                 }
@@ -68,14 +74,19 @@ impl AgentServer {
                     }
                     Ok((client_stream, client_address)) => (client_stream, client_address),
                 };
-                if let Err(e) = ready_and_call_service(&mut handle_client_connection_service, ClientConnectionInfo {
-                    client_stream,
-                    client_address,
-                }).await {
+                if let Err(e) = ready_and_call_service(
+                    &mut handle_client_connection_service,
+                    ClientConnectionInfo {
+                        client_stream,
+                        client_address,
+                    },
+                )
+                .await
+                {
                     error!(
-                            "Error happen when handle client connection [{}], error:{:#?}",
-                            client_address, e
-                        );
+                        "Error happen when handle client connection [{}], error:{:#?}",
+                        client_address, e
+                    );
                 }
             }
         });

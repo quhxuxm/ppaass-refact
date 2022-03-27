@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use std::path::Path;
 
 use lazy_static::lazy_static;

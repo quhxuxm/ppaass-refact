@@ -5,11 +5,16 @@ use bytes::BytesMut;
 use futures_util::future::BoxFuture;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
-use tower::Service;
 use tower::util::BoxCloneService;
+use tower::Service;
 use tracing::{debug, error};
 
-use common::{AgentMessagePayloadTypeValue, CommonError, generate_uuid, MessageFramedRead, MessageFramedWrite, MessagePayload, NetAddress, PayloadEncryptionType, PayloadType, ReadMessageService, ReadMessageServiceRequest, ReadMessageServiceResult, ready_and_call_service, WriteMessageService, WriteMessageServiceRequest, WriteMessageServiceResult};
+use common::{
+    generate_uuid, ready_and_call_service, AgentMessagePayloadTypeValue, CommonError,
+    MessageFramedRead, MessageFramedWrite, MessagePayload, NetAddress, PayloadEncryptionType,
+    PayloadType, ReadMessageService, ReadMessageServiceRequest, ReadMessageServiceResult,
+    WriteMessageService, WriteMessageServiceRequest, WriteMessageServiceResult,
+};
 
 use crate::SERVER_CONFIG;
 
@@ -28,12 +33,12 @@ pub(crate) struct HttpRelayServiceResult {
     pub client_address: SocketAddr,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct HttpRelayService {
     write_agent_message_service:
-    BoxCloneService<WriteMessageServiceRequest, WriteMessageServiceResult, CommonError>,
+        BoxCloneService<WriteMessageServiceRequest, WriteMessageServiceResult, CommonError>,
     read_proxy_message_service:
-    BoxCloneService<ReadMessageServiceRequest, Option<ReadMessageServiceResult>, CommonError>,
+        BoxCloneService<ReadMessageServiceRequest, Option<ReadMessageServiceResult>, CommonError>,
 }
 impl Default for HttpRelayService {
     fn default() -> Self {
@@ -90,12 +95,10 @@ impl Service<HttpRelayServiceRequest> for HttpRelayService {
                             )),
                         },
                     )
-                        .await;
+                    .await;
                     let _write_agent_message_result = match write_agent_message_result {
                         Err(_) => return,
-                        Ok(v) => {
-                            message_framed_write = v.message_framed_write
-                        },
+                        Ok(v) => message_framed_write = v.message_framed_write,
                     };
                 }
                 loop {
@@ -134,7 +137,7 @@ impl Service<HttpRelayServiceRequest> for HttpRelayService {
                             )),
                         },
                     )
-                        .await;
+                    .await;
                     let write_agent_message_result = match write_agent_message_result {
                         Err(_) => return,
                         Ok(v) => v,
@@ -150,7 +153,7 @@ impl Service<HttpRelayServiceRequest> for HttpRelayService {
                             message_framed_read,
                         },
                     )
-                        .await;
+                    .await;
                     let ReadMessageServiceResult {
                         message_framed_read: message_framed_read_in_result,
                         message_payload,
@@ -186,4 +189,3 @@ impl Service<HttpRelayServiceRequest> for HttpRelayService {
         })
     }
 }
-

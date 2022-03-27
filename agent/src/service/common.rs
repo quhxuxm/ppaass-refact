@@ -2,16 +2,16 @@ use std::io::ErrorKind;
 use std::net::SocketAddr;
 use std::task::{Context, Poll};
 
-use futures_util::{future, TryFutureExt};
+use futures_util::future;
 use futures_util::future::BoxFuture;
-use tokio::io::AsyncWriteExt;
+
 use tokio::net::TcpStream;
-use tower::{Service, service_fn, ServiceExt};
 use tower::retry::{Policy, Retry};
 use tower::util::BoxCloneService;
+use tower::{service_fn, Service};
 use tracing::{debug, error};
 
-use common::{CommonError, generate_uuid, Message, MessageFramedWrite, MessagePayload, PayloadEncryptionType, ready_and_call_service};
+use common::{ready_and_call_service, CommonError};
 
 use crate::config::SERVER_CONFIG;
 use crate::service::http::{HttpFlowRequest, HttpFlowResult, HttpFlowService};
@@ -26,6 +26,7 @@ pub(crate) struct ClientConnectionInfo {
     pub client_address: SocketAddr,
 }
 
+#[derive(Debug)]
 pub(crate) struct HandleClientConnectionService {
     socks5_flow_service: BoxCloneService<Socks5FlowRequest, Socks5FlowResult, CommonError>,
     http_flow_service: BoxCloneService<HttpFlowRequest, HttpFlowResult, CommonError>,
@@ -76,10 +77,14 @@ impl Service<ClientConnectionInfo> for HandleClientConnectionService {
             }
             if protocol == SOCKS5_PROTOCOL_FLAG {
                 debug!("Incoming request is for socks5 protocol.");
-                let flow_result = ready_and_call_service(&mut socks5_flow_service, Socks5FlowRequest {
-                    client_stream: req.client_stream,
-                    client_address: req.client_address,
-                }).await?;
+                let flow_result = ready_and_call_service(
+                    &mut socks5_flow_service,
+                    Socks5FlowRequest {
+                        client_stream: req.client_stream,
+                        client_address: req.client_address,
+                    },
+                )
+                .await?;
                 debug!(
                     "Client {} complete socks5 relay",
                     flow_result.client_address
@@ -87,10 +92,14 @@ impl Service<ClientConnectionInfo> for HandleClientConnectionService {
                 return Ok(());
             }
             debug!("Incoming request is for http protocol.");
-            let _flow_result = ready_and_call_service(&mut http_flow_service, HttpFlowRequest {
-                client_stream: req.client_stream,
-                client_address: req.client_address,
-            }).await?;
+            let _flow_result = ready_and_call_service(
+                &mut http_flow_service,
+                HttpFlowRequest {
+                    client_stream: req.client_stream,
+                    client_address: req.client_address,
+                },
+            )
+            .await?;
             return Ok(());
         })
     }
@@ -120,7 +129,8 @@ struct ConnectToProxyAttempts {
 
 #[derive(Clone)]
 pub(crate) struct ConnectToProxyService {
-    concrete_service: BoxCloneService<ConcreteConnectToProxyRequest, ConnectToProxyServiceResult, CommonError>,
+    concrete_service:
+        BoxCloneService<ConcreteConnectToProxyRequest, ConnectToProxyServiceResult, CommonError>,
 }
 
 impl ConnectToProxyService {
@@ -128,8 +138,13 @@ impl ConnectToProxyService {
         let concrete_service = Retry::new(
             ConnectToProxyAttempts { retry },
             service_fn(|request: ConcreteConnectToProxyRequest| async move {
-                debug!("Client {}, begin connect to proxy: {}", request.client_address, request.proxy_address);
-                let proxy_stream = TcpStream::connect(&request.proxy_address).await.map_err(|e| CommonError::IoError { source: e })?;
+                debug!(
+                    "Client {}, begin connect to proxy: {}",
+                    request.client_address, request.proxy_address
+                );
+                let proxy_stream = TcpStream::connect(&request.proxy_address)
+                    .await
+                    .map_err(|e| CommonError::IoError { source: e })?;
                 debug!(
                     "Client {}, success connect to proxy: {}",
                     request.client_address, request.proxy_address
@@ -146,12 +161,14 @@ impl ConnectToProxyService {
     }
 }
 
-impl Policy<ConcreteConnectToProxyRequest, ConnectToProxyServiceResult, CommonError> for ConnectToProxyAttempts {
+impl Policy<ConcreteConnectToProxyRequest, ConnectToProxyServiceResult, CommonError>
+    for ConnectToProxyAttempts
+{
     type Future = futures_util::future::Ready<Self>;
 
     fn retry(
         &self,
-        req: &ConcreteConnectToProxyRequest,
+        _req: &ConcreteConnectToProxyRequest,
         result: Result<&ConnectToProxyServiceResult, &CommonError>,
     ) -> Option<Self::Future> {
         match result {
@@ -188,25 +205,37 @@ impl Service<ConnectToProxyServiceRequest> for ConnectToProxyService {
     type Error = CommonError;
     type Future = BoxFuture<'static, Result<ConnectToProxyServiceResult, Self::Error>>;
 
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         Poll::Ready(Ok(()))
     }
 
     fn call(&mut self, request: ConnectToProxyServiceRequest) -> Self::Future {
-        let proxy_addresses = SERVER_CONFIG.proxy_addresses().as_ref().expect("No proxy addresses configuration item").clone();
+        let proxy_addresses = SERVER_CONFIG
+            .proxy_addresses()
+            .as_ref()
+            .expect("No proxy addresses configuration item")
+            .clone();
         let mut concrete_connect_service = self.concrete_service.clone();
         let connect_future = async move {
             if let Some(proxy_address) = request.proxy_address {
-                return ready_and_call_service(&mut concrete_connect_service, ConcreteConnectToProxyRequest {
-                    proxy_address,
-                    client_address: request.client_address,
-                }).await;
+                return ready_and_call_service(
+                    &mut concrete_connect_service,
+                    ConcreteConnectToProxyRequest {
+                        proxy_address,
+                        client_address: request.client_address,
+                    },
+                )
+                .await;
             }
             for address in proxy_addresses.into_iter() {
-                let concrete_connect_result = ready_and_call_service(&mut concrete_connect_service, ConcreteConnectToProxyRequest {
-                    proxy_address: address.clone(),
-                    client_address: request.client_address,
-                }).await;
+                let concrete_connect_result = ready_and_call_service(
+                    &mut concrete_connect_service,
+                    ConcreteConnectToProxyRequest {
+                        proxy_address: address.clone(),
+                        client_address: request.client_address,
+                    },
+                )
+                .await;
                 match concrete_connect_result {
                     Ok(r) => return Ok(r),
                     Err(e) => {
