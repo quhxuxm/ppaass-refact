@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 use std::task::{Context, Poll};
 
-use bytes::BytesMut;
+use bytes::{BufMut, BytesMut};
 use futures_util::future::BoxFuture;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
@@ -91,7 +91,8 @@ impl Service<Socks5RelayServiceRequest> for Socks5RelayService {
                             );
                             return;
                         }
-                        Ok(0) => {
+                        Ok(0) if buf.remaining_mut() > 0 => {
+                            debug!("Read all data from agent.");
                             return;
                         }
                         Ok(size) => {
