@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 use std::task::{Context, Poll};
 
-use bytes::BytesMut;
+use bytes::{BufMut, BytesMut};
 use futures_util::future::BoxFuture;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
@@ -145,12 +145,12 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                             error!("Fail to read data from target because of error: {:#?}", e);
                             return;
                         }
-                        Ok(0) => {
+                        Ok(0) if buf.remaining_mut() > 0 => {
                             debug!("Read all data from target.");
                             return;
                         }
                         Ok(size) => {
-                            debug!("Read {} bytes from target.", size)
+                            debug!("Read {} bytes from target.", size);
                         }
                     };
                     let proxy_message_payload = MessagePayload::new(
