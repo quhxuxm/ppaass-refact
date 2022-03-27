@@ -273,7 +273,7 @@ impl Service<HttpConnectServiceRequest> for HttpConnectService {
                 Ok(Some(v)) => v,
                 Ok(_) => {
                     Self::send_error_to_client(http_client_framed).await?;
-                    return Err(CommonError::OtherError);
+                    return Err(CommonError::UnknownError);
                 }
             };
             if let ReadMessageServiceResult {
@@ -326,7 +326,7 @@ impl Service<HttpConnectServiceRequest> for HttpConnectService {
                 });
             };
             Self::send_error_to_client(http_client_framed).await?;
-            return Err(CommonError::OtherError);
+            return Err(CommonError::UnknownError);
         })
     }
 }

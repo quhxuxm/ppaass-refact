@@ -7,6 +7,6 @@ pub enum CommonError {
         #[from]
         source: std::io::Error,
     },
-    #[error("Other error happen.")]
-    OtherError,
+    #[error("Unkown error happen.")]
+    UnknownError,
 }

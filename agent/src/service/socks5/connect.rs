@@ -107,7 +107,7 @@ impl Socks5ConnectCommandService {
                 "Fail to flush socks5 connect fail result to client because of error: {:#?}",
                 e
             );
-            return Err(CommonError::OtherError);
+            return Err(CommonError::UnknownError);
         }
         Ok(None)
     }
