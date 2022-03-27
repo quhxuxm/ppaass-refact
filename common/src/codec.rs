@@ -1,14 +1,14 @@
 use bytes::{Buf, Bytes, BytesMut};
 use lz4::block::{compress, decompress};
-use rand::Rng;
 use rand::rngs::OsRng;
+use rand::Rng;
 use tokio_util::codec::{Decoder, Encoder, LengthDelimitedCodec};
 use tracing::{debug, error};
 
-use crate::{CommonError, Message, PayloadEncryptionType};
 use crate::crypto::{
     decrypt_with_aes, decrypt_with_blowfish, encrypt_with_aes, encrypt_with_blowfish, RsaCrypto,
 };
+use crate::{CommonError, Message, PayloadEncryptionType};
 
 const LENGTH_DELIMITED_CODEC_LENGTH_FIELD_LENGTH: usize = 8;
 
@@ -27,7 +27,8 @@ impl MessageCodec<OsRng> {
     ) -> Self {
         let mut length_delimited_codec_builder = LengthDelimitedCodec::builder();
         length_delimited_codec_builder.max_frame_length(max_frame_size);
-        length_delimited_codec_builder.length_field_length(LENGTH_DELIMITED_CODEC_LENGTH_FIELD_LENGTH);
+        length_delimited_codec_builder
+            .length_field_length(LENGTH_DELIMITED_CODEC_LENGTH_FIELD_LENGTH);
         let length_delimited_codec = length_delimited_codec_builder.new_codec();
         let rng = OsRng;
         let rsa_crypto = RsaCrypto::new(public_key, private_key, rng);
@@ -57,13 +58,14 @@ impl Decoder for MessageCodec<OsRng> {
             Some(r) => r,
         };
         let mut message: Message = if self.compress {
-            let lz4_decompress_result = match decompress(length_delimited_decode_result.chunk(), None) {
-                Err(e) => {
-                    error!("Fail to decompress message because of error: {:#?}", e);
-                    return Err(CommonError::IoError { source: e });
-                }
-                Ok(r) => Bytes::from(r),
-            };
+            let lz4_decompress_result =
+                match decompress(length_delimited_decode_result.chunk(), None) {
+                    Err(e) => {
+                        error!("Fail to decompress message because of error: {:#?}", e);
+                        return Err(CommonError::IoError { source: e });
+                    }
+                    Ok(r) => Bytes::from(r),
+                };
             match lz4_decompress_result.try_into() {
                 Err(e) => {
                     error!("Fail to parse message because of error: {:#?}", e);
@@ -87,7 +89,8 @@ impl Decoder for MessageCodec<OsRng> {
                     debug!("Nothing to decrypt for blowfish.")
                 }
                 Some(ref content) => {
-                    let original_encryption_token = match self.rsa_crypto.decrypt(encryption_token) {
+                    let original_encryption_token = match self.rsa_crypto.decrypt(encryption_token)
+                    {
                         Err(e) => {
                             error!(
                                 "Fail to decrypt message with blowfish because of error: {:#?}",
@@ -97,7 +100,8 @@ impl Decoder for MessageCodec<OsRng> {
                         }
                         Ok(r) => r,
                     };
-                    let decrypt_payload = decrypt_with_blowfish(&original_encryption_token, content);
+                    let decrypt_payload =
+                        decrypt_with_blowfish(&original_encryption_token, content);
                     message.payload = Some(decrypt_payload);
                 }
             },
@@ -106,7 +110,8 @@ impl Decoder for MessageCodec<OsRng> {
                     debug!("Nothing to decrypt for aes.")
                 }
                 Some(ref content) => {
-                    let original_encryption_token = match self.rsa_crypto.decrypt(encryption_token) {
+                    let original_encryption_token = match self.rsa_crypto.decrypt(encryption_token)
+                    {
                         Err(e) => {
                             error!(
                                 "Fail to decrypt message with aes because of error: {:#?}",
@@ -160,7 +165,10 @@ impl Encoder<Message> for MessageCodec<OsRng> {
         let (encrypted_payload, encrypted_payload_encryption_type) = match payload_encryption_type {
             PayloadEncryptionType::Plain => (payload, PayloadEncryptionType::Plain),
             PayloadEncryptionType::Blowfish(ref original_token) => {
-                let encrypted_payload_encryption_token = match self.rsa_crypto.encrypt(original_token) {
+                let encrypted_payload_encryption_token = match self
+                    .rsa_crypto
+                    .encrypt(original_token)
+                {
                     Ok(r) => r,
                     Err(e) => {
                         error!("Fail the encrypt original message encryption token with rsa crypto for blowfish");
@@ -173,7 +181,10 @@ impl Encoder<Message> for MessageCodec<OsRng> {
                 )
             }
             PayloadEncryptionType::Aes(ref original_token) => {
-                let encrypted_payload_encryption_token = match self.rsa_crypto.encrypt(original_token) {
+                let encrypted_payload_encryption_token = match self
+                    .rsa_crypto
+                    .encrypt(original_token)
+                {
                     Ok(r) => r,
                     Err(e) => {
                         error!("Fail the encrypt original message encryption token with rsa crypto for aes");
