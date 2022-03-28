@@ -79,7 +79,19 @@ impl Service<HttpRelayServiceRequest> for HttpRelayService {
             let source_address_a2t = request.source_address.clone();
             let target_address_a2t = request.target_address.clone();
             let target_address_t2a = request.target_address.clone();
+
+            let (relay_status_sender, mut relay_status_receiver) = tokio::sync::mpsc::channel::<bool>(1);
+
             tokio::spawn(async move {
+                match relay_status_receiver.try_recv(){
+                    Err(e)=>{
+                        debug!("Proxy data reader goes well: {:#?}", e);
+                    }
+                    Ok(_)=>{
+                        error!("Proxy data reader error happen.");
+                        return;
+                    }
+                }
                 if let Some(init_data) = request.init_data {
                     let write_agent_message_result = ready_and_call_service(
                         &mut write_agent_message_service,
@@ -105,6 +117,15 @@ impl Service<HttpRelayServiceRequest> for HttpRelayService {
                     };
                 }
                 loop {
+                    match relay_status_receiver.try_recv(){
+                        Err(e)=>{
+                            debug!("Proxy data reader goes well: {:#?}", e);
+                        }
+                        Ok(_)=>{
+                            error!("Proxy data reader error happen.");
+                            return;
+                        }
+                    }
                     let mut buf = BytesMut::with_capacity(
                         SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
                     );
@@ -170,6 +191,17 @@ impl Service<HttpRelayServiceRequest> for HttpRelayService {
                     } = match read_proxy_message_result {
                         Err(e) => {
                             error!("Fail to read proxy data because of error: {:#?}", e);
+                            match relay_status_sender.try_send(true) {
+                                Err(e) => {
+                                    error!(
+                                        "Fail to notice proxy data reader because of error: {:#?}.",
+                                        e
+                                    );
+                                }
+                                Ok(_) => {
+                                    debug!("Success notice proxy data reader to close.");
+                                }
+                            };
                             return;
                         }
                         Ok(Some(
