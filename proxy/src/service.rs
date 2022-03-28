@@ -4,11 +4,8 @@ use std::task::{Context, Poll};
 use futures_util::future;
 use futures_util::future::BoxFuture;
 use tokio::net::TcpStream;
+use tower::retry::{Policy, Retry};
 use tower::util::BoxCloneService;
-use tower::{
-    retry::{Policy, Retry},
-    util::BoxLayer,
-};
 use tower::{service_fn, Service};
 use tracing::{debug, error};
 
