@@ -3,8 +3,11 @@ use std::task::{Context, Poll};
 
 use bytes::{BufMut, BytesMut};
 use futures_util::future::BoxFuture;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    sync::mpsc::error::TryRecvError,
+};
 use tower::util::BoxCloneService;
 use tower::Service;
 use tracing::{debug, error};
@@ -92,18 +95,24 @@ impl Service<HttpRelayServiceRequest> for HttpRelayService {
 
             tokio::spawn(async move {
                 match proxy_reader_error_receiver.try_recv() {
-                    Err(e) => {
-                        debug!("Proxy data reader goes well: {:#?}", e);
-                    }
+                    Err(e) => match e {
+                        TryRecvError::Empty => {
+                            debug!("Proxy data reader goes well: {:#?}", e);
+                        }
+                        TryRecvError::Disconnected => return,
+                    },
                     Ok(_) => {
                         error!("Proxy data reader error happen.");
                         return;
                     }
                 }
                 match client_writer_error_receiver.try_recv() {
-                    Err(e) => {
-                        debug!("Client data writer goes well: {:#?}", e);
-                    }
+                    Err(e) => match e {
+                        TryRecvError::Empty => {
+                            debug!("Client data writer goes well: {:#?}", e);
+                        }
+                        TryRecvError::Disconnected => return,
+                    },
                     Ok(_) => {
                         error!("Client data writer error happen.");
                         return;
@@ -144,18 +153,24 @@ impl Service<HttpRelayServiceRequest> for HttpRelayService {
                 }
                 loop {
                     match proxy_reader_error_receiver.try_recv() {
-                        Err(e) => {
-                            debug!("Proxy data reader goes well: {:#?}", e);
-                        }
+                        Err(e) => match e {
+                            TryRecvError::Empty => {
+                                debug!("Proxy data reader goes well: {:#?}", e);
+                            }
+                            TryRecvError::Disconnected => return,
+                        },
                         Ok(_) => {
                             error!("Proxy data reader error happen.");
                             return;
                         }
                     }
                     match client_writer_error_receiver.try_recv() {
-                        Err(e) => {
-                            debug!("Client data writer goes well: {:#?}", e);
-                        }
+                        Err(e) => match e {
+                            TryRecvError::Empty => {
+                                debug!("Client data writer goes well: {:#?}", e);
+                            }
+                            TryRecvError::Disconnected => return,
+                        },
                         Ok(_) => {
                             error!("Client data writer error happen.");
                             return;
@@ -223,18 +238,24 @@ impl Service<HttpRelayServiceRequest> for HttpRelayService {
             tokio::spawn(async move {
                 loop {
                     match proxy_writer_error_receiver.try_recv() {
-                        Err(e) => {
-                            debug!("Proxy data writer goes well: {:#?}", e);
-                        }
+                        Err(e) => match e {
+                            TryRecvError::Empty => {
+                                debug!("Proxy data writer goes well: {:#?}", e);
+                            }
+                            TryRecvError::Disconnected => return,
+                        },
                         Ok(_) => {
                             error!("Proxy data writer error happen.");
                             return;
                         }
                     }
                     match client_reader_error_receiver.try_recv() {
-                        Err(e) => {
-                            debug!("Client reader goes well: {:#?}", e);
-                        }
+                        Err(e) => match e {
+                            TryRecvError::Empty => {
+                                debug!("Client reader goes well: {:#?}", e);
+                            }
+                            TryRecvError::Disconnected => return,
+                        },
                         Ok(_) => {
                             error!("Client reader error happen.");
                             return;
@@ -296,8 +317,11 @@ impl Service<HttpRelayServiceRequest> for HttpRelayService {
                             "Fail to write proxy data from {:#?} to client because of error: {:#?}",
                             target_address_t2a, e
                         );
-                        if let Err(e) = client_writer_error_sender.try_send(true){
-                            error!("Fail to notice client writer error because of error: {:#?}", e);
+                        if let Err(e) = client_writer_error_sender.try_send(true) {
+                            error!(
+                                "Fail to notice client writer error because of error: {:#?}",
+                                e
+                            );
                         }
                         return;
                     };
