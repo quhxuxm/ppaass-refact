@@ -10,15 +10,15 @@ use tower::ServiceBuilder;
 use tracing::{debug, error};
 
 use common::{
-    AgentMessagePayloadTypeValue, CommonError, generate_uuid, MessageFramedRead,
-    MessageFramedWrite, MessagePayload, NetAddress, PayloadEncryptionType, PayloadType,
-    ProxyMessagePayloadTypeValue, ReadMessageService, ReadMessageServiceRequest, ReadMessageServiceResult,
-    ready_and_call_service, WriteMessageService, WriteMessageServiceRequest,
+    generate_uuid, ready_and_call_service, AgentMessagePayloadTypeValue, CommonError,
+    MessageFramedRead, MessageFramedWrite, MessagePayload, NetAddress, PayloadEncryptionType,
+    PayloadType, ProxyMessagePayloadTypeValue, ReadMessageService, ReadMessageServiceRequest,
+    ReadMessageServiceResult, WriteMessageService, WriteMessageServiceRequest,
 };
 
+use crate::service::common::DEFAULT_BUFFER_SIZE;
 use crate::SERVER_CONFIG;
 
-const DEFAULT_BUFFER_SIZE: usize = 64 * 1024;
 pub(crate) struct HttpRelayServiceRequest {
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,
@@ -78,7 +78,7 @@ impl Service<HttpRelayServiceRequest> for HttpRelayService {
                             )),
                         },
                     )
-                        .await;
+                    .await;
                     let _write_agent_message_result = match write_agent_message_result {
                         Err(e) => {
                             error!(
@@ -127,7 +127,7 @@ impl Service<HttpRelayServiceRequest> for HttpRelayService {
                             )),
                         },
                     )
-                        .await;
+                    .await;
                     let write_agent_message_result = match write_agent_message_result {
                         Err(e) => {
                             error!(
@@ -149,14 +149,14 @@ impl Service<HttpRelayServiceRequest> for HttpRelayService {
                             message_framed_read,
                         },
                     )
-                        .await;
+                    .await;
                     let ReadMessageServiceResult {
                         message_framed_read: message_framed_read_in_result,
                         message_payload:
-                        MessagePayload {
-                            data: proxy_raw_data,
-                            ..
-                        },
+                            MessagePayload {
+                                data: proxy_raw_data,
+                                ..
+                            },
                         ..
                     } = match read_proxy_message_result {
                         Err(e) => {
@@ -166,13 +166,13 @@ impl Service<HttpRelayServiceRequest> for HttpRelayService {
                         Ok(Some(
                             value @ ReadMessageServiceResult {
                                 message_payload:
-                                MessagePayload {
-                                    payload_type:
-                                    PayloadType::ProxyPayload(
-                                        ProxyMessagePayloadTypeValue::TcpData,
-                                    ),
-                                    ..
-                                },
+                                    MessagePayload {
+                                        payload_type:
+                                            PayloadType::ProxyPayload(
+                                                ProxyMessagePayloadTypeValue::TcpData,
+                                            ),
+                                        ..
+                                    },
                                 ..
                             },
                         )) => value,

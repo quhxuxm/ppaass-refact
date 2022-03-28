@@ -2,8 +2,8 @@ use std::io::ErrorKind;
 use std::net::SocketAddr;
 use std::task::{Context, Poll};
 
-use futures_util::{SinkExt, StreamExt};
 use futures_util::future::BoxFuture;
+use futures_util::{SinkExt, StreamExt};
 use tokio::net::TcpStream;
 use tokio_util::codec::Framed;
 use tower::Service;
@@ -13,9 +13,8 @@ use common::CommonError;
 
 use crate::codec::socks5::Socks5AuthCodec;
 use crate::command::socks5::{Socks5AuthCommandResult, Socks5AuthMethod};
+use crate::service::common::DEFAULT_BUFFER_SIZE;
 use crate::SERVER_CONFIG;
-
-const DEFAULT_BUFFER_SIZE: usize = 1024 * 64;
 
 pub(crate) struct Socks5AuthenticateFlowRequest {
     pub client_stream: TcpStream,

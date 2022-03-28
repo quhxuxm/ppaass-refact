@@ -5,20 +5,22 @@ use std::task::{Context, Poll};
 use futures_util::future;
 use futures_util::future::BoxFuture;
 use tokio::net::TcpStream;
-use tower::{Service, service_fn, ServiceBuilder};
 use tower::retry::{Policy, Retry};
 use tower::util::BoxCloneService;
+use tower::{service_fn, Service, ServiceBuilder};
 use tracing::{debug, error};
 
-use common::{CommonError, ready_and_call_service};
+use common::{ready_and_call_service, CommonError, PrepareMessageFramedService};
 
-use crate::config::SERVER_CONFIG;
+use crate::config::{AGENT_PRIVATE_KEY, PROXY_PUBLIC_KEY, SERVER_CONFIG};
 use crate::service::http::{HttpFlowRequest, HttpFlowResult, HttpFlowService};
 use crate::service::socks5::{Socks5FlowRequest, Socks5FlowResult, Socks5FlowService};
 
 const SOCKS5_PROTOCOL_FLAG: u8 = 5;
 const SOCKS4_PROTOCOL_FLAG: u8 = 4;
-
+pub const DEFAULT_BUFFER_SIZE: usize = 1024 * 64;
+pub const DEFAULT_MAX_FRAME_SIZE: usize = DEFAULT_BUFFER_SIZE * 2;
+pub const DEFAULT_RETRY_TIMES: u16 = 3;
 #[derive(Debug)]
 pub(crate) struct ClientConnectionInfo {
     pub client_stream: TcpStream,
@@ -39,7 +41,8 @@ impl Service<ClientConnectionInfo> for HandleClientConnectionService {
 
     fn call(&mut self, req: ClientConnectionInfo) -> Self::Future {
         Box::pin(async move {
-            let mut socks5_flow_service = ServiceBuilder::new().service(Socks5FlowService::default());
+            let mut socks5_flow_service =
+                ServiceBuilder::new().service(Socks5FlowService::default());
             let mut http_flow_service = ServiceBuilder::new().service(HttpFlowService::default());
             let mut protocol_buf: [u8; 1] = [0];
             let peek_result = req.client_stream.peek(&mut protocol_buf).await;
@@ -71,7 +74,7 @@ impl Service<ClientConnectionInfo> for HandleClientConnectionService {
                         client_address: req.client_address,
                     },
                 )
-                    .await?;
+                .await?;
                 debug!(
                     "Client {} complete socks5 relay",
                     flow_result.client_address
@@ -86,7 +89,7 @@ impl Service<ClientConnectionInfo> for HandleClientConnectionService {
                     client_address: req.client_address,
                 },
             )
-                .await?;
+            .await?;
             return Ok(());
         })
     }
@@ -117,7 +120,7 @@ struct ConnectToProxyAttempts {
 #[derive(Clone)]
 pub(crate) struct ConnectToProxyService {
     concrete_service:
-    BoxCloneService<ConcreteConnectToProxyRequest, ConnectToProxyServiceResult, CommonError>,
+        BoxCloneService<ConcreteConnectToProxyRequest, ConnectToProxyServiceResult, CommonError>,
 }
 
 impl ConnectToProxyService {
@@ -149,7 +152,7 @@ impl ConnectToProxyService {
 }
 
 impl Policy<ConcreteConnectToProxyRequest, ConnectToProxyServiceResult, CommonError>
-for ConnectToProxyAttempts
+    for ConnectToProxyAttempts
 {
     type Future = futures_util::future::Ready<Self>;
 
@@ -212,7 +215,7 @@ impl Service<ConnectToProxyServiceRequest> for ConnectToProxyService {
                         client_address: request.client_address,
                     },
                 )
-                    .await;
+                .await;
             }
             for address in proxy_addresses.into_iter() {
                 let concrete_connect_result = ready_and_call_service(
@@ -222,7 +225,7 @@ impl Service<ConnectToProxyServiceRequest> for ConnectToProxyService {
                         client_address: request.client_address,
                     },
                 )
-                    .await;
+                .await;
                 match concrete_connect_result {
                     Ok(r) => return Ok(r),
                     Err(e) => {
@@ -243,4 +246,16 @@ impl Service<ConnectToProxyServiceRequest> for ConnectToProxyService {
         };
         Box::pin(connect_future)
     }
+}
+
+pub fn generate_prepare_message_framed_service() -> PrepareMessageFramedService {
+    ServiceBuilder::new().service(PrepareMessageFramedService::new(
+        &(*PROXY_PUBLIC_KEY),
+        &(*AGENT_PRIVATE_KEY),
+        SERVER_CONFIG
+            .max_frame_size()
+            .unwrap_or(DEFAULT_MAX_FRAME_SIZE),
+        SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
+        SERVER_CONFIG.compress().unwrap_or(true),
+    ))
 }
