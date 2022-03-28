@@ -4,24 +4,19 @@ use std::task::{Context, Poll};
 use futures_util::future;
 use futures_util::future::BoxFuture;
 use tokio::net::TcpStream;
-use tower::retry::{Policy, Retry};
 use tower::util::BoxCloneService;
+use tower::{
+    retry::{Policy, Retry},
+    ServiceBuilder,
+};
 use tower::{service_fn, Service};
 use tracing::{debug, error, info};
 
-use common::{
-    ready_and_call_service, CommonError, PrepareMessageFramedResult, PrepareMessageFramedService,
-};
+use common::{ready_and_call_service, CommonError, PrepareMessageFramedService};
 
 use crate::config::{AGENT_PUBLIC_KEY, PROXY_PRIVATE_KEY};
-use crate::service::tcp::connect::{
-    TcpConnectService, TcpConnectServiceRequest, TcpConnectServiceResult,
-};
-use crate::service::tcp::relay::{TcpRelayService, TcpRelayServiceRequest, TcpRelayServiceResult};
-use crate::service::udp::associate::{
-    UdpAssociateService, UdpAssociateServiceRequest, UdpAssociateServiceResult,
-};
-use crate::service::udp::relay::{UdpRelayService, UdpRelayServiceRequest, UdpRelayServiceResult};
+use crate::service::tcp::connect::{TcpConnectService, TcpConnectServiceRequest};
+use crate::service::tcp::relay::{TcpRelayService, TcpRelayServiceRequest};
 use crate::SERVER_CONFIG;
 
 mod tcp;
@@ -34,60 +29,36 @@ pub(crate) struct AgentConnectionInfo {
     pub agent_address: SocketAddr,
 }
 
-#[derive(Debug)]
-pub(crate) struct HandleAgentConnectionService {
-    prepare_message_frame_service:
-        BoxCloneService<TcpStream, PrepareMessageFramedResult, CommonError>,
-    tcp_connect_service:
-        BoxCloneService<TcpConnectServiceRequest, TcpConnectServiceResult, CommonError>,
-    tcp_relay_service: BoxCloneService<TcpRelayServiceRequest, TcpRelayServiceResult, CommonError>,
-    _udp_associate_service:
-        BoxCloneService<UdpAssociateServiceRequest, UdpAssociateServiceResult, CommonError>,
-    _udp_relay_service: BoxCloneService<UdpRelayServiceRequest, UdpRelayServiceResult, CommonError>,
-}
-
-impl Default for HandleAgentConnectionService {
-    fn default() -> Self {
-        let agent_public_key = &(*AGENT_PUBLIC_KEY);
-        let proxy_private_key = &(*PROXY_PRIVATE_KEY);
-        Self {
-            prepare_message_frame_service: BoxCloneService::new(PrepareMessageFramedService::new(
-                agent_public_key,
-                proxy_private_key,
-                SERVER_CONFIG
-                    .max_frame_size()
-                    .unwrap_or(DEFAULT_MAX_FRAME_SIZE),
-                SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
-                SERVER_CONFIG.compress().unwrap_or(true),
-            )),
-            tcp_connect_service: BoxCloneService::new::<TcpConnectService>(Default::default()),
-            tcp_relay_service: BoxCloneService::new::<TcpRelayService>(Default::default()),
-            _udp_associate_service: BoxCloneService::new(UdpAssociateService),
-            _udp_relay_service: BoxCloneService::new(UdpRelayService),
-        }
-    }
-}
+#[derive(Debug, Default)]
+pub(crate) struct HandleAgentConnectionService;
 
 impl Service<AgentConnectionInfo> for HandleAgentConnectionService {
     type Response = ();
     type Error = CommonError;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        let tcp_connect_service_ready = self.tcp_connect_service.poll_ready(cx)?;
-        if tcp_connect_service_ready.is_ready() {
-            debug!("Ready to handle agent connection.");
-            return Poll::Ready(Ok(()));
-        }
-        debug!("Not ready to handle agent connection.");
-        Poll::Pending
+    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        Poll::Ready(Ok(()))
     }
 
     fn call(&mut self, req: AgentConnectionInfo) -> Self::Future {
-        let mut prepare_message_frame_service = self.prepare_message_frame_service.clone();
-        let mut tcp_connect_service = self.tcp_connect_service.clone();
-        let mut tcp_relay_service = self.tcp_relay_service.clone();
         Box::pin(async move {
+            let agent_public_key = &(*AGENT_PUBLIC_KEY);
+            let proxy_private_key = &(*PROXY_PRIVATE_KEY);
+            let mut prepare_message_frame_service =
+                ServiceBuilder::new().service(PrepareMessageFramedService::new(
+                    agent_public_key,
+                    proxy_private_key,
+                    SERVER_CONFIG
+                        .max_frame_size()
+                        .unwrap_or(DEFAULT_MAX_FRAME_SIZE),
+                    SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
+                    SERVER_CONFIG.compress().unwrap_or(true),
+                ));
+            let mut tcp_connect_service =
+                ServiceBuilder::new().service(TcpConnectService::default());
+            let mut tcp_relay_service = ServiceBuilder::new().service(TcpRelayService::default());
+
             let framed_result =
                 ready_and_call_service(&mut prepare_message_frame_service, req.agent_stream)
                     .await?;

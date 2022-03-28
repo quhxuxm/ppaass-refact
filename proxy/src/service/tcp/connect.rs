@@ -4,8 +4,8 @@ use std::task::{Context, Poll};
 use bytes::Bytes;
 use futures_util::future::BoxFuture;
 use tokio::net::TcpStream;
-use tower::util::BoxCloneService;
 use tower::Service;
+use tower::ServiceBuilder;
 use tracing::error;
 use tracing::log::debug;
 
@@ -14,7 +14,6 @@ use common::{
     MessageFramedRead, MessageFramedWrite, MessagePayload, NetAddress, PayloadEncryptionType,
     PayloadType, ProxyMessagePayloadTypeValue, ReadMessageService, ReadMessageServiceRequest,
     ReadMessageServiceResult, WriteMessageService, WriteMessageServiceRequest,
-    WriteMessageServiceResult,
 };
 
 use crate::service::{
@@ -37,48 +36,27 @@ pub(crate) struct TcpConnectServiceResult {
     pub user_token: String,
 }
 
-#[derive(Clone)]
-pub(crate) struct TcpConnectService {
-    read_agent_message_service:
-        BoxCloneService<ReadMessageServiceRequest, Option<ReadMessageServiceResult>, CommonError>,
-    write_proxy_message_service:
-        BoxCloneService<WriteMessageServiceRequest, WriteMessageServiceResult, CommonError>,
-    connect_to_target_service:
-        BoxCloneService<ConnectToTargetServiceRequest, ConnectToTargetServiceResult, CommonError>,
-}
-
-impl Default for TcpConnectService {
-    fn default() -> Self {
-        Self {
-            read_agent_message_service: BoxCloneService::new(ReadMessageService),
-            write_proxy_message_service: BoxCloneService::new(WriteMessageService),
-            connect_to_target_service: BoxCloneService::new(ConnectToTargetService::new(
-                SERVER_CONFIG.target_connection_retry().unwrap_or(3),
-            )),
-        }
-    }
-}
+#[derive(Clone, Default)]
+pub(crate) struct TcpConnectService;
 
 impl Service<TcpConnectServiceRequest> for TcpConnectService {
     type Response = TcpConnectServiceResult;
     type Error = CommonError;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        let connect_to_target_service_ready = self.connect_to_target_service.poll_ready(cx)?;
-        if connect_to_target_service_ready.is_ready() {
-            debug!("Ready connect to target for agent connection.");
-            return Poll::Ready(Ok(()));
-        }
-        debug!("Not ready connect to target for agent connection.");
-        Poll::Pending
+    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        Poll::Ready(Ok(()))
     }
 
     fn call(&mut self, req: TcpConnectServiceRequest) -> Self::Future {
-        let mut read_agent_message_service = self.read_agent_message_service.clone();
-        let mut connect_to_target_service = self.connect_to_target_service.clone();
-        let mut write_proxy_message_service = self.write_proxy_message_service.clone();
         Box::pin(async move {
+            let mut read_agent_message_service =
+                ServiceBuilder::new().service(ReadMessageService::default());
+            let mut write_proxy_message_service =
+                ServiceBuilder::new().service(WriteMessageService::default());
+            let mut connect_to_target_service = ServiceBuilder::new().service(
+                ConnectToTargetService::new(SERVER_CONFIG.target_connection_retry().unwrap_or(3)),
+            );
             let read_agent_message_result = ready_and_call_service(
                 &mut read_agent_message_service,
                 ReadMessageServiceRequest {
