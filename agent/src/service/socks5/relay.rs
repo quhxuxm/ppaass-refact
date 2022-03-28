@@ -62,8 +62,10 @@ impl Service<Socks5RelayServiceRequest> for Socks5RelayService {
         if write_agent_message_service_ready.is_ready()
             && read_proxy_message_service_ready.is_ready()
         {
+            debug!("Ready to do socks5 relay.");
             return Poll::Ready(Ok(()));
         }
+        debug!("Not ready to do socks5 relay.");
         Poll::Pending
     }
 

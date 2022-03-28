@@ -64,8 +64,10 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
         if read_agent_message_service_ready.is_ready()
             && write_proxy_message_service_ready.is_ready()
         {
+            debug!("Ready to do relay.");
             return Poll::Ready(Ok(()));
         }
+        debug!("Not ready to do relay.");
         Poll::Pending
     }
 

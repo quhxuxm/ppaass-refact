@@ -60,8 +60,10 @@ impl Service<HttpRelayServiceRequest> for HttpRelayService {
         if write_agent_message_service_ready.is_ready()
             && read_proxy_message_service_ready.is_ready()
         {
+            debug!("Ready to do http relay.");
             return Poll::Ready(Ok(()));
         }
+        debug!("Not ready to do http relay.");
         Poll::Pending
     }
 
