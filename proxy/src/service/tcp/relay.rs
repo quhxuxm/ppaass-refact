@@ -3,8 +3,11 @@ use std::task::{Context, Poll};
 
 use bytes::BytesMut;
 use futures_util::future::BoxFuture;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    sync::mpsc::error::TryRecvError,
+};
 use tower::util::BoxCloneService;
 use tower::Service;
 use tracing::{debug, error, info};
@@ -103,22 +106,26 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
             tokio::spawn(async move {
                 loop {
                     match target_reader_error_receiver.try_recv() {
-                        Err(e) => {
-                            debug!("Target reader goes well: {:#?}", e);
-                        }
+                        Err(e) => match e {
+                            TryRecvError::Empty => {
+                                debug!("Target reader goes well: {:#?}", e);
+                            }
+                            TryRecvError::Disconnected => return,
+                        },
                         Ok(_) => {
                             error!("Target reader error happen.");
-                            drop(target_reader_error_receiver);
                             return;
                         }
                     }
                     match agent_writer_error_receiver.try_recv() {
-                        Err(e) => {
-                            debug!("Agent writer goes well: {:#?}", e);
-                        }
+                        Err(e) => match e {
+                            TryRecvError::Empty => {
+                                debug!("Agent writer goes well: {:#?}", e);
+                            }
+                            TryRecvError::Disconnected => return,
+                        },
                         Ok(_) => {
                             error!("Agent writer error happen.");
-                            drop(agent_writer_error_receiver);
                             return;
                         }
                     }
@@ -204,22 +211,26 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
             tokio::spawn(async move {
                 loop {
                     match target_writer_error_receiver.try_recv() {
-                        Err(e) => {
-                            debug!("Target writer goes well: {:#?}", e);
-                        }
+                        Err(e) => match e {
+                            TryRecvError::Empty => {
+                                debug!("Target writer goes well: {:#?}", e);
+                            }
+                            TryRecvError::Disconnected => return,
+                        },
                         Ok(_) => {
                             error!("Target writer error happen.");
-                            drop(target_writer_error_receiver);
                             return;
                         }
                     }
                     match agent_reader_error_receiver.try_recv() {
-                        Err(e) => {
-                            debug!("Agent reader goes well: {:#?}", e);
-                        }
+                        Err(e) => match e {
+                            TryRecvError::Empty => {
+                                debug!("Agent reader goes well: {:#?}", e);
+                            }
+                            TryRecvError::Disconnected => return,
+                        },
                         Ok(_) => {
                             error!("Agent reader error happen.");
-                            drop(agent_reader_error_receiver);
                             return;
                         }
                     }
