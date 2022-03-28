@@ -154,7 +154,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                         )) => v,
                         Ok(_) => {
                             error!(
-                                "Invalid payload typefrom agent: {:#?}",
+                                "Invalid payload type from agent: {:#?}",
                                 agent_address_for_proxy_to_target
                             );
                             return;
@@ -235,7 +235,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                         }
                         Ok(0) => {
                             info!(
-                                "Read all data from target: {:#?}",
+                                "Read all data from target, agent: {:#?}",
                                 agent_address_for_target_to_proxy
                             );
                             return;
