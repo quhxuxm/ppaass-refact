@@ -11,3 +11,5 @@ log_file = "ppaass-proxy.log"
 buffered_connection_number=1024
 concurrent_connection_number=1024
 target_connection_retry=2
+rate_limit=1024
+max_log_level = "INFO"

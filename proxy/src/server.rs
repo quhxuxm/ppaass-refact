@@ -77,6 +77,10 @@ impl ProxyServer {
                         .concurrency_limit(
                             SERVER_CONFIG.concurrent_connection_number().unwrap_or(1024),
                         )
+                        .rate_limit(
+                            SERVER_CONFIG.rate_limit().unwrap_or(1024),
+                            Duration::from_secs(1),
+                        )
                         .service::<HandleAgentConnectionService>(Default::default());
                     if let Err(e) = ready_and_call_service(
                         &mut handle_agent_connection_service,

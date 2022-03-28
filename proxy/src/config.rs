@@ -37,6 +37,7 @@ pub(crate) struct Config {
     target_connection_retry: Option<u16>,
     buffered_connection_number: Option<usize>,
     concurrent_connection_number: Option<usize>,
+    rate_limit: Option<u64>,
 }
 
 impl Config {
@@ -92,5 +93,8 @@ impl Config {
     }
     pub fn concurrent_connection_number(&self) -> Option<usize> {
         self.concurrent_connection_number
+    }
+    pub fn rate_limit(&self) -> Option<u64> {
+        self.rate_limit
     }
 }

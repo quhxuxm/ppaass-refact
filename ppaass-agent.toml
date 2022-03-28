@@ -15,3 +15,4 @@ max_log_level = "INFO"
 proxy_connection_retry = 2
 buffered_connection_number=1024
 concurrent_connection_number=1024
+rate_limit=1024
