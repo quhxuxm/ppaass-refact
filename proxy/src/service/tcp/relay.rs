@@ -7,7 +7,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tower::util::BoxCloneService;
 use tower::Service;
-use tracing::{debug, error};
+use tracing::{debug, error, info};
 
 use common::{
     generate_uuid, ready_and_call_service, AgentMessagePayloadTypeValue, CommonError,
@@ -83,6 +83,8 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
         let agent_connect_message_source_address = req.source_address;
         let agent_connect_message_target_address = req.target_address;
         let target_address_for_return = agent_connect_message_target_address.clone();
+        let agent_address_for_proxy_to_target = req.agent_address.clone();
+        let agent_address_for_target_to_proxy = req.agent_address.clone();
         let (mut target_stream_read, mut target_stream_write) = target_stream.into_split();
 
         let (target_reader_error_sender, mut target_reader_error_receiver) =
@@ -131,7 +133,10 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                         ..
                     } = match read_agent_message_result {
                         Ok(None) => {
-                            debug!("Read all data from agent");
+                            info!(
+                                "Read all data from agent: {:#?}",
+                                agent_address_for_proxy_to_target
+                            );
                             return;
                         }
                         Ok(Some(
@@ -148,7 +153,10 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                             },
                         )) => v,
                         Ok(_) => {
-                            error!("Invalid payload type.");
+                            error!(
+                                "Invalid payload typefrom agent: {:#?}",
+                                agent_address_for_proxy_to_target
+                            );
                             return;
                         }
                         Err(e) => {
@@ -225,8 +233,11 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                             };
                             return;
                         }
-                        Ok(0) if buf.remaining_mut() > 0 => {
-                            debug!("Read all data from target.");
+                        Ok(0) => {
+                            info!(
+                                "Read all data from target: {:#?}",
+                                agent_address_for_target_to_proxy
+                            );
                             return;
                         }
                         Ok(size) => {
