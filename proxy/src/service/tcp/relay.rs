@@ -83,16 +83,20 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
         let agent_connect_message_target_address = req.target_address;
         let (mut target_stream_read, mut target_stream_write) = target_stream.into_split();
 
-        let (relay_status_sender, mut relay_status_receiver) = tokio::sync::mpsc::channel::<bool>(1);
+        let (target_reader_error_sender, mut target_reader_error_receiver) =
+            tokio::sync::mpsc::channel::<bool>(1);
+
+        let (target_writer_error_sender, mut target_writer_error_receiver) =
+            tokio::sync::mpsc::channel::<bool>(1);
 
         Box::pin(async move {
             tokio::spawn(async move {
                 loop {
-                    match relay_status_receiver.try_recv(){
-                        Err(e)=>{
+                    match target_reader_error_receiver.try_recv() {
+                        Err(e) => {
                             debug!("Target reader goes well: {:#?}", e);
                         }
-                        Ok(_)=>{
+                        Ok(_) => {
                             error!("Target reader error happen.");
                             return;
                         }
@@ -141,6 +145,12 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                             "Fail to write from agent to target because of error: {:#?}",
                             e
                         );
+                        if let Err(e) = target_writer_error_sender.try_send(true) {
+                            error!(
+                                "Fail to notice target data reader because of error: {:#?}.",
+                                e
+                            );
+                        };
                         return;
                     };
                     if let Err(e) = target_stream_write.flush().await {
@@ -148,28 +158,38 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                             "Fail to flush from agent to target because of error: {:#?}",
                             e
                         );
+                        if let Err(e) = target_writer_error_sender.try_send(true) {
+                            error!(
+                                "Fail to notice target data reader because of error: {:#?}.",
+                                e
+                            );
+                        };
                         return;
                     };
                 }
             });
             tokio::spawn(async move {
                 loop {
+                    match target_writer_error_receiver.try_recv() {
+                        Err(e) => {
+                            debug!("Target writer goes well: {:#?}", e);
+                        }
+                        Ok(_) => {
+                            error!("Target writer error happen.");
+                            return;
+                        }
+                    }
                     let mut buf = BytesMut::with_capacity(
                         SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
                     );
                     match target_stream_read.read_buf(&mut buf).await {
                         Err(e) => {
                             error!("Fail to read data from target because of error: {:#?}", e);
-                            match relay_status_sender.try_send(true) {
-                                Err(e) => {
-                                    error!(
-                                        "Fail to notice agent data reader because of error: {:#?}.",
-                                        e
-                                    );
-                                }
-                                Ok(_) => {
-                                    debug!("Success notice agent data reader to close.");
-                                }
+                            if let Err(e) = target_reader_error_sender.try_send(true) {
+                                error!(
+                                    "Fail to notice agent data reader because of error: {:#?}.",
+                                    e
+                                );
                             };
                             return;
                         }
