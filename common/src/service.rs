@@ -13,8 +13,8 @@ use crate::{
     generate_uuid, CommonError, Message, MessageCodec, MessagePayload, PayloadEncryptionType,
 };
 
-pub type MessageFramedRead = SplitStream<Framed<TcpStream, MessageCodec<OsRng>>>;
-pub type MessageFramedWrite = SplitSink<Framed<TcpStream, MessageCodec<OsRng>>, Message>;
+pub type MessageFramedRead = SplitStream<Framed<TcpStream, MessageCodec>>;
+pub type MessageFramedWrite = SplitSink<Framed<TcpStream, MessageCodec>, Message>;
 
 pub struct PrepareMessageFramedResult {
     pub message_framed_write: MessageFramedWrite,

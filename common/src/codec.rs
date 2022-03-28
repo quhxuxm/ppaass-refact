@@ -12,13 +12,13 @@ use crate::{CommonError, Message, PayloadEncryptionType};
 
 const LENGTH_DELIMITED_CODEC_LENGTH_FIELD_LENGTH: usize = 8;
 
-pub struct MessageCodec<T: Rng + Send> {
-    rsa_crypto: RsaCrypto<T>,
+pub struct MessageCodec{
+    rsa_crypto: RsaCrypto<OsRng>,
     length_delimited_codec: LengthDelimitedCodec,
     compress: bool,
 }
 
-impl MessageCodec<OsRng> {
+impl MessageCodec {
     pub fn new(
         public_key: &'static str,
         private_key: &'static str,
@@ -47,7 +47,7 @@ impl MessageCodec<OsRng> {
     }
 }
 
-impl Decoder for MessageCodec<OsRng> {
+impl Decoder for MessageCodec {
     type Item = Message;
     type Error = CommonError;
 
@@ -132,7 +132,7 @@ impl Decoder for MessageCodec<OsRng> {
     }
 }
 
-impl Encoder<Message> for MessageCodec<OsRng> {
+impl Encoder<Message> for MessageCodec {
     type Error = CommonError;
 
     fn encode(&mut self, original_message: Message, dst: &mut BytesMut) -> Result<(), Self::Error> {
