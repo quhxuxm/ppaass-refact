@@ -4,31 +4,30 @@ use std::task::{Context, Poll};
 use bytecodec::bytes::BytesEncoder;
 use bytecodec::EncodeExt;
 use bytes::Bytes;
-use futures_util::future::BoxFuture;
 use futures_util::{SinkExt, StreamExt};
+use futures_util::future::BoxFuture;
 use httpcodec::{BodyEncoder, HttpVersion, ReasonPhrase, RequestEncoder, Response, StatusCode};
 use tokio::net::TcpStream;
 use tokio_util::codec::Framed;
-use tower::util::BoxCloneService;
 use tower::Service;
-use tracing::{debug, error};
+use tower::ServiceBuilder;
+use tracing::error;
 use url::Url;
 
 use common::{
-    generate_uuid, ready_and_call_service, AgentMessagePayloadTypeValue, CommonError,
-    MessageFramedRead, MessageFramedWrite, MessagePayload, NetAddress, PayloadEncryptionType,
-    PayloadType, PrepareMessageFramedResult, PrepareMessageFramedService,
-    ProxyMessagePayloadTypeValue, ReadMessageService, ReadMessageServiceRequest,
-    ReadMessageServiceResult, WriteMessageService, WriteMessageServiceRequest,
+    AgentMessagePayloadTypeValue, CommonError, generate_uuid, MessageFramedRead,
+    MessageFramedWrite, MessagePayload, NetAddress, PayloadEncryptionType, PayloadType, PrepareMessageFramedService, ProxyMessagePayloadTypeValue,
+    ReadMessageService, ReadMessageServiceRequest, ReadMessageServiceResult,
+    ready_and_call_service, WriteMessageService, WriteMessageServiceRequest,
     WriteMessageServiceResult,
 };
 
 use crate::codec::http::HttpCodec;
 use crate::config::{AGENT_PRIVATE_KEY, PROXY_PUBLIC_KEY};
+use crate::SERVER_CONFIG;
 use crate::service::common::{
     ConnectToProxyService, ConnectToProxyServiceRequest, ConnectToProxyServiceResult,
 };
-use crate::SERVER_CONFIG;
 
 const DEFAULT_BUFFER_SIZE: usize = 1024 * 64;
 const DEFAULT_MAX_FRAME_SIZE: usize = DEFAULT_BUFFER_SIZE * 2;
@@ -61,44 +60,8 @@ pub(crate) struct HttpConnectServiceResult {
     pub target_address: NetAddress,
     pub proxy_address_string: String,
 }
-#[derive(Clone, Debug)]
-pub(crate) struct HttpConnectService {
-    connect_to_proxy_service:
-        BoxCloneService<ConnectToProxyServiceRequest, ConnectToProxyServiceResult, CommonError>,
-    prepare_message_framed_service:
-        BoxCloneService<TcpStream, PrepareMessageFramedResult, CommonError>,
-    write_agent_message_service:
-        BoxCloneService<WriteMessageServiceRequest, WriteMessageServiceResult, CommonError>,
-    read_proxy_message_service:
-        BoxCloneService<ReadMessageServiceRequest, Option<ReadMessageServiceResult>, CommonError>,
-}
-
-impl Default for HttpConnectService {
-    fn default() -> Self {
-        Self {
-            prepare_message_framed_service: BoxCloneService::new(PrepareMessageFramedService::new(
-                &(*PROXY_PUBLIC_KEY),
-                &(*AGENT_PRIVATE_KEY),
-                SERVER_CONFIG
-                    .max_frame_size()
-                    .unwrap_or(DEFAULT_MAX_FRAME_SIZE),
-                SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
-                SERVER_CONFIG.compress().unwrap_or(true),
-            )),
-            write_agent_message_service: BoxCloneService::new::<WriteMessageService>(
-                Default::default(),
-            ),
-            read_proxy_message_service: BoxCloneService::new::<ReadMessageService>(
-                Default::default(),
-            ),
-            connect_to_proxy_service: BoxCloneService::new(ConnectToProxyService::new(
-                SERVER_CONFIG
-                    .proxy_connection_retry()
-                    .unwrap_or(DEFAULT_RETRY_TIMES),
-            )),
-        }
-    }
-}
+#[derive(Clone, Debug, Default)]
+pub(crate) struct HttpConnectService;
 
 impl HttpConnectService {
     async fn send_error_to_client(
@@ -124,21 +87,25 @@ impl Service<HttpConnectServiceRequest> for HttpConnectService {
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        let connect_to_proxy_service_ready = self.connect_to_proxy_service.poll_ready(cx)?;
-        if connect_to_proxy_service_ready.is_ready() {
-            debug!("Ready connect to proxy for http client connection");
-            return Poll::Ready(Ok(()));
-        }
-        debug!("Not ready connect to proxy for http client connection");
-        Poll::Pending
+        Poll::Ready(Ok(()))
     }
 
     fn call(&mut self, mut request: HttpConnectServiceRequest) -> Self::Future {
-        let mut prepare_message_framed_service = self.prepare_message_framed_service.clone();
-        let mut write_agent_message_service = self.write_agent_message_service.clone();
-        let mut read_proxy_message_service = self.read_proxy_message_service.clone();
-        let mut connect_to_proxy_service = self.connect_to_proxy_service.clone();
         Box::pin(async move {
+            let mut prepare_message_framed_service = ServiceBuilder::new().service(PrepareMessageFramedService::new(
+                &(*PROXY_PUBLIC_KEY),
+                &(*AGENT_PRIVATE_KEY),
+                SERVER_CONFIG
+                    .max_frame_size()
+                    .unwrap_or(DEFAULT_MAX_FRAME_SIZE),
+                SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
+                SERVER_CONFIG.compress().unwrap_or(true),
+            ));
+            let mut write_agent_message_service = ServiceBuilder::new().service(WriteMessageService::default());
+            let mut read_proxy_message_service = ServiceBuilder::new().service(ReadMessageService::default());
+            let mut connect_to_proxy_service = ServiceBuilder::new().service(ConnectToProxyService::new(SERVER_CONFIG
+                .proxy_connection_retry()
+                .unwrap_or(DEFAULT_RETRY_TIMES)));
             let mut http_client_framed = Framed::with_capacity(
                 &mut request.client_stream,
                 HttpCodec::default(),
@@ -207,7 +174,7 @@ impl Service<HttpConnectServiceRequest> for HttpConnectService {
                     client_address: request.client_address,
                 },
             )
-            .await
+                .await
             {
                 Err(e) => {
                     Self::send_error_to_client(http_client_framed).await?;
@@ -244,7 +211,7 @@ impl Service<HttpConnectServiceRequest> for HttpConnectService {
                     )),
                 },
             )
-            .await
+                .await
             {
                 Err(e) => {
                     Self::send_error_to_client(http_client_framed).await?;
@@ -258,7 +225,7 @@ impl Service<HttpConnectServiceRequest> for HttpConnectService {
                     message_framed_read: framed_result.message_framed_read,
                 },
             )
-            .await
+                .await
             {
                 Err(e) => {
                     Self::send_error_to_client(http_client_framed).await?;
@@ -272,13 +239,13 @@ impl Service<HttpConnectServiceRequest> for HttpConnectService {
             };
             if let ReadMessageServiceResult {
                 message_payload:
-                    MessagePayload {
-                        target_address,
-                        source_address,
-                        payload_type:
-                            PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::TcpConnectSuccess),
-                        ..
-                    },
+                MessagePayload {
+                    target_address,
+                    source_address,
+                    payload_type:
+                    PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::TcpConnectSuccess),
+                    ..
+                },
                 message_framed_read,
                 message_id,
                 ..

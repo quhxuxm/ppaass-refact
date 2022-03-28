@@ -4,14 +4,13 @@ use std::task::{Context, Poll};
 
 use futures_util::future;
 use futures_util::future::BoxFuture;
-
 use tokio::net::TcpStream;
+use tower::{Service, service_fn, ServiceBuilder};
 use tower::retry::{Policy, Retry};
 use tower::util::BoxCloneService;
-use tower::{service_fn, Service};
 use tracing::{debug, error};
 
-use common::{ready_and_call_service, CommonError};
+use common::{CommonError, ready_and_call_service};
 
 use crate::config::SERVER_CONFIG;
 use crate::service::http::{HttpFlowRequest, HttpFlowResult, HttpFlowService};
@@ -26,20 +25,8 @@ pub(crate) struct ClientConnectionInfo {
     pub client_address: SocketAddr,
 }
 
-#[derive(Debug)]
-pub(crate) struct HandleClientConnectionService {
-    socks5_flow_service: BoxCloneService<Socks5FlowRequest, Socks5FlowResult, CommonError>,
-    http_flow_service: BoxCloneService<HttpFlowRequest, HttpFlowResult, CommonError>,
-}
-
-impl Default for HandleClientConnectionService {
-    fn default() -> Self {
-        Self {
-            socks5_flow_service: BoxCloneService::new::<Socks5FlowService>(Default::default()),
-            http_flow_service: BoxCloneService::new(HttpFlowService::new()),
-        }
-    }
-}
+#[derive(Debug, Default)]
+pub(crate) struct HandleClientConnectionService;
 
 impl Service<ClientConnectionInfo> for HandleClientConnectionService {
     type Response = ();
@@ -51,9 +38,9 @@ impl Service<ClientConnectionInfo> for HandleClientConnectionService {
     }
 
     fn call(&mut self, req: ClientConnectionInfo) -> Self::Future {
-        let mut socks5_flow_service = self.socks5_flow_service.clone();
-        let mut http_flow_service = self.http_flow_service.clone();
         Box::pin(async move {
+            let mut socks5_flow_service = ServiceBuilder::new().service(Socks5FlowService::default());
+            let mut http_flow_service = ServiceBuilder::new().service(HttpFlowService::default());
             let mut protocol_buf: [u8; 1] = [0];
             let peek_result = req.client_stream.peek(&mut protocol_buf).await;
             let protocol = match peek_result {
@@ -84,7 +71,7 @@ impl Service<ClientConnectionInfo> for HandleClientConnectionService {
                         client_address: req.client_address,
                     },
                 )
-                .await?;
+                    .await?;
                 debug!(
                     "Client {} complete socks5 relay",
                     flow_result.client_address
@@ -99,7 +86,7 @@ impl Service<ClientConnectionInfo> for HandleClientConnectionService {
                     client_address: req.client_address,
                 },
             )
-            .await?;
+                .await?;
             return Ok(());
         })
     }
@@ -130,7 +117,7 @@ struct ConnectToProxyAttempts {
 #[derive(Clone)]
 pub(crate) struct ConnectToProxyService {
     concrete_service:
-        BoxCloneService<ConcreteConnectToProxyRequest, ConnectToProxyServiceResult, CommonError>,
+    BoxCloneService<ConcreteConnectToProxyRequest, ConnectToProxyServiceResult, CommonError>,
 }
 
 impl ConnectToProxyService {
@@ -162,7 +149,7 @@ impl ConnectToProxyService {
 }
 
 impl Policy<ConcreteConnectToProxyRequest, ConnectToProxyServiceResult, CommonError>
-    for ConnectToProxyAttempts
+for ConnectToProxyAttempts
 {
     type Future = futures_util::future::Ready<Self>;
 
@@ -225,7 +212,7 @@ impl Service<ConnectToProxyServiceRequest> for ConnectToProxyService {
                         client_address: request.client_address,
                     },
                 )
-                .await;
+                    .await;
             }
             for address in proxy_addresses.into_iter() {
                 let concrete_connect_result = ready_and_call_service(
@@ -235,7 +222,7 @@ impl Service<ConnectToProxyServiceRequest> for ConnectToProxyService {
                         client_address: request.client_address,
                     },
                 )
-                .await;
+                    .await;
                 match concrete_connect_result {
                     Ok(r) => return Ok(r),
                     Err(e) => {
