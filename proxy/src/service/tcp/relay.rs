@@ -108,6 +108,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                         }
                         Ok(_) => {
                             error!("Target reader error happen.");
+                            drop(target_reader_error_receiver);
                             return;
                         }
                     }
@@ -117,6 +118,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                         }
                         Ok(_) => {
                             error!("Agent writer error happen.");
+                            drop(agent_writer_error_receiver);
                             return;
                         }
                     }
@@ -207,6 +209,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                         }
                         Ok(_) => {
                             error!("Target writer error happen.");
+                            drop(target_writer_error_receiver);
                             return;
                         }
                     }
@@ -216,6 +219,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                         }
                         Ok(_) => {
                             error!("Agent reader error happen.");
+                            drop(agent_reader_error_receiver);
                             return;
                         }
                     }
