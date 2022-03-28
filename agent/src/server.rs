@@ -71,11 +71,13 @@ impl AgentServer {
                     }
                     Ok((client_stream, client_address)) => (client_stream, client_address),
                 };
-                let mut handle_client_connection_service = ServiceBuilder::new()
-                    .buffer(SERVER_CONFIG.buffered_connection_number().unwrap_or(1024))
-                    .concurrency_limit(SERVER_CONFIG.concurrent_connection_number().unwrap_or(1024))
-                    .service::<HandleClientConnectionService>(Default::default());
                 tokio::spawn(async move {
+                    let mut handle_client_connection_service = ServiceBuilder::new()
+                        .buffer(SERVER_CONFIG.buffered_connection_number().unwrap_or(1024))
+                        .concurrency_limit(
+                            SERVER_CONFIG.concurrent_connection_number().unwrap_or(1024),
+                        )
+                        .service::<HandleClientConnectionService>(Default::default());
                     if let Err(e) = ready_and_call_service(
                         &mut handle_client_connection_service,
                         ClientConnectionInfo {
