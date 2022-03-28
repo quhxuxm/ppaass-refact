@@ -204,7 +204,7 @@ impl Service<HttpRelayServiceRequest> for HttpRelayService {
                     };
                     message_framed_read = message_framed_read_in_result;
                     if let Err(e) = client_stream_write_half
-                        .write_all(proxy_raw_data.as_ref())
+                        .write(proxy_raw_data.as_ref())
                         .await
                     {
                         error!(
