@@ -3,22 +3,18 @@ use std::task::{Context, Poll};
 
 use futures_util::future::BoxFuture;
 use tokio::net::TcpStream;
-use tower::util::BoxCloneService;
 use tower::Service;
+use tower::ServiceBuilder;
 
 use common::{ready_and_call_service, CommonError};
-use tracing::debug;
 
 use crate::service::socks5::authenticate::{
-    Socks5AuthCommandService, Socks5AuthenticateFlowRequest, Socks5AuthenticateFlowResult,
+    Socks5AuthCommandService, Socks5AuthenticateFlowRequest,
 };
 use crate::service::socks5::connect::{
     Socks5ConnectCommandService, Socks5ConnectCommandServiceRequest,
-    Socks5ConnectCommandServiceResult,
 };
-use crate::service::socks5::relay::{
-    Socks5RelayService, Socks5RelayServiceRequest, Socks5RelayServiceResult,
-};
+use crate::service::socks5::relay::{Socks5RelayService, Socks5RelayServiceRequest};
 
 mod authenticate;
 mod connect;
@@ -31,52 +27,25 @@ pub(crate) struct Socks5FlowRequest {
 pub(crate) struct Socks5FlowResult {
     pub client_address: SocketAddr,
 }
-#[derive(Clone, Debug)]
-pub(crate) struct Socks5FlowService {
-    authenticate_service:
-        BoxCloneService<Socks5AuthenticateFlowRequest, Socks5AuthenticateFlowResult, CommonError>,
-    connect_service: BoxCloneService<
-        Socks5ConnectCommandServiceRequest,
-        Socks5ConnectCommandServiceResult,
-        CommonError,
-    >,
-    relay_service:
-        BoxCloneService<Socks5RelayServiceRequest, Socks5RelayServiceResult, CommonError>,
-}
-
-impl Default for Socks5FlowService {
-    fn default() -> Self {
-        Self {
-            authenticate_service: BoxCloneService::new::<Socks5AuthCommandService>(
-                Default::default(),
-            ),
-            connect_service: BoxCloneService::new::<Socks5ConnectCommandService>(Default::default()),
-            relay_service: BoxCloneService::new::<Socks5RelayService>(Default::default()),
-        }
-    }
-}
+#[derive(Clone, Debug, Default)]
+pub(crate) struct Socks5FlowService;
 
 impl Service<Socks5FlowRequest> for Socks5FlowService {
     type Response = Socks5FlowResult;
     type Error = CommonError;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        let authenticate_service_ready = self.authenticate_service.poll_ready(cx)?;
-        let connect_service_ready = self.connect_service.poll_ready(cx)?;
-        if authenticate_service_ready.is_ready() && connect_service_ready.is_ready() {
-            debug!("Ready to handle client socks5 connection.");
-            return Poll::Ready(Ok(()));
-        }
-        debug!("Not ready to handle client socks5 connection.");
-        Poll::Pending
+    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        Poll::Ready(Ok(()))
     }
 
     fn call(&mut self, req: Socks5FlowRequest) -> Self::Future {
-        let mut authenticate_service = self.authenticate_service.clone();
-        let mut connect_service = self.connect_service.clone();
-        let mut relay_service = self.relay_service.clone();
         Box::pin(async move {
+            let mut authenticate_service =
+                ServiceBuilder::new().service(Socks5AuthCommandService::default());
+            let mut connect_service =
+                ServiceBuilder::new().service(Socks5ConnectCommandService::default());
+            let mut relay_service = ServiceBuilder::new().service(Socks5RelayService::default());
             let authenticate_result = ready_and_call_service(
                 &mut authenticate_service,
                 Socks5AuthenticateFlowRequest {

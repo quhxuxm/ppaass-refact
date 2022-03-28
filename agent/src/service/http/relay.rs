@@ -5,8 +5,8 @@ use bytes::{BufMut, BytesMut};
 use futures_util::future::BoxFuture;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
-use tower::util::BoxCloneService;
 use tower::Service;
+use tower::ServiceBuilder;
 use tracing::{debug, error};
 
 use common::{
@@ -14,7 +14,6 @@ use common::{
     MessageFramedRead, MessageFramedWrite, MessagePayload, NetAddress, PayloadEncryptionType,
     PayloadType, ProxyMessagePayloadTypeValue, ReadMessageService, ReadMessageServiceRequest,
     ReadMessageServiceResult, WriteMessageService, WriteMessageServiceRequest,
-    WriteMessageServiceResult,
 };
 
 use crate::SERVER_CONFIG;
@@ -34,43 +33,24 @@ pub(crate) struct HttpRelayServiceResult {
     pub client_address: SocketAddr,
 }
 
-#[derive(Clone, Debug)]
-pub(crate) struct HttpRelayService {
-    write_agent_message_service:
-        BoxCloneService<WriteMessageServiceRequest, WriteMessageServiceResult, CommonError>,
-    read_proxy_message_service:
-        BoxCloneService<ReadMessageServiceRequest, Option<ReadMessageServiceResult>, CommonError>,
-}
-impl Default for HttpRelayService {
-    fn default() -> Self {
-        Self {
-            write_agent_message_service: BoxCloneService::new(WriteMessageService),
-            read_proxy_message_service: BoxCloneService::new(ReadMessageService),
-        }
-    }
-}
+#[derive(Clone, Debug, Default)]
+pub(crate) struct HttpRelayService;
+
 impl Service<HttpRelayServiceRequest> for HttpRelayService {
     type Response = HttpRelayServiceResult;
     type Error = CommonError;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        let write_agent_message_service_ready = self.write_agent_message_service.poll_ready(cx)?;
-        let read_proxy_message_service_ready = self.read_proxy_message_service.poll_ready(cx)?;
-        if write_agent_message_service_ready.is_ready()
-            && read_proxy_message_service_ready.is_ready()
-        {
-            debug!("Ready to do http relay.");
-            return Poll::Ready(Ok(()));
-        }
-        debug!("Not ready to do http relay.");
-        Poll::Pending
+    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        Poll::Ready(Ok(()))
     }
 
     fn call(&mut self, request: HttpRelayServiceRequest) -> Self::Future {
-        let mut write_agent_message_service = self.write_agent_message_service.clone();
-        let mut read_proxy_message_service = self.read_proxy_message_service.clone();
         Box::pin(async move {
+            let mut write_agent_message_service =
+                ServiceBuilder::new().service(WriteMessageService::default());
+            let mut read_proxy_message_service =
+                ServiceBuilder::new().service(ReadMessageService::default());
             let client_stream = request.client_stream;
             let mut message_framed_read = request.message_framed_read;
             let mut message_framed_write = request.message_framed_write;

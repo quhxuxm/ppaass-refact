@@ -3,7 +3,7 @@ use std::task::{Context, Poll};
 use futures_util::future::BoxFuture;
 use futures_util::stream::{SplitSink, SplitStream};
 use futures_util::{SinkExt, StreamExt};
-use rand::rngs::OsRng;
+
 use tokio::net::TcpStream;
 use tokio_util::codec::Framed;
 use tower::Service;

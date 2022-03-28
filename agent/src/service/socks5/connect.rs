@@ -1,22 +1,21 @@
-use std::net::SocketAddr;
 use std::task::Poll;
+use std::{fmt::Debug, net::SocketAddr};
 
 use bytes::Bytes;
 use futures_util::future::BoxFuture;
 use futures_util::{SinkExt, StreamExt};
 use tokio::net::TcpStream;
 use tokio_util::codec::Framed;
-use tower::util::BoxCloneService;
 use tower::Service;
+use tower::ServiceBuilder;
 use tracing::log::{debug, error};
 
 use common::{
     generate_uuid, ready_and_call_service, AgentMessagePayloadTypeValue, CommonError,
     MessageFramedRead, MessageFramedWrite, MessagePayload, NetAddress, PayloadEncryptionType,
-    PayloadType, PrepareMessageFramedResult, PrepareMessageFramedService,
-    ProxyMessagePayloadTypeValue, ReadMessageService, ReadMessageServiceRequest,
-    ReadMessageServiceResult, WriteMessageService, WriteMessageServiceRequest,
-    WriteMessageServiceResult,
+    PayloadType, PrepareMessageFramedService, ProxyMessagePayloadTypeValue, ReadMessageService,
+    ReadMessageServiceRequest, ReadMessageServiceResult, WriteMessageService,
+    WriteMessageServiceRequest,
 };
 
 use crate::codec::socks5::Socks5ConnectCodec;
@@ -25,9 +24,7 @@ use crate::command::socks5::{
     Socks5ConnectCommandType,
 };
 use crate::config::{AGENT_PRIVATE_KEY, PROXY_PUBLIC_KEY};
-use crate::service::common::{
-    ConnectToProxyService, ConnectToProxyServiceRequest, ConnectToProxyServiceResult,
-};
+use crate::service::common::{ConnectToProxyService, ConnectToProxyServiceRequest};
 use crate::SERVER_CONFIG;
 
 const DEFAULT_RETRY_TIMES: u16 = 3;
@@ -50,44 +47,8 @@ pub(crate) struct Socks5ConnectCommandServiceResult {
     pub connect_response_message_id: String,
 }
 
-#[derive(Clone, Debug)]
-pub(crate) struct Socks5ConnectCommandService {
-    prepare_message_framed_service:
-        BoxCloneService<TcpStream, PrepareMessageFramedResult, CommonError>,
-    write_agent_message_service:
-        BoxCloneService<WriteMessageServiceRequest, WriteMessageServiceResult, CommonError>,
-    read_proxy_message_service:
-        BoxCloneService<ReadMessageServiceRequest, Option<ReadMessageServiceResult>, CommonError>,
-    connect_to_proxy_service:
-        BoxCloneService<ConnectToProxyServiceRequest, ConnectToProxyServiceResult, CommonError>,
-}
-
-impl Default for Socks5ConnectCommandService {
-    fn default() -> Self {
-        Self {
-            prepare_message_framed_service: BoxCloneService::new(PrepareMessageFramedService::new(
-                &(*PROXY_PUBLIC_KEY),
-                &(*AGENT_PRIVATE_KEY),
-                SERVER_CONFIG
-                    .max_frame_size()
-                    .unwrap_or(DEFAULT_MAX_FRAME_SIZE),
-                SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
-                SERVER_CONFIG.compress().unwrap_or(true),
-            )),
-            write_agent_message_service: BoxCloneService::new::<WriteMessageService>(
-                Default::default(),
-            ),
-            read_proxy_message_service: BoxCloneService::new::<ReadMessageService>(
-                Default::default(),
-            ),
-            connect_to_proxy_service: BoxCloneService::new(ConnectToProxyService::new(
-                SERVER_CONFIG
-                    .proxy_connection_retry()
-                    .unwrap_or(DEFAULT_RETRY_TIMES),
-            )),
-        }
-    }
-}
+#[derive(Clone, Debug, Default)]
+pub(crate) struct Socks5ConnectCommandService;
 
 impl Socks5ConnectCommandService {
     async fn send_socks5_failure(
@@ -112,11 +73,14 @@ impl Socks5ConnectCommandService {
         Ok(None)
     }
 
-    async fn call_service<'a, T, U>(
-        service: &'a mut BoxCloneService<T, U, CommonError>,
+    async fn call_service<'a, S, T, U>(
+        service: &'a mut S,
         request: T,
         socks5_client_framed: &mut Framed<&'a mut TcpStream, Socks5ConnectCodec>,
-    ) -> Result<U, CommonError> {
+    ) -> Result<U, CommonError>
+    where
+        S: Service<T, Response = U, Error = CommonError>,
+    {
         return match ready_and_call_service(service, request).await {
             Ok(v) => Ok(v),
             Err(e) => {
@@ -132,22 +96,34 @@ impl Service<Socks5ConnectCommandServiceRequest> for Socks5ConnectCommandService
     type Error = CommonError;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
-    fn poll_ready(&mut self, ctx: &mut std::task::Context) -> Poll<Result<(), Self::Error>> {
-        let connect_to_proxy_service_ready = self.connect_to_proxy_service.poll_ready(ctx)?;
-        if connect_to_proxy_service_ready.is_ready() {
-            debug!("Ready connect to proxy for socks5 client connection");
-            return Poll::Ready(Ok(()));
-        }
-        debug!("Not ready connect to proxy for socks5 client connection");
-        Poll::Pending
+    fn poll_ready(&mut self, _cx: &mut std::task::Context) -> Poll<Result<(), Self::Error>> {
+        Poll::Ready(Ok(()))
     }
 
     fn call(&mut self, mut request: Socks5ConnectCommandServiceRequest) -> Self::Future {
-        let mut prepare_message_framed_service = self.prepare_message_framed_service.clone();
-        let mut write_agent_message_service = self.write_agent_message_service.clone();
-        let mut read_proxy_message_service = self.read_proxy_message_service.clone();
-        let mut connect_to_proxy_service = self.connect_to_proxy_service.clone();
         Box::pin(async move {
+            let mut write_agent_message_service =
+                ServiceBuilder::new().service(WriteMessageService::default());
+            let mut read_proxy_message_service =
+                ServiceBuilder::new().service(ReadMessageService::default());
+            let mut connect_to_proxy_service =
+                ServiceBuilder::new().service(ConnectToProxyService::new(
+                    SERVER_CONFIG
+                        .proxy_connection_retry()
+                        .unwrap_or(DEFAULT_RETRY_TIMES),
+                ));
+
+            let mut prepare_message_framed_service =
+                ServiceBuilder::new().service(PrepareMessageFramedService::new(
+                    &(*PROXY_PUBLIC_KEY),
+                    &(*AGENT_PRIVATE_KEY),
+                    SERVER_CONFIG
+                        .max_frame_size()
+                        .unwrap_or(DEFAULT_MAX_FRAME_SIZE),
+                    SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
+                    SERVER_CONFIG.compress().unwrap_or(true),
+                ));
+
             let mut socks5_client_framed = Framed::with_capacity(
                 &mut request.client_stream,
                 Socks5ConnectCodec,
