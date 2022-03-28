@@ -89,6 +89,12 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
         let (target_writer_error_sender, mut target_writer_error_receiver) =
             tokio::sync::mpsc::channel::<bool>(1);
 
+        let (agent_reader_error_sender, mut agent_reader_error_receiver) =
+            tokio::sync::mpsc::channel::<bool>(1);
+
+        let (agent_writer_error_sender, mut agent_writer_error_receiver) =
+            tokio::sync::mpsc::channel::<bool>(1);
+
         Box::pin(async move {
             tokio::spawn(async move {
                 loop {
@@ -98,6 +104,15 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                         }
                         Ok(_) => {
                             error!("Target reader error happen.");
+                            return;
+                        }
+                    }
+                    match agent_writer_error_receiver.try_recv() {
+                        Err(e) => {
+                            debug!("Agent writer goes well: {:#?}", e);
+                        }
+                        Ok(_) => {
+                            error!("Agent writer error happen.");
                             return;
                         }
                     }
@@ -136,6 +151,9 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                         }
                         Err(e) => {
                             error!("Fail to read from agent because of error: {:#?}", e);
+                            if let Err(e) = agent_reader_error_sender.try_send(true){
+                                error!("Fail to notice agent reader error because of error: {:#?}", e);
+                            }
                             return;
                         }
                     };
@@ -176,6 +194,15 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                         }
                         Ok(_) => {
                             error!("Target writer error happen.");
+                            return;
+                        }
+                    }
+                    match agent_reader_error_receiver.try_recv() {
+                        Err(e) => {
+                            debug!("Agent reader goes well: {:#?}", e);
+                        }
+                        Ok(_) => {
+                            error!("Agent reader error happen.");
                             return;
                         }
                     }
@@ -223,6 +250,9 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                     match write_proxy_message_result {
                         Err(e) => {
                             error!("Fail to read from target because of error(ready): {:#?}", e);
+                            if let Err(e) = agent_writer_error_sender.try_send(true){
+                                error!("Fail to notice agent writer error because of error: {:#?}", e);
+                            }
                             return;
                         }
                         Ok(proxy_message_write_result) => {
