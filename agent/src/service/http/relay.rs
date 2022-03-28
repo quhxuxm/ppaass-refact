@@ -80,14 +80,16 @@ impl Service<HttpRelayServiceRequest> for HttpRelayService {
             let target_address_a2t = request.target_address.clone();
             let target_address_t2a = request.target_address.clone();
 
-            let (relay_status_sender, mut relay_status_receiver) = tokio::sync::mpsc::channel::<bool>(1);
-
+            let (proxy_reader_error_sender, mut proxy_reader_error_receiver) =
+                tokio::sync::mpsc::channel::<bool>(1);
+            let (proxy_writer_error_sender, mut proxy_writer_error_receiver) =
+                tokio::sync::mpsc::channel::<bool>(1);
             tokio::spawn(async move {
-                match relay_status_receiver.try_recv(){
-                    Err(e)=>{
+                match proxy_reader_error_receiver.try_recv() {
+                    Err(e) => {
                         debug!("Proxy data reader goes well: {:#?}", e);
                     }
-                    Ok(_)=>{
+                    Ok(_) => {
                         error!("Proxy data reader error happen.");
                         return;
                     }
@@ -117,11 +119,11 @@ impl Service<HttpRelayServiceRequest> for HttpRelayService {
                     };
                 }
                 loop {
-                    match relay_status_receiver.try_recv(){
-                        Err(e)=>{
+                    match proxy_reader_error_receiver.try_recv() {
+                        Err(e) => {
                             debug!("Proxy data reader goes well: {:#?}", e);
                         }
-                        Ok(_)=>{
+                        Ok(_) => {
                             error!("Proxy data reader error happen.");
                             return;
                         }
@@ -164,7 +166,16 @@ impl Service<HttpRelayServiceRequest> for HttpRelayService {
                     )
                     .await;
                     let write_agent_message_result = match write_agent_message_result {
-                        Err(_) => return,
+                        Err(e) => {
+                            error!(
+                                "Fail to write agent message to proxy because of error: {:#?}",
+                                e
+                            );
+                            if let Err(e) = proxy_writer_error_sender.try_send(true) {
+                                error!("Fail to notice proxy writer error happen because of error: {:#?}", e);
+                            }
+                            return
+                        }
                         Ok(v) => v,
                     };
                     message_framed_write = write_agent_message_result.message_framed_write;
@@ -172,6 +183,15 @@ impl Service<HttpRelayServiceRequest> for HttpRelayService {
             });
             tokio::spawn(async move {
                 loop {
+                    match proxy_writer_error_receiver.try_recv() {
+                        Err(e) => {
+                            debug!("Proxy data writer goes well: {:#?}", e);
+                        }
+                        Ok(_) => {
+                            error!("Proxy data writer error happen.");
+                            return;
+                        }
+                    }
                     let read_proxy_message_result = ready_and_call_service(
                         &mut read_proxy_message_service,
                         ReadMessageServiceRequest {
@@ -191,7 +211,7 @@ impl Service<HttpRelayServiceRequest> for HttpRelayService {
                     } = match read_proxy_message_result {
                         Err(e) => {
                             error!("Fail to read proxy data because of error: {:#?}", e);
-                            match relay_status_sender.try_send(true) {
+                            match proxy_reader_error_sender.try_send(true) {
                                 Err(e) => {
                                     error!(
                                         "Fail to notice proxy data reader because of error: {:#?}.",
