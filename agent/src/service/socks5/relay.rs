@@ -85,6 +85,11 @@ impl Service<Socks5RelayServiceRequest> for Socks5RelayService {
                 tokio::sync::mpsc::channel::<bool>(1);
             let (proxy_writer_error_sender, mut proxy_writer_error_receiver) =
                 tokio::sync::mpsc::channel::<bool>(1);
+
+            let (client_reader_error_sender, mut client_reader_error_receiver) =
+                tokio::sync::mpsc::channel::<bool>(1);
+            let (client_writer_error_sender, mut client_writer_error_receiver) =
+                tokio::sync::mpsc::channel::<bool>(1);
             tokio::spawn(async move {
                 loop {
                     match proxy_reader_error_receiver.try_recv() {
@@ -93,6 +98,15 @@ impl Service<Socks5RelayServiceRequest> for Socks5RelayService {
                         }
                         Ok(_) => {
                             error!("Proxy data reader error happen.");
+                            return;
+                        }
+                    }
+                    match client_writer_error_receiver.try_recv() {
+                        Err(e) => {
+                            debug!("Client data writer goes well: {:#?}", e);
+                        }
+                        Ok(_) => {
+                            error!("Client data writer error happen.");
                             return;
                         }
                     }
@@ -105,6 +119,12 @@ impl Service<Socks5RelayServiceRequest> for Socks5RelayService {
                                 "Fail to read client data from {:#?} because of error: {:#?}",
                                 target_address_a2t, e
                             );
+                            if let Err(e) = client_reader_error_sender.try_send(true) {
+                                error!(
+                                    "Fail to notice client reader error because of error: {:#?}",
+                                    e
+                                );
+                            }
                             return;
                         }
                         Ok(0) if buf.remaining_mut() > 0 => {
@@ -157,6 +177,15 @@ impl Service<Socks5RelayServiceRequest> for Socks5RelayService {
                         }
                         Ok(_) => {
                             error!("Proxy data writer error happen.");
+                            return;
+                        }
+                    }
+                    match client_reader_error_receiver.try_recv() {
+                        Err(e) => {
+                            debug!("Client reader goes well: {:#?}", e);
+                        }
+                        Ok(_) => {
+                            error!("Client reader error happen.");
                             return;
                         }
                     }
@@ -215,6 +244,9 @@ impl Service<Socks5RelayServiceRequest> for Socks5RelayService {
                             "Fail to write proxy data from {:#?} to client because of error: {:#?}",
                             target_address_t2a, e
                         );
+                        if let Err(e) = client_writer_error_sender.try_send(true){
+                            error!("Fail to notice client writer error because of error: {:#?}", e);
+                        }
                         return;
                     };
                     if let Err(e) = client_stream_write_half.flush().await {
