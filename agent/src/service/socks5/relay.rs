@@ -95,30 +95,6 @@ impl Service<Socks5RelayServiceRequest> for Socks5RelayService {
                 tokio::sync::mpsc::channel::<bool>(1);
             tokio::spawn(async move {
                 loop {
-                    match proxy_reader_error_receiver.try_recv() {
-                        Err(e) => match e {
-                            TryRecvError::Empty => {
-                                debug!("Proxy data reader goes well: {:#?}", e);
-                            }
-                            TryRecvError::Disconnected => return,
-                        },
-                        Ok(_) => {
-                            error!("Proxy data reader error happen.");
-                            return;
-                        }
-                    }
-                    match client_writer_error_receiver.try_recv() {
-                        Err(e) => match e {
-                            TryRecvError::Empty => {
-                                debug!("Client data writer goes well: {:#?}", e);
-                            }
-                            TryRecvError::Disconnected => return,
-                        },
-                        Ok(_) => {
-                            error!("Client data writer error happen.");
-                            return;
-                        }
-                    }
                     let mut buf = BytesMut::with_capacity(
                         SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
                     );
@@ -176,34 +152,34 @@ impl Service<Socks5RelayServiceRequest> for Socks5RelayService {
                         Ok(v) => v,
                     };
                     message_framed_write = write_agent_message_result.message_framed_write;
+                    match proxy_reader_error_receiver.try_recv() {
+                        Err(e) => match e {
+                            TryRecvError::Empty => {
+                                debug!("Proxy data reader goes well: {:#?}", e);
+                            }
+                            TryRecvError::Disconnected => return,
+                        },
+                        Ok(_) => {
+                            error!("Proxy data reader error happen.");
+                            return;
+                        }
+                    }
+                    match client_writer_error_receiver.try_recv() {
+                        Err(e) => match e {
+                            TryRecvError::Empty => {
+                                debug!("Client data writer goes well: {:#?}", e);
+                            }
+                            TryRecvError::Disconnected => return,
+                        },
+                        Ok(_) => {
+                            error!("Client data writer error happen.");
+                            return;
+                        }
+                    }
                 }
             });
             tokio::spawn(async move {
                 loop {
-                    match proxy_writer_error_receiver.try_recv() {
-                        Err(e) => match e {
-                            TryRecvError::Empty => {
-                                debug!("Proxy data writer goes well: {:#?}", e);
-                            }
-                            TryRecvError::Disconnected => return,
-                        },
-                        Ok(_) => {
-                            error!("Proxy data writer error happen.");
-                            return;
-                        }
-                    }
-                    match client_reader_error_receiver.try_recv() {
-                        Err(e) => match e {
-                            TryRecvError::Empty => {
-                                debug!("Client reader goes well: {:#?}", e);
-                            }
-                            TryRecvError::Disconnected => return,
-                        },
-                        Ok(_) => {
-                            error!("Client reader error happen.");
-                            return;
-                        }
-                    }
                     let read_proxy_message_result = ready_and_call_service(
                         &mut read_proxy_message_service,
                         ReadMessageServiceRequest {
@@ -274,6 +250,30 @@ impl Service<Socks5RelayServiceRequest> for Socks5RelayService {
                         );
                         return;
                     };
+                    match proxy_writer_error_receiver.try_recv() {
+                        Err(e) => match e {
+                            TryRecvError::Empty => {
+                                debug!("Proxy data writer goes well: {:#?}", e);
+                            }
+                            TryRecvError::Disconnected => return,
+                        },
+                        Ok(_) => {
+                            error!("Proxy data writer error happen.");
+                            return;
+                        }
+                    }
+                    match client_reader_error_receiver.try_recv() {
+                        Err(e) => match e {
+                            TryRecvError::Empty => {
+                                debug!("Client reader goes well: {:#?}", e);
+                            }
+                            TryRecvError::Disconnected => return,
+                        },
+                        Ok(_) => {
+                            error!("Client reader error happen.");
+                            return;
+                        }
+                    }
                 }
             });
             Ok(Socks5RelayServiceResult {

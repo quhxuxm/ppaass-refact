@@ -105,30 +105,6 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
         Box::pin(async move {
             tokio::spawn(async move {
                 loop {
-                    match target_reader_error_receiver.try_recv() {
-                        Err(e) => match e {
-                            TryRecvError::Empty => {
-                                debug!("Target reader goes well: {:#?}", e);
-                            }
-                            TryRecvError::Disconnected => return,
-                        },
-                        Ok(_) => {
-                            error!("Target reader error happen.");
-                            return;
-                        }
-                    }
-                    match agent_writer_error_receiver.try_recv() {
-                        Err(e) => match e {
-                            TryRecvError::Empty => {
-                                debug!("Agent writer goes well: {:#?}", e);
-                            }
-                            TryRecvError::Disconnected => return,
-                        },
-                        Ok(_) => {
-                            error!("Agent writer error happen.");
-                            return;
-                        }
-                    }
                     let read_agent_message_result = ready_and_call_service(
                         &mut read_agent_message_service,
                         ReadMessageServiceRequest {
@@ -206,34 +182,34 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                         };
                         return;
                     };
+                    match target_reader_error_receiver.try_recv() {
+                        Err(e) => match e {
+                            TryRecvError::Empty => {
+                                debug!("Target reader goes well: {:#?}", e);
+                            }
+                            TryRecvError::Disconnected => return,
+                        },
+                        Ok(_) => {
+                            error!("Target reader error happen.");
+                            return;
+                        }
+                    }
+                    match agent_writer_error_receiver.try_recv() {
+                        Err(e) => match e {
+                            TryRecvError::Empty => {
+                                debug!("Agent writer goes well: {:#?}", e);
+                            }
+                            TryRecvError::Disconnected => return,
+                        },
+                        Ok(_) => {
+                            error!("Agent writer error happen.");
+                            return;
+                        }
+                    }
                 }
             });
             tokio::spawn(async move {
                 loop {
-                    match target_writer_error_receiver.try_recv() {
-                        Err(e) => match e {
-                            TryRecvError::Empty => {
-                                debug!("Target writer goes well: {:#?}", e);
-                            }
-                            TryRecvError::Disconnected => return,
-                        },
-                        Ok(_) => {
-                            error!("Target writer error happen.");
-                            return;
-                        }
-                    }
-                    match agent_reader_error_receiver.try_recv() {
-                        Err(e) => match e {
-                            TryRecvError::Empty => {
-                                debug!("Agent reader goes well: {:#?}", e);
-                            }
-                            TryRecvError::Disconnected => return,
-                        },
-                        Ok(_) => {
-                            error!("Agent reader error happen.");
-                            return;
-                        }
-                    }
                     let mut buf = BytesMut::with_capacity(
                         SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
                     );
@@ -291,6 +267,30 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                         }
                         Ok(proxy_message_write_result) => {
                             message_framed_write = proxy_message_write_result.message_framed_write;
+                            match target_writer_error_receiver.try_recv() {
+                                Err(e) => match e {
+                                    TryRecvError::Empty => {
+                                        debug!("Target writer goes well: {:#?}", e);
+                                    }
+                                    TryRecvError::Disconnected => return,
+                                },
+                                Ok(_) => {
+                                    error!("Target writer error happen.");
+                                    return;
+                                }
+                            }
+                            match agent_reader_error_receiver.try_recv() {
+                                Err(e) => match e {
+                                    TryRecvError::Empty => {
+                                        debug!("Agent reader goes well: {:#?}", e);
+                                    }
+                                    TryRecvError::Disconnected => return,
+                                },
+                                Ok(_) => {
+                                    error!("Agent reader error happen.");
+                                    return;
+                                }
+                            }
                         }
                     }
                 }

@@ -94,30 +94,6 @@ impl Service<HttpRelayServiceRequest> for HttpRelayService {
                 tokio::sync::mpsc::channel::<bool>(1);
 
             tokio::spawn(async move {
-                match proxy_reader_error_receiver.try_recv() {
-                    Err(e) => match e {
-                        TryRecvError::Empty => {
-                            debug!("Proxy data reader goes well: {:#?}", e);
-                        }
-                        TryRecvError::Disconnected => return,
-                    },
-                    Ok(_) => {
-                        error!("Proxy data reader error happen.");
-                        return;
-                    }
-                }
-                match client_writer_error_receiver.try_recv() {
-                    Err(e) => match e {
-                        TryRecvError::Empty => {
-                            debug!("Client data writer goes well: {:#?}", e);
-                        }
-                        TryRecvError::Disconnected => return,
-                    },
-                    Ok(_) => {
-                        error!("Client data writer error happen.");
-                        return;
-                    }
-                }
                 if let Some(init_data) = request.init_data {
                     let write_agent_message_result = ready_and_call_service(
                         &mut write_agent_message_service,
@@ -150,8 +126,6 @@ impl Service<HttpRelayServiceRequest> for HttpRelayService {
                         }
                         Ok(v) => message_framed_write = v.message_framed_write,
                     };
-                }
-                loop {
                     match proxy_reader_error_receiver.try_recv() {
                         Err(e) => match e {
                             TryRecvError::Empty => {
@@ -176,6 +150,8 @@ impl Service<HttpRelayServiceRequest> for HttpRelayService {
                             return;
                         }
                     }
+                }
+                loop {
                     let mut buf = BytesMut::with_capacity(
                         SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
                     );
@@ -233,34 +209,34 @@ impl Service<HttpRelayServiceRequest> for HttpRelayService {
                         Ok(v) => v,
                     };
                     message_framed_write = write_agent_message_result.message_framed_write;
+                    match proxy_reader_error_receiver.try_recv() {
+                        Err(e) => match e {
+                            TryRecvError::Empty => {
+                                debug!("Proxy data reader goes well: {:#?}", e);
+                            }
+                            TryRecvError::Disconnected => return,
+                        },
+                        Ok(_) => {
+                            error!("Proxy data reader error happen.");
+                            return;
+                        }
+                    }
+                    match client_writer_error_receiver.try_recv() {
+                        Err(e) => match e {
+                            TryRecvError::Empty => {
+                                debug!("Client data writer goes well: {:#?}", e);
+                            }
+                            TryRecvError::Disconnected => return,
+                        },
+                        Ok(_) => {
+                            error!("Client data writer error happen.");
+                            return;
+                        }
+                    }
                 }
             });
             tokio::spawn(async move {
                 loop {
-                    match proxy_writer_error_receiver.try_recv() {
-                        Err(e) => match e {
-                            TryRecvError::Empty => {
-                                debug!("Proxy data writer goes well: {:#?}", e);
-                            }
-                            TryRecvError::Disconnected => return,
-                        },
-                        Ok(_) => {
-                            error!("Proxy data writer error happen.");
-                            return;
-                        }
-                    }
-                    match client_reader_error_receiver.try_recv() {
-                        Err(e) => match e {
-                            TryRecvError::Empty => {
-                                debug!("Client reader goes well: {:#?}", e);
-                            }
-                            TryRecvError::Disconnected => return,
-                        },
-                        Ok(_) => {
-                            error!("Client reader error happen.");
-                            return;
-                        }
-                    }
                     let read_proxy_message_result = ready_and_call_service(
                         &mut read_proxy_message_service,
                         ReadMessageServiceRequest {
@@ -332,6 +308,30 @@ impl Service<HttpRelayServiceRequest> for HttpRelayService {
                         );
                         return;
                     };
+                    match proxy_writer_error_receiver.try_recv() {
+                        Err(e) => match e {
+                            TryRecvError::Empty => {
+                                debug!("Proxy data writer goes well: {:#?}", e);
+                            }
+                            TryRecvError::Disconnected => return,
+                        },
+                        Ok(_) => {
+                            error!("Proxy data writer error happen.");
+                            return;
+                        }
+                    }
+                    match client_reader_error_receiver.try_recv() {
+                        Err(e) => match e {
+                            TryRecvError::Empty => {
+                                debug!("Client reader goes well: {:#?}", e);
+                            }
+                            TryRecvError::Disconnected => return,
+                        },
+                        Ok(_) => {
+                            error!("Client reader error happen.");
+                            return;
+                        }
+                    }
                 }
             });
             Ok(HttpRelayServiceResult {
