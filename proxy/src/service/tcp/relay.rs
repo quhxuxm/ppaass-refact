@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 use std::task::{Context, Poll};
 
-use bytes::{BufMut, BytesMut};
+use bytes::BytesMut;
 use futures_util::future::BoxFuture;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
