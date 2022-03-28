@@ -1,9 +1,9 @@
-use std::task::Poll;
 use std::{fmt::Debug, net::SocketAddr};
+use std::task::Poll;
 
 use bytes::Bytes;
-use futures_util::future::BoxFuture;
 use futures_util::{SinkExt, StreamExt};
+use futures_util::future::BoxFuture;
 use tokio::net::TcpStream;
 use tokio_util::codec::Framed;
 use tower::Service;
@@ -11,10 +11,10 @@ use tower::ServiceBuilder;
 use tracing::log::{debug, error};
 
 use common::{
-    generate_uuid, ready_and_call_service, AgentMessagePayloadTypeValue, CommonError,
-    MessageFramedRead, MessageFramedWrite, MessagePayload, NetAddress, PayloadEncryptionType,
-    PayloadType, PrepareMessageFramedService, ProxyMessagePayloadTypeValue, ReadMessageService,
-    ReadMessageServiceRequest, ReadMessageServiceResult, WriteMessageService,
+    AgentMessagePayloadTypeValue, CommonError, generate_uuid, MessageFramedRead,
+    MessageFramedWrite, MessagePayload, NetAddress, PayloadEncryptionType, PayloadType,
+    PrepareMessageFramedService, ProxyMessagePayloadTypeValue, ReadMessageService, ReadMessageServiceRequest,
+    ReadMessageServiceResult, ready_and_call_service, WriteMessageService,
     WriteMessageServiceRequest,
 };
 
@@ -24,8 +24,8 @@ use crate::command::socks5::{
     Socks5ConnectCommandType,
 };
 use crate::config::{AGENT_PRIVATE_KEY, PROXY_PUBLIC_KEY};
-use crate::service::common::{ConnectToProxyService, ConnectToProxyServiceRequest};
 use crate::SERVER_CONFIG;
+use crate::service::common::{ConnectToProxyService, ConnectToProxyServiceRequest};
 
 const DEFAULT_RETRY_TIMES: u16 = 3;
 const DEFAULT_BUFFER_SIZE: usize = 1024 * 64;
@@ -112,7 +112,6 @@ impl Service<Socks5ConnectCommandServiceRequest> for Socks5ConnectCommandService
                         .proxy_connection_retry()
                         .unwrap_or(DEFAULT_RETRY_TIMES),
                 ));
-
             let mut prepare_message_framed_service =
                 ServiceBuilder::new().service(PrepareMessageFramedService::new(
                     &(*PROXY_PUBLIC_KEY),
@@ -123,7 +122,6 @@ impl Service<Socks5ConnectCommandServiceRequest> for Socks5ConnectCommandService
                     SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
                     SERVER_CONFIG.compress().unwrap_or(true),
                 ));
-
             let mut socks5_client_framed = Framed::with_capacity(
                 &mut request.client_stream,
                 Socks5ConnectCodec,
@@ -150,7 +148,7 @@ impl Service<Socks5ConnectCommandServiceRequest> for Socks5ConnectCommandService
                         },
                         &mut socks5_client_framed,
                     )
-                    .await?
+                        .await?
                 }
                 Socks5ConnectCommandType::Bind => {
                     todo!()
@@ -164,7 +162,7 @@ impl Service<Socks5ConnectCommandServiceRequest> for Socks5ConnectCommandService
                 connect_to_proxy_service_result.proxy_stream,
                 &mut socks5_client_framed,
             )
-            .await?;
+                .await?;
             let write_message_result = Self::call_service(
                 &mut write_agent_message_service,
                 WriteMessageServiceRequest {
@@ -183,7 +181,7 @@ impl Service<Socks5ConnectCommandServiceRequest> for Socks5ConnectCommandService
                 },
                 &mut socks5_client_framed,
             )
-            .await?;
+                .await?;
             let read_proxy_message_result = Self::call_service(
                 &mut read_proxy_message_service,
                 ReadMessageServiceRequest {
@@ -191,18 +189,18 @@ impl Service<Socks5ConnectCommandServiceRequest> for Socks5ConnectCommandService
                 },
                 &mut socks5_client_framed,
             )
-            .await?;
+                .await?;
             let read_proxy_message_result =
                 read_proxy_message_result.ok_or(CommonError::CodecError)?;
             if let ReadMessageServiceResult {
                 message_payload:
-                    MessagePayload {
-                        payload_type:
-                            PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::TcpConnectSuccess),
-                        source_address,
-                        target_address,
-                        ..
-                    },
+                MessagePayload {
+                    payload_type:
+                    PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::TcpConnectSuccess),
+                    source_address,
+                    target_address,
+                    ..
+                },
                 message_framed_read,
                 message_id,
                 ..

@@ -1,6 +1,6 @@
 use bytecodec::bytes::{BytesEncoder, RemainingBytesDecoder};
-use bytecodec::io::IoDecodeExt;
 use bytecodec::EncodeExt;
+use bytecodec::io::IoDecodeExt;
 use bytes::{Buf, BufMut, BytesMut};
 use httpcodec::{BodyDecoder, BodyEncoder, Request, RequestDecoder, Response, ResponseEncoder};
 use tokio_util::codec::{Decoder, Encoder};

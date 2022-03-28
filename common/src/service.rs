@@ -1,16 +1,15 @@
 use std::task::{Context, Poll};
 
+use futures_util::{SinkExt, StreamExt};
 use futures_util::future::BoxFuture;
 use futures_util::stream::{SplitSink, SplitStream};
-use futures_util::{SinkExt, StreamExt};
-
 use tokio::net::TcpStream;
 use tokio_util::codec::Framed;
 use tower::Service;
 use tracing::{debug, error};
 
 use crate::{
-    generate_uuid, CommonError, Message, MessageCodec, MessagePayload, PayloadEncryptionType,
+    CommonError, generate_uuid, Message, MessageCodec, MessagePayload, PayloadEncryptionType,
 };
 
 pub type MessageFramedRead = SplitStream<Framed<TcpStream, MessageCodec>>;

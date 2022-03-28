@@ -63,7 +63,6 @@ impl ProxyServer {
                     e
                 );
             };
-
             let listener = match TcpListener::from_std(std_listener) {
                 Err(e) => {
                     panic!("Fail to generate proxy server listener from std listener because of error: {:#?}", e);
@@ -73,7 +72,6 @@ impl ProxyServer {
                     listener
                 }
             };
-
             loop {
                 let (agent_stream, agent_address) = match listener.accept().await {
                     Err(e) => {
@@ -85,7 +83,6 @@ impl ProxyServer {
                     }
                     Ok((agent_stream, agent_address)) => (agent_stream, agent_address),
                 };
-
                 tokio::spawn(async move {
                     let mut handle_agent_connection_service = ServiceBuilder::new()
                         .buffer(SERVER_CONFIG.buffered_connection_number().unwrap_or(1024))
@@ -104,7 +101,7 @@ impl ProxyServer {
                             agent_address,
                         },
                     )
-                    .await
+                        .await
                     {
                         error!(
                             "Error happen when handle agent connection [{}], error:{:#?}",

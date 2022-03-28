@@ -10,10 +10,10 @@ use tower::ServiceBuilder;
 use tracing::{debug, error};
 
 use common::{
-    generate_uuid, ready_and_call_service, AgentMessagePayloadTypeValue, CommonError,
-    MessageFramedRead, MessageFramedWrite, MessagePayload, NetAddress, PayloadEncryptionType,
-    PayloadType, ProxyMessagePayloadTypeValue, ReadMessageService, ReadMessageServiceRequest,
-    ReadMessageServiceResult, WriteMessageService, WriteMessageServiceRequest,
+    AgentMessagePayloadTypeValue, CommonError, generate_uuid, MessageFramedRead,
+    MessageFramedWrite, MessagePayload, NetAddress, PayloadEncryptionType, PayloadType,
+    ProxyMessagePayloadTypeValue, ReadMessageService, ReadMessageServiceRequest, ReadMessageServiceResult,
+    ready_and_call_service, WriteMessageService, WriteMessageServiceRequest,
 };
 
 use crate::SERVER_CONFIG;
@@ -59,7 +59,6 @@ impl Service<HttpRelayServiceRequest> for HttpRelayService {
             let source_address_a2t = request.source_address.clone();
             let target_address_a2t = request.target_address.clone();
             let target_address_t2a = request.target_address.clone();
-
             tokio::spawn(async move {
                 if let Some(init_data) = request.init_data {
                     let write_agent_message_result = ready_and_call_service(
@@ -79,7 +78,7 @@ impl Service<HttpRelayServiceRequest> for HttpRelayService {
                             )),
                         },
                     )
-                    .await;
+                        .await;
                     let _write_agent_message_result = match write_agent_message_result {
                         Err(e) => {
                             error!(
@@ -101,7 +100,6 @@ impl Service<HttpRelayServiceRequest> for HttpRelayService {
                                 "Fail to read client data from {:#?} because of error: {:#?}",
                                 target_address_a2t, e
                             );
-
                             return;
                         }
                         Ok(0) if buf.remaining_mut() > 0 => {
@@ -129,14 +127,13 @@ impl Service<HttpRelayServiceRequest> for HttpRelayService {
                             )),
                         },
                     )
-                    .await;
+                        .await;
                     let write_agent_message_result = match write_agent_message_result {
                         Err(e) => {
                             error!(
                                 "Fail to write agent message to proxy because of error: {:#?}",
                                 e
                             );
-
                             return;
                         }
                         Ok(v) => v,
@@ -152,15 +149,14 @@ impl Service<HttpRelayServiceRequest> for HttpRelayService {
                             message_framed_read,
                         },
                     )
-                    .await;
-
+                        .await;
                     let ReadMessageServiceResult {
                         message_framed_read: message_framed_read_in_result,
                         message_payload:
-                            MessagePayload {
-                                data: proxy_raw_data,
-                                ..
-                            },
+                        MessagePayload {
+                            data: proxy_raw_data,
+                            ..
+                        },
                         ..
                     } = match read_proxy_message_result {
                         Err(e) => {
@@ -170,13 +166,13 @@ impl Service<HttpRelayServiceRequest> for HttpRelayService {
                         Ok(Some(
                             value @ ReadMessageServiceResult {
                                 message_payload:
-                                    MessagePayload {
-                                        payload_type:
-                                            PayloadType::ProxyPayload(
-                                                ProxyMessagePayloadTypeValue::TcpData,
-                                            ),
-                                        ..
-                                    },
+                                MessagePayload {
+                                    payload_type:
+                                    PayloadType::ProxyPayload(
+                                        ProxyMessagePayloadTypeValue::TcpData,
+                                    ),
+                                    ..
+                                },
                                 ..
                             },
                         )) => value,

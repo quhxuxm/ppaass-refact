@@ -2,8 +2,8 @@ use std::io::ErrorKind;
 use std::net::SocketAddr;
 use std::task::{Context, Poll};
 
-use futures_util::future::BoxFuture;
 use futures_util::{SinkExt, StreamExt};
+use futures_util::future::BoxFuture;
 use tokio::net::TcpStream;
 use tokio_util::codec::Framed;
 use tower::Service;

@@ -45,7 +45,6 @@ impl AgentServer {
 
     pub(crate) fn run(&self) {
         self.runtime.block_on(async {
-
             let std_listener = match std::net::TcpListener::bind(SocketAddrV4::new(
                 Ipv4Addr::new(0, 0, 0, 0),
                 SERVER_CONFIG.port().unwrap_or(DEFAULT_SERVER_PORT),
@@ -64,7 +63,6 @@ impl AgentServer {
                     e
                 );
             };
-
             let listener = match TcpListener::from_std(std_listener) {
                 Err(e) => {
                     panic!("Fail to generate agent server listener from std listener because of error: {:#?}", e);
@@ -74,7 +72,6 @@ impl AgentServer {
                     listener
                 }
             };
-
             loop {
                 let (client_stream, client_address) = match listener.accept().await {
                     Err(e) => {
@@ -104,7 +101,7 @@ impl AgentServer {
                             client_address,
                         },
                     )
-                    .await
+                        .await
                     {
                         error!(
                             "Error happen when handle client connection [{}], error:{:#?}",
