@@ -45,17 +45,32 @@ impl AgentServer {
 
     pub(crate) fn run(&self) {
         self.runtime.block_on(async {
-            let listener = match TcpListener::bind(SocketAddrV4::new(
+
+            let std_listener = match std::net::TcpListener::bind(SocketAddrV4::new(
                 Ipv4Addr::new(0, 0, 0, 0),
                 SERVER_CONFIG.port().unwrap_or(DEFAULT_SERVER_PORT),
-            ))
-            .await
-            {
+            )) {
                 Err(e) => {
                     panic!("Fail to bind agent server port because of error: {:#?}", e);
                 }
                 Ok(listener) => {
                     info!("Success to bind agent server port, start listening ... ");
+                    listener
+                }
+            };
+            if let Err(e) = std_listener.set_nonblocking(true) {
+                panic!(
+                    "Fail to set agent server listener to be non-blocking because of error: {:#?}",
+                    e
+                );
+            };
+
+            let listener = match TcpListener::from_std(std_listener) {
+                Err(e) => {
+                    panic!("Fail to generate agent server listener from std listener because of error: {:#?}", e);
+                }
+                Ok(listener) => {
+                    info!("Success to generate agent server listener.");
                     listener
                 }
             };
