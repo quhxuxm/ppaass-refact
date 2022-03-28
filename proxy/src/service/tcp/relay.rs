@@ -83,9 +83,20 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
         let agent_connect_message_target_address = req.target_address;
         let (mut target_stream_read, mut target_stream_write) = target_stream.into_split();
 
+        let (relay_status_sender, mut relay_status_receiver) = tokio::sync::mpsc::channel::<bool>(1);
+
         Box::pin(async move {
             tokio::spawn(async move {
                 loop {
+                    match relay_status_receiver.try_recv(){
+                        Err(e)=>{
+                            debug!("Target reader goes well: {:#?}", e);
+                        }
+                        Ok(_)=>{
+                            error!("Target reader error happen.");
+                            return;
+                        }
+                    }
                     let read_agent_message_result = ready_and_call_service(
                         &mut read_agent_message_service,
                         ReadMessageServiceRequest {
@@ -149,6 +160,17 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                     match target_stream_read.read_buf(&mut buf).await {
                         Err(e) => {
                             error!("Fail to read data from target because of error: {:#?}", e);
+                            match relay_status_sender.try_send(true) {
+                                Err(e) => {
+                                    error!(
+                                        "Fail to notice agent data reader because of error: {:#?}.",
+                                        e
+                                    );
+                                }
+                                Ok(_) => {
+                                    debug!("Success notice agent data reader to close.");
+                                }
+                            };
                             return;
                         }
                         Ok(0) if buf.remaining_mut() > 0 => {
