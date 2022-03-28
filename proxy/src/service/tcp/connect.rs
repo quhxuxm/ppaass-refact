@@ -65,15 +65,12 @@ impl Service<TcpConnectServiceRequest> for TcpConnectService {
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        let read_agent_message_service_ready = self.read_agent_message_service.poll_ready(cx)?;
-        let write_proxy_message_service_ready = self.write_proxy_message_service.poll_ready(cx)?;
         let connect_to_target_service_ready = self.connect_to_target_service.poll_ready(cx)?;
-        if read_agent_message_service_ready.is_ready()
-            && write_proxy_message_service_ready.is_ready()
-            && connect_to_target_service_ready.is_ready()
-        {
+        if connect_to_target_service_ready.is_ready() {
+            debug!("Ready connect to target for agent connection.");
             return Poll::Ready(Ok(()));
         }
+        debug!("Not ready connect to target for agent connection.");
         Poll::Pending
     }
 

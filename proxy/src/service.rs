@@ -4,8 +4,11 @@ use std::task::{Context, Poll};
 use futures_util::future;
 use futures_util::future::BoxFuture;
 use tokio::net::TcpStream;
-use tower::retry::{Policy, Retry};
 use tower::util::BoxCloneService;
+use tower::{
+    retry::{Policy, Retry},
+    util::BoxLayer,
+};
 use tower::{service_fn, Service};
 use tracing::{debug, error};
 
@@ -75,15 +78,11 @@ impl Service<AgentConnectionInfo> for HandleAgentConnectionService {
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         let tcp_connect_service_ready = self.tcp_connect_service.poll_ready(cx)?;
-        let prepare_message_frame_service_ready =
-            self.prepare_message_frame_service.poll_ready(cx)?;
-        let tcp_relay_service_ready = self.tcp_relay_service.poll_ready(cx)?;
-        if tcp_connect_service_ready.is_ready()
-            && prepare_message_frame_service_ready.is_ready()
-            && tcp_relay_service_ready.is_ready()
-        {
+        if tcp_connect_service_ready.is_ready() {
+            debug!("Ready to handle agent connection.");
             return Poll::Ready(Ok(()));
         }
+        debug!("Not ready to handle agent connection.");
         Poll::Pending
     }
 

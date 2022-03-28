@@ -11,7 +11,7 @@ use tokio::net::TcpStream;
 use tokio_util::codec::Framed;
 use tower::util::BoxCloneService;
 use tower::Service;
-use tracing::error;
+use tracing::{debug, error};
 use url::Url;
 
 use common::{
@@ -124,18 +124,12 @@ impl Service<HttpConnectServiceRequest> for HttpConnectService {
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        let prepare_message_framed_service_ready =
-            self.prepare_message_framed_service.poll_ready(cx)?;
-        let write_agent_message_service_ready = self.write_agent_message_service.poll_ready(cx)?;
-        let read_proxy_message_service_ready = self.read_proxy_message_service.poll_ready(cx)?;
         let connect_to_proxy_service_ready = self.connect_to_proxy_service.poll_ready(cx)?;
-        if prepare_message_framed_service_ready.is_ready()
-            && write_agent_message_service_ready.is_ready()
-            && read_proxy_message_service_ready.is_ready()
-            && connect_to_proxy_service_ready.is_ready()
-        {
+        if connect_to_proxy_service_ready.is_ready() {
+            debug!("Ready connect to proxy for http client connection");
             return Poll::Ready(Ok(()));
         }
+        debug!("Not ready connect to proxy for http client connection");
         Poll::Pending
     }
 

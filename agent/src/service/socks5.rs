@@ -7,6 +7,7 @@ use tower::util::BoxCloneService;
 use tower::Service;
 
 use common::{ready_and_call_service, CommonError};
+use tracing::debug;
 
 use crate::service::socks5::authenticate::{
     Socks5AuthCommandService, Socks5AuthenticateFlowRequest, Socks5AuthenticateFlowResult,
@@ -63,13 +64,11 @@ impl Service<Socks5FlowRequest> for Socks5FlowService {
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         let authenticate_service_ready = self.authenticate_service.poll_ready(cx)?;
         let connect_service_ready = self.connect_service.poll_ready(cx)?;
-        let relay_service_ready = self.relay_service.poll_ready(cx)?;
-        if authenticate_service_ready.is_ready()
-            && connect_service_ready.is_ready()
-            && relay_service_ready.is_ready()
-        {
+        if authenticate_service_ready.is_ready() && connect_service_ready.is_ready() {
+            debug!("Ready to handle client socks5 connection.");
             return Poll::Ready(Ok(()));
         }
+        debug!("Not ready to handle client socks5 connection.");
         Poll::Pending
     }
 

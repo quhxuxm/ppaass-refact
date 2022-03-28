@@ -7,6 +7,7 @@ use tower::util::BoxCloneService;
 use tower::Service;
 
 use common::{ready_and_call_service, CommonError};
+use tracing::debug;
 
 use crate::service::http::connect::{
     HttpConnectService, HttpConnectServiceRequest, HttpConnectServiceResult,
@@ -51,10 +52,11 @@ impl Service<HttpFlowRequest> for HttpFlowService {
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         let connect_service_ready = self.connect_service.poll_ready(cx)?;
-        let relay_service = self.relay_service.poll_ready(cx)?;
-        if connect_service_ready.is_ready() && relay_service.is_ready() {
+        if connect_service_ready.is_ready() {
+            debug!("Ready to handle client http connection.");
             return Poll::Ready(Ok(()));
         }
+        debug!("Not ready to handle client http connection.");
         Poll::Pending
     }
 

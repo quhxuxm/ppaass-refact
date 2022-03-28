@@ -133,15 +133,12 @@ impl Service<Socks5ConnectCommandServiceRequest> for Socks5ConnectCommandService
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, ctx: &mut std::task::Context) -> Poll<Result<(), Self::Error>> {
-        let write_agent_message_service_ready = self.write_agent_message_service.poll_ready(ctx)?;
-        let read_proxy_message_service_ready = self.read_proxy_message_service.poll_ready(ctx)?;
         let connect_to_proxy_service_ready = self.connect_to_proxy_service.poll_ready(ctx)?;
-        if write_agent_message_service_ready.is_ready()
-            && read_proxy_message_service_ready.is_ready()
-            && connect_to_proxy_service_ready.is_ready()
-        {
+        if connect_to_proxy_service_ready.is_ready() {
+            debug!("Ready connect to proxy for socks5 client connection");
             return Poll::Ready(Ok(()));
         }
+        debug!("Not ready connect to proxy for socks5 client connection");
         Poll::Pending
     }
 
