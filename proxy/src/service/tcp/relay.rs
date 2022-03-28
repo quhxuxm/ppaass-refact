@@ -3,11 +3,8 @@ use std::task::{Context, Poll};
 
 use bytes::BytesMut;
 use futures_util::future::BoxFuture;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
-use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
-    sync::mpsc::error::TryRecvError,
-};
 use tower::util::BoxCloneService;
 use tower::Service;
 use tracing::{debug, error, info};
