@@ -34,6 +34,7 @@ pub(crate) struct TcpRelayServiceRequest {
 
 pub(crate) struct TcpRelayServiceResult {
     pub agent_address: SocketAddr,
+    pub target_address: NetAddress,
 }
 
 #[derive(Clone)]
@@ -81,6 +82,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
         let user_token = req.user_token;
         let agent_connect_message_source_address = req.source_address;
         let agent_connect_message_target_address = req.target_address;
+        let target_address_for_return = agent_connect_message_target_address.clone();
         let (mut target_stream_read, mut target_stream_write) = target_stream.into_split();
 
         let (target_reader_error_sender, mut target_reader_error_receiver) =
@@ -151,8 +153,11 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                         }
                         Err(e) => {
                             error!("Fail to read from agent because of error: {:#?}", e);
-                            if let Err(e) = agent_reader_error_sender.try_send(true){
-                                error!("Fail to notice agent reader error because of error: {:#?}", e);
+                            if let Err(e) = agent_reader_error_sender.try_send(true) {
+                                error!(
+                                    "Fail to notice agent reader error because of error: {:#?}",
+                                    e
+                                );
                             }
                             return;
                         }
@@ -250,8 +255,11 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                     match write_proxy_message_result {
                         Err(e) => {
                             error!("Fail to read from target because of error(ready): {:#?}", e);
-                            if let Err(e) = agent_writer_error_sender.try_send(true){
-                                error!("Fail to notice agent writer error because of error: {:#?}", e);
+                            if let Err(e) = agent_writer_error_sender.try_send(true) {
+                                error!(
+                                    "Fail to notice agent writer error because of error: {:#?}",
+                                    e
+                                );
                             }
                             return;
                         }
@@ -262,6 +270,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                 }
             });
             Ok(TcpRelayServiceResult {
+                target_address: target_address_for_return,
                 agent_address: req.agent_address,
             })
         })

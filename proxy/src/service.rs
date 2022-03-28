@@ -7,7 +7,7 @@ use tokio::net::TcpStream;
 use tower::retry::{Policy, Retry};
 use tower::util::BoxCloneService;
 use tower::{service_fn, Service};
-use tracing::{debug, error};
+use tracing::{debug, error, info};
 
 use common::{
     ready_and_call_service, CommonError, PrepareMessageFramedResult, PrepareMessageFramedService,
@@ -100,7 +100,7 @@ impl Service<AgentConnectionInfo> for HandleAgentConnectionService {
                 },
             )
             .await?;
-            let _tcp_connect_result = ready_and_call_service(
+            let relay_result = ready_and_call_service(
                 &mut tcp_relay_service,
                 TcpRelayServiceRequest {
                     message_framed_read: tcp_connect_result.message_framed_read,
@@ -113,7 +113,15 @@ impl Service<AgentConnectionInfo> for HandleAgentConnectionService {
                     agent_tcp_connect_message_id: tcp_connect_result.agent_tcp_connect_message_id,
                 },
             )
-            .await?;
+            .await;
+            match relay_result {
+                Err(e) => {
+                    error!("Error happen when relay agent connection, error: {:#?}", e);
+                }
+                Ok(r) => {
+                    info!("Relay process started for agent: {:#?}", r.agent_address);
+                }
+            }
             Ok(())
         })
     }
