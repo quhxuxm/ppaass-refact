@@ -90,18 +90,6 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
         let agent_address_for_target_to_proxy = req.agent_address.clone();
         let (mut target_stream_read, mut target_stream_write) = target_stream.into_split();
 
-        let (target_reader_error_sender, mut target_reader_error_receiver) =
-            tokio::sync::mpsc::channel::<bool>(1);
-
-        let (target_writer_error_sender, mut target_writer_error_receiver) =
-            tokio::sync::mpsc::channel::<bool>(1);
-
-        let (agent_reader_error_sender, mut agent_reader_error_receiver) =
-            tokio::sync::mpsc::channel::<bool>(1);
-
-        let (agent_writer_error_sender, mut agent_writer_error_receiver) =
-            tokio::sync::mpsc::channel::<bool>(1);
-
         Box::pin(async move {
             tokio::spawn(async move {
                 loop {
@@ -146,27 +134,15 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                         }
                         Err(e) => {
                             error!("Fail to read from agent because of error: {:#?}", e);
-                            if let Err(e) = agent_reader_error_sender.try_send(true) {
-                                error!(
-                                    "Fail to notice agent reader error because of error: {:#?}",
-                                    e
-                                );
-                            }
                             return;
                         }
                     };
                     message_framed_read = message_framed_read_from_read_agent_result;
-                    if let Err(e) = target_stream_write.write_all(data.as_ref()).await {
+                    if let Err(e) = target_stream_write.write(data.as_ref()).await {
                         error!(
                             "Fail to write from agent to target because of error: {:#?}",
                             e
                         );
-                        if let Err(e) = target_writer_error_sender.try_send(true) {
-                            error!(
-                                "Fail to notice target data reader because of error: {:#?}.",
-                                e
-                            );
-                        };
                         return;
                     };
                     if let Err(e) = target_stream_write.flush().await {
@@ -174,38 +150,8 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                             "Fail to flush from agent to target because of error: {:#?}",
                             e
                         );
-                        if let Err(e) = target_writer_error_sender.try_send(true) {
-                            error!(
-                                "Fail to notice target data reader because of error: {:#?}.",
-                                e
-                            );
-                        };
                         return;
                     };
-                    match target_reader_error_receiver.try_recv() {
-                        Err(e) => match e {
-                            TryRecvError::Empty => {
-                                debug!("Target reader goes well: {:#?}", e);
-                            }
-                            TryRecvError::Disconnected => return,
-                        },
-                        Ok(_) => {
-                            error!("Target reader error happen.");
-                            return;
-                        }
-                    }
-                    match agent_writer_error_receiver.try_recv() {
-                        Err(e) => match e {
-                            TryRecvError::Empty => {
-                                debug!("Agent writer goes well: {:#?}", e);
-                            }
-                            TryRecvError::Disconnected => return,
-                        },
-                        Ok(_) => {
-                            error!("Agent writer error happen.");
-                            return;
-                        }
-                    }
                 }
             });
             tokio::spawn(async move {
@@ -216,12 +162,6 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                     match target_stream_read.read_buf(&mut buf).await {
                         Err(e) => {
                             error!("Fail to read data from target because of error: {:#?}", e);
-                            if let Err(e) = target_reader_error_sender.try_send(true) {
-                                error!(
-                                    "Fail to notice agent data reader because of error: {:#?}.",
-                                    e
-                                );
-                            };
                             return;
                         }
                         Ok(0) => {
@@ -257,40 +197,10 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                     match write_proxy_message_result {
                         Err(e) => {
                             error!("Fail to read from target because of error(ready): {:#?}", e);
-                            if let Err(e) = agent_writer_error_sender.try_send(true) {
-                                error!(
-                                    "Fail to notice agent writer error because of error: {:#?}",
-                                    e
-                                );
-                            }
                             return;
                         }
                         Ok(proxy_message_write_result) => {
                             message_framed_write = proxy_message_write_result.message_framed_write;
-                            match target_writer_error_receiver.try_recv() {
-                                Err(e) => match e {
-                                    TryRecvError::Empty => {
-                                        debug!("Target writer goes well: {:#?}", e);
-                                    }
-                                    TryRecvError::Disconnected => return,
-                                },
-                                Ok(_) => {
-                                    error!("Target writer error happen.");
-                                    return;
-                                }
-                            }
-                            match agent_reader_error_receiver.try_recv() {
-                                Err(e) => match e {
-                                    TryRecvError::Empty => {
-                                        debug!("Agent reader goes well: {:#?}", e);
-                                    }
-                                    TryRecvError::Disconnected => return,
-                                },
-                                Ok(_) => {
-                                    error!("Agent reader error happen.");
-                                    return;
-                                }
-                            }
                         }
                     }
                 }
