@@ -10,16 +10,18 @@ use tracing::error;
 use tracing::log::debug;
 
 use common::{
-    AgentMessagePayloadTypeValue, CommonError, generate_uuid, MessageFramedRead,
-    MessageFramedWrite, MessagePayload, NetAddress, PayloadEncryptionType, PayloadType,
-    ProxyMessagePayloadTypeValue, ReadMessageService, ReadMessageServiceRequest, ReadMessageServiceResult,
-    ready_and_call_service, WriteMessageService, WriteMessageServiceRequest,
+    generate_uuid, ready_and_call_service, AgentMessagePayloadTypeValue, CommonError,
+    MessageFramedRead, MessageFramedWrite, MessagePayload, NetAddress,
+    PayloadEncryptionTypeSelectService, PayloadEncryptionTypeSelectServiceRequest,
+    PayloadEncryptionTypeSelectServiceResult, PayloadType, ProxyMessagePayloadTypeValue,
+    ReadMessageService, ReadMessageServiceRequest, ReadMessageServiceResult, WriteMessageService,
+    WriteMessageServiceRequest,
 };
 
-use crate::SERVER_CONFIG;
 use crate::service::{
     ConnectToTargetService, ConnectToTargetServiceRequest, ConnectToTargetServiceResult,
 };
+use crate::SERVER_CONFIG;
 
 pub(crate) struct TcpConnectServiceRequest {
     pub message_framed_read: MessageFramedRead,
@@ -57,27 +59,40 @@ impl Service<TcpConnectServiceRequest> for TcpConnectService {
             let mut connect_to_target_service = ServiceBuilder::new().service(
                 ConnectToTargetService::new(SERVER_CONFIG.target_connection_retry().unwrap_or(3)),
             );
+            let mut payload_encryption_type_select_service =
+                ServiceBuilder::new().service(PayloadEncryptionTypeSelectService);
             let read_agent_message_result = ready_and_call_service(
                 &mut read_agent_message_service,
                 ReadMessageServiceRequest {
                     message_framed_read: req.message_framed_read,
                 },
             )
-                .await?;
+            .await?;
             if let Some(ReadMessageServiceResult {
                 message_payload:
-                MessagePayload {
-                    payload_type:
-                    PayloadType::AgentPayload(AgentMessagePayloadTypeValue::TcpConnect),
-                    target_address,
-                    source_address,
-                    ..
-                },
+                    MessagePayload {
+                        payload_type:
+                            PayloadType::AgentPayload(AgentMessagePayloadTypeValue::TcpConnect),
+                        target_address,
+                        source_address,
+                        ..
+                    },
                 message_framed_read,
                 user_token,
                 message_id,
             }) = read_agent_message_result
             {
+                let PayloadEncryptionTypeSelectServiceResult {
+                    payload_encryption_type,
+                    ..
+                } = ready_and_call_service(
+                    &mut payload_encryption_type_select_service,
+                    PayloadEncryptionTypeSelectServiceRequest {
+                        encryption_token: generate_uuid().into(),
+                        user_token: user_token.clone(),
+                    },
+                )
+                .await?;
                 let connect_to_target_result = ready_and_call_service(
                     &mut connect_to_target_service,
                     ConnectToTargetServiceRequest {
@@ -85,7 +100,7 @@ impl Service<TcpConnectServiceRequest> for TcpConnectService {
                         agent_address: req.agent_address,
                     },
                 )
-                    .await;
+                .await;
                 let ConnectToTargetServiceResult { target_stream } = match connect_to_target_result
                 {
                     Err(e) => {
@@ -104,14 +119,12 @@ impl Service<TcpConnectServiceRequest> for TcpConnectService {
                             WriteMessageServiceRequest {
                                 message_framed_write: req.message_framed_write,
                                 message_payload: Some(connect_fail_payload),
-                                payload_encryption_type: PayloadEncryptionType::Blowfish(
-                                    generate_uuid().into(),
-                                ),
+                                payload_encryption_type,
                                 user_token,
                                 ref_id: Some(message_id),
                             },
                         )
-                            .await?;
+                        .await?;
                         return Err(e);
                     }
                     Ok(v) => v,
@@ -131,14 +144,12 @@ impl Service<TcpConnectServiceRequest> for TcpConnectService {
                     WriteMessageServiceRequest {
                         message_framed_write: req.message_framed_write,
                         message_payload: Some(connect_success_payload),
-                        payload_encryption_type: PayloadEncryptionType::Blowfish(
-                            generate_uuid().into(),
-                        ),
+                        payload_encryption_type,
                         user_token: user_token.clone(),
                         ref_id: Some(message_id.clone()),
                     },
                 )
-                    .await?;
+                .await?;
                 return Ok(TcpConnectServiceResult {
                     message_framed_write: write_proxy_message_result.message_framed_write,
                     message_framed_read,

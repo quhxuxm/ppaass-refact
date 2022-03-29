@@ -16,10 +16,11 @@ use url::Url;
 
 use common::{
     generate_uuid, ready_and_call_service, AgentMessagePayloadTypeValue, CommonError,
-    MessageFramedRead, MessageFramedWrite, MessagePayload, NetAddress, PayloadEncryptionType,
-    PayloadType, ProxyMessagePayloadTypeValue, ReadMessageService, ReadMessageServiceRequest,
-    ReadMessageServiceResult, WriteMessageService, WriteMessageServiceRequest,
-    WriteMessageServiceResult,
+    MessageFramedRead, MessageFramedWrite, MessagePayload, NetAddress,
+    PayloadEncryptionTypeSelectService, PayloadEncryptionTypeSelectServiceRequest,
+    PayloadEncryptionTypeSelectServiceResult, PayloadType, ProxyMessagePayloadTypeValue,
+    ReadMessageService, ReadMessageServiceRequest, ReadMessageServiceResult, WriteMessageService,
+    WriteMessageServiceRequest, WriteMessageServiceResult,
 };
 
 use crate::codec::http::HttpCodec;
@@ -102,6 +103,8 @@ impl Service<HttpConnectServiceRequest> for HttpConnectService {
                         .proxy_connection_retry()
                         .unwrap_or(DEFAULT_RETRY_TIMES),
                 ));
+            let mut payload_encryption_type_select_service =
+                ServiceBuilder::new().service(PayloadEncryptionTypeSelectService);
             let mut http_client_framed = Framed::with_capacity(
                 &mut request.client_stream,
                 HttpCodec::default(),
@@ -188,15 +191,24 @@ impl Service<HttpConnectServiceRequest> for HttpConnectService {
                     }
                     Ok(v) => v,
                 };
+            let PayloadEncryptionTypeSelectServiceResult {
+                payload_encryption_type,
+                ..
+            } = ready_and_call_service(
+                &mut payload_encryption_type_select_service,
+                PayloadEncryptionTypeSelectServiceRequest {
+                    encryption_token: generate_uuid().into(),
+                    user_token: SERVER_CONFIG.user_token().clone().unwrap(),
+                },
+            )
+            .await?;
             let WriteMessageServiceResult {
                 message_framed_write,
             } = match ready_and_call_service(
                 &mut write_agent_message_service,
                 WriteMessageServiceRequest {
                     message_framed_write: framed_result.message_framed_write,
-                    payload_encryption_type: PayloadEncryptionType::Blowfish(
-                        generate_uuid().into(),
-                    ),
+                    payload_encryption_type,
                     user_token: SERVER_CONFIG.user_token().clone().unwrap(),
                     ref_id: None,
                     message_payload: Some(MessagePayload::new(

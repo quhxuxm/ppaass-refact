@@ -11,9 +11,11 @@ use tracing::{debug, error, info};
 
 use common::{
     generate_uuid, ready_and_call_service, AgentMessagePayloadTypeValue, CommonError,
-    MessageFramedRead, MessageFramedWrite, MessagePayload, NetAddress, PayloadEncryptionType,
-    PayloadType, ProxyMessagePayloadTypeValue, ReadMessageService, ReadMessageServiceRequest,
-    ReadMessageServiceResult, WriteMessageService, WriteMessageServiceRequest,
+    MessageFramedRead, MessageFramedWrite, MessagePayload, NetAddress,
+    PayloadEncryptionTypeSelectService, PayloadEncryptionTypeSelectServiceRequest,
+    PayloadEncryptionTypeSelectServiceResult, PayloadType, ProxyMessagePayloadTypeValue,
+    ReadMessageService, ReadMessageServiceRequest, ReadMessageServiceResult, WriteMessageService,
+    WriteMessageServiceRequest,
 };
 
 use crate::SERVER_CONFIG;
@@ -67,6 +69,8 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                 ServiceBuilder::new().service(ReadMessageService::default());
             let mut write_proxy_message_service =
                 ServiceBuilder::new().service(WriteMessageService::default());
+            let mut payload_encryption_type_select_service =
+                ServiceBuilder::new().service(PayloadEncryptionTypeSelectService);
             tokio::spawn(async move {
                 loop {
                     let read_agent_message_result = ready_and_call_service(
@@ -157,15 +161,34 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                         PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::TcpData),
                         buf.freeze(),
                     );
+                    let PayloadEncryptionTypeSelectServiceResult {
+                        payload_encryption_type,
+                        ..
+                    } = match ready_and_call_service(
+                        &mut payload_encryption_type_select_service,
+                        PayloadEncryptionTypeSelectServiceRequest {
+                            encryption_token: generate_uuid().into(),
+                            user_token: user_token.clone(),
+                        },
+                    )
+                    .await
+                    {
+                        Err(e) => {
+                            error!(
+                                "Fail to select payload encryption type because of error: {:#?}",
+                                e
+                            );
+                            return;
+                        }
+                        Ok(v) => v,
+                    };
                     let write_proxy_message_result = ready_and_call_service(
                         &mut write_proxy_message_service,
                         WriteMessageServiceRequest {
                             message_framed_write,
                             ref_id: Some(agent_tcp_connect_message_id.clone()),
                             user_token: user_token.clone(),
-                            payload_encryption_type: PayloadEncryptionType::Blowfish(
-                                generate_uuid().into(),
-                            ),
+                            payload_encryption_type,
                             message_payload: Some(proxy_message_payload),
                         },
                     )

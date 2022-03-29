@@ -1,15 +1,16 @@
 use std::task::{Context, Poll};
 
-use futures_util::{SinkExt, StreamExt};
+use bytes::Bytes;
 use futures_util::future::BoxFuture;
 use futures_util::stream::{SplitSink, SplitStream};
+use futures_util::{SinkExt, StreamExt};
 use tokio::net::TcpStream;
 use tokio_util::codec::Framed;
 use tower::Service;
 use tracing::{debug, error};
 
 use crate::{
-    CommonError, generate_uuid, Message, MessageCodec, MessagePayload, PayloadEncryptionType,
+    generate_uuid, CommonError, Message, MessageCodec, MessagePayload, PayloadEncryptionType,
 };
 
 pub type MessageFramedRead = SplitStream<Framed<TcpStream, MessageCodec>>;
@@ -192,6 +193,41 @@ impl Service<ReadMessageServiceRequest> for ReadMessageService {
                 user_token: message.user_token,
                 message_id: message.id,
             }))
+        })
+    }
+}
+
+pub struct PayloadEncryptionTypeSelectServiceRequest {
+    pub user_token: String,
+    pub encryption_token: Bytes,
+}
+
+pub struct PayloadEncryptionTypeSelectServiceResult {
+    pub user_token: String,
+    pub encryption_token: Bytes,
+    pub payload_encryption_type: PayloadEncryptionType,
+}
+
+pub struct PayloadEncryptionTypeSelectService;
+
+impl Service<PayloadEncryptionTypeSelectServiceRequest> for PayloadEncryptionTypeSelectService {
+    type Response = PayloadEncryptionTypeSelectServiceResult;
+    type Error = CommonError;
+    type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
+
+    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        Poll::Ready(Ok(()))
+    }
+
+    fn call(&mut self, req: PayloadEncryptionTypeSelectServiceRequest) -> Self::Future {
+        Box::pin(async move {
+            Ok(PayloadEncryptionTypeSelectServiceResult {
+                payload_encryption_type: PayloadEncryptionType::Blowfish(
+                    req.encryption_token.clone(),
+                ),
+                user_token: req.user_token.clone(),
+                encryption_token: req.encryption_token.clone(),
+            })
         })
     }
 }

@@ -11,9 +11,11 @@ use tracing::{debug, error};
 
 use common::{
     generate_uuid, ready_and_call_service, AgentMessagePayloadTypeValue, CommonError,
-    MessageFramedRead, MessageFramedWrite, MessagePayload, NetAddress, PayloadEncryptionType,
-    PayloadType, ProxyMessagePayloadTypeValue, ReadMessageService, ReadMessageServiceRequest,
-    ReadMessageServiceResult, WriteMessageService, WriteMessageServiceRequest,
+    MessageFramedRead, MessageFramedWrite, MessagePayload, NetAddress,
+    PayloadEncryptionTypeSelectService, PayloadEncryptionTypeSelectServiceRequest,
+    PayloadEncryptionTypeSelectServiceResult, PayloadType, ProxyMessagePayloadTypeValue,
+    ReadMessageService, ReadMessageServiceRequest, ReadMessageServiceResult, WriteMessageService,
+    WriteMessageServiceRequest,
 };
 
 use crate::service::common::DEFAULT_BUFFER_SIZE;
@@ -51,6 +53,8 @@ impl Service<HttpRelayServiceRequest> for HttpRelayService {
                 ServiceBuilder::new().service(WriteMessageService::default());
             let mut read_proxy_message_service =
                 ServiceBuilder::new().service(ReadMessageService::default());
+            let mut payload_encryption_type_select_service =
+                ServiceBuilder::new().service(PayloadEncryptionTypeSelectService);
             let client_stream = request.client_stream;
             let mut message_framed_read = request.message_framed_read;
             let mut message_framed_write = request.message_framed_write;
@@ -61,15 +65,34 @@ impl Service<HttpRelayServiceRequest> for HttpRelayService {
             let target_address_t2a = request.target_address.clone();
             tokio::spawn(async move {
                 if let Some(init_data) = request.init_data {
+                    let PayloadEncryptionTypeSelectServiceResult {
+                        payload_encryption_type,
+                        ..
+                    } = match ready_and_call_service(
+                        &mut payload_encryption_type_select_service,
+                        PayloadEncryptionTypeSelectServiceRequest {
+                            encryption_token: generate_uuid().into(),
+                            user_token: SERVER_CONFIG.user_token().clone().unwrap(),
+                        },
+                    )
+                    .await
+                    {
+                        Err(e) => {
+                            error!(
+                                "Fail to select payload encryption type because of error: {:#?}",
+                                e
+                            );
+                            return;
+                        }
+                        Ok(v) => v,
+                    };
                     let write_agent_message_result = ready_and_call_service(
                         &mut write_agent_message_service,
                         WriteMessageServiceRequest {
                             message_framed_write,
                             ref_id: Some(request.connect_response_message_id.clone()),
                             user_token: SERVER_CONFIG.user_token().clone().unwrap(),
-                            payload_encryption_type: PayloadEncryptionType::Blowfish(
-                                generate_uuid().into(),
-                            ),
+                            payload_encryption_type,
                             message_payload: Some(MessagePayload::new(
                                 source_address_a2t.clone(),
                                 target_address_a2t.clone(),
@@ -110,15 +133,34 @@ impl Service<HttpRelayServiceRequest> for HttpRelayService {
                             debug!("Read {} bytes from client", size);
                         }
                     }
+                    let PayloadEncryptionTypeSelectServiceResult {
+                        payload_encryption_type,
+                        ..
+                    } = match ready_and_call_service(
+                        &mut payload_encryption_type_select_service,
+                        PayloadEncryptionTypeSelectServiceRequest {
+                            encryption_token: generate_uuid().into(),
+                            user_token: SERVER_CONFIG.user_token().clone().unwrap(),
+                        },
+                    )
+                    .await
+                    {
+                        Err(e) => {
+                            error!(
+                                "Fail to select payload encryption type because of error: {:#?}",
+                                e
+                            );
+                            return;
+                        }
+                        Ok(v) => v,
+                    };
                     let write_agent_message_result = ready_and_call_service(
                         &mut write_agent_message_service,
                         WriteMessageServiceRequest {
                             message_framed_write,
                             ref_id: Some(request.connect_response_message_id.clone()),
                             user_token: SERVER_CONFIG.user_token().clone().unwrap(),
-                            payload_encryption_type: PayloadEncryptionType::Blowfish(
-                                generate_uuid().into(),
-                            ),
+                            payload_encryption_type,
                             message_payload: Some(MessagePayload::new(
                                 source_address_a2t.clone(),
                                 target_address_a2t.clone(),
