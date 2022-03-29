@@ -19,6 +19,7 @@ use common::{
 use crate::service::common::DEFAULT_BUFFER_SIZE;
 use crate::SERVER_CONFIG;
 
+#[allow(unused)]
 pub(crate) struct Socks5RelayServiceRequest {
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,
@@ -30,9 +31,11 @@ pub(crate) struct Socks5RelayServiceRequest {
     pub target_address: NetAddress,
 }
 
+#[allow(unused)]
 pub(crate) struct Socks5RelayServiceResult {
     pub client_address: SocketAddr,
 }
+
 #[derive(Clone, Default)]
 pub(crate) struct Socks5RelayService;
 

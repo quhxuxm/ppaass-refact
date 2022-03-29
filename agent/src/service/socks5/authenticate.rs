@@ -16,11 +16,13 @@ use crate::command::socks5::{Socks5AuthCommandResult, Socks5AuthMethod};
 use crate::service::common::DEFAULT_BUFFER_SIZE;
 use crate::SERVER_CONFIG;
 
+#[allow(unused)]
 pub(crate) struct Socks5AuthenticateFlowRequest {
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,
 }
 
+#[allow(unused)]
 pub(crate) struct Socks5AuthenticateFlowResult {
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,

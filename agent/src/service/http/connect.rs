@@ -41,10 +41,13 @@ const CONNECTION_ESTABLISHED: &str = "Connection Established";
 
 type HttpFramed<'a> = Framed<&'a mut TcpStream, HttpCodec>;
 
+#[allow(unused)]
 pub(crate) struct HttpConnectServiceRequest {
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,
 }
+
+#[allow(unused)]
 pub(crate) struct HttpConnectServiceResult {
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,

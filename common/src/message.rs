@@ -1,3 +1,4 @@
+#![allow(unused)]
 use std::net::{IpAddr, SocketAddr};
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};

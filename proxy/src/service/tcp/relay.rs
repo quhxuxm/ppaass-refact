@@ -10,16 +10,17 @@ use tower::ServiceBuilder;
 use tracing::{debug, error, info};
 
 use common::{
-    AgentMessagePayloadTypeValue, CommonError, generate_uuid, MessageFramedRead,
-    MessageFramedWrite, MessagePayload, NetAddress, PayloadEncryptionType, PayloadType,
-    ProxyMessagePayloadTypeValue, ReadMessageService, ReadMessageServiceRequest, ReadMessageServiceResult,
-    ready_and_call_service, WriteMessageService, WriteMessageServiceRequest,
+    generate_uuid, ready_and_call_service, AgentMessagePayloadTypeValue, CommonError,
+    MessageFramedRead, MessageFramedWrite, MessagePayload, NetAddress, PayloadEncryptionType,
+    PayloadType, ProxyMessagePayloadTypeValue, ReadMessageService, ReadMessageServiceRequest,
+    ReadMessageServiceResult, WriteMessageService, WriteMessageServiceRequest,
 };
 
 use crate::SERVER_CONFIG;
 
 const DEFAULT_BUFFER_SIZE: usize = 64 * 1024;
 
+#[allow(unused)]
 pub(crate) struct TcpRelayServiceRequest {
     pub message_framed_read: MessageFramedRead,
     pub message_framed_write: MessageFramedWrite,
@@ -31,6 +32,7 @@ pub(crate) struct TcpRelayServiceRequest {
     pub target_address: NetAddress,
 }
 
+#[allow(unused)]
 pub(crate) struct TcpRelayServiceResult {
     pub agent_address: SocketAddr,
     pub target_address: NetAddress,
@@ -73,7 +75,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                             message_framed_read,
                         },
                     )
-                        .await;
+                    .await;
                     let ReadMessageServiceResult {
                         message_payload: MessagePayload { data, .. },
                         message_framed_read: message_framed_read_from_read_agent_result,
@@ -89,13 +91,13 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                         Ok(Some(
                             v @ ReadMessageServiceResult {
                                 message_payload:
-                                MessagePayload {
-                                    payload_type:
-                                    PayloadType::AgentPayload(
-                                        AgentMessagePayloadTypeValue::TcpData,
-                                    ),
-                                    ..
-                                },
+                                    MessagePayload {
+                                        payload_type:
+                                            PayloadType::AgentPayload(
+                                                AgentMessagePayloadTypeValue::TcpData,
+                                            ),
+                                        ..
+                                    },
                                 ..
                             },
                         )) => v,
@@ -167,7 +169,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                             message_payload: Some(proxy_message_payload),
                         },
                     )
-                        .await;
+                    .await;
                     match write_proxy_message_result {
                         Err(e) => {
                             error!("Fail to read from target because of error(ready): {:#?}", e);

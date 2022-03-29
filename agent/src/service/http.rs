@@ -5,14 +5,10 @@ use futures_util::future::BoxFuture;
 use tokio::net::TcpStream;
 use tower::{Service, ServiceBuilder};
 
-use common::{CommonError, ready_and_call_service};
+use common::{ready_and_call_service, CommonError};
 
-use crate::service::http::connect::{
-    HttpConnectService, HttpConnectServiceRequest,
-};
-use crate::service::http::relay::{
-    HttpRelayService, HttpRelayServiceRequest,
-};
+use crate::service::http::connect::{HttpConnectService, HttpConnectServiceRequest};
+use crate::service::http::relay::{HttpRelayService, HttpRelayServiceRequest};
 
 mod connect;
 mod relay;
@@ -23,6 +19,7 @@ pub(crate) struct HttpFlowRequest {
     pub client_address: SocketAddr,
 }
 #[derive(Debug)]
+#[allow(unused)]
 pub(crate) struct HttpFlowResult {
     pub client_address: SocketAddr,
 }
@@ -50,7 +47,7 @@ impl Service<HttpFlowRequest> for HttpFlowService {
                     client_stream: req.client_stream,
                 },
             )
-                .await?;
+            .await?;
             let relay_result = ready_and_call_service(
                 &mut relay_service,
                 HttpRelayServiceRequest {
@@ -64,7 +61,7 @@ impl Service<HttpFlowRequest> for HttpFlowService {
                     connect_response_message_id: connect_result.message_id,
                 },
             )
-                .await?;
+            .await?;
             Ok(HttpFlowResult {
                 client_address: relay_result.client_address,
             })

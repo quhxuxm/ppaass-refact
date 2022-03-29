@@ -1,14 +1,13 @@
 use bytes::{Buf, Bytes, BytesMut};
 use lz4::block::{compress, decompress};
-use rand::Rng;
 use rand::rngs::OsRng;
 use tokio_util::codec::{Decoder, Encoder, LengthDelimitedCodec};
 use tracing::{debug, error};
 
-use crate::{CommonError, Message, PayloadEncryptionType};
 use crate::crypto::{
     decrypt_with_aes, decrypt_with_blowfish, encrypt_with_aes, encrypt_with_blowfish, RsaCrypto,
 };
+use crate::{CommonError, Message, PayloadEncryptionType};
 
 const LENGTH_DELIMITED_CODEC_LENGTH_FIELD_LENGTH: usize = 8;
 
