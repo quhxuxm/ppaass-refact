@@ -63,11 +63,13 @@ impl Decoder for MessageCodec {
         let decoder_timeout_seconds = self.decoder_timeout_seconds;
         let length_delimited_codec = &mut self.length_delimited_codec;
         let length_delimited_decode_result: Result<Result<Option<BytesMut>, Error>, Elapsed> =
-            Handle::current().block_on(async move {
-                timeout(Duration::from_secs(decoder_timeout_seconds), async move {
-                    length_delimited_codec.decode(src)
+            tokio::task::block_in_place(|| {
+                Handle::current().block_on(async move {
+                    timeout(Duration::from_secs(decoder_timeout_seconds), async move {
+                        length_delimited_codec.decode(src)
+                    })
+                    .await
                 })
-                .await
             });
         let length_delimited_decode_result = match length_delimited_decode_result {
             Err(e) => {
