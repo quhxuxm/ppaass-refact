@@ -4,25 +4,26 @@ use std::task::{Context, Poll};
 use futures_util::future;
 use futures_util::future::BoxFuture;
 use tokio::net::TcpStream;
+use tower::util::BoxCloneService;
 use tower::{
     retry::{Policy, Retry},
     ServiceBuilder,
 };
-use tower::{Service, service_fn};
-use tower::util::BoxCloneService;
+use tower::{service_fn, Service};
 use tracing::{debug, error, info};
 
-use common::{CommonError, PrepareMessageFramedService, ready_and_call_service};
+use common::{ready_and_call_service, CommonError, PrepareMessageFramedService};
 
 use crate::config::{AGENT_PUBLIC_KEY, PROXY_PRIVATE_KEY};
-use crate::SERVER_CONFIG;
 use crate::service::tcp::connect::{TcpConnectService, TcpConnectServiceRequest};
 use crate::service::tcp::relay::{TcpRelayService, TcpRelayServiceRequest};
+use crate::SERVER_CONFIG;
 
 mod tcp;
 mod udp;
 const DEFAULT_BUFFER_SIZE: usize = 1024 * 64;
 const DEFAULT_MAX_FRAME_SIZE: usize = DEFAULT_BUFFER_SIZE * 2;
+const DEFAULT_DECODER_TIMEOUT_SECONDS: u64 = 20;
 #[derive(Debug)]
 pub(crate) struct AgentConnectionInfo {
     pub agent_stream: TcpStream,
@@ -54,6 +55,9 @@ impl Service<AgentConnectionInfo> for HandleAgentConnectionService {
                         .unwrap_or(DEFAULT_MAX_FRAME_SIZE),
                     SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
                     SERVER_CONFIG.compress().unwrap_or(true),
+                    SERVER_CONFIG
+                        .decoder_timeout_seconds()
+                        .unwrap_or(DEFAULT_DECODER_TIMEOUT_SECONDS),
                 ));
             let mut tcp_connect_service =
                 ServiceBuilder::new().service(TcpConnectService::default());
@@ -69,7 +73,7 @@ impl Service<AgentConnectionInfo> for HandleAgentConnectionService {
                     agent_address: req.agent_address,
                 },
             )
-                .await?;
+            .await?;
             let relay_result = ready_and_call_service(
                 &mut tcp_relay_service,
                 TcpRelayServiceRequest {
@@ -83,7 +87,7 @@ impl Service<AgentConnectionInfo> for HandleAgentConnectionService {
                     agent_tcp_connect_message_id: tcp_connect_result.agent_tcp_connect_message_id,
                 },
             )
-                .await;
+            .await;
             match relay_result {
                 Err(e) => {
                     error!("Error happen when relay agent connection, error: {:#?}", e);
@@ -115,7 +119,7 @@ struct ConnectToTargetAttempts {
 #[derive(Clone)]
 pub(crate) struct ConnectToTargetService {
     concrete_service:
-    BoxCloneService<ConnectToTargetServiceRequest, ConnectToTargetServiceResult, CommonError>,
+        BoxCloneService<ConnectToTargetServiceRequest, ConnectToTargetServiceResult, CommonError>,
 }
 
 impl ConnectToTargetService {
@@ -146,7 +150,7 @@ impl ConnectToTargetService {
 }
 
 impl Policy<ConnectToTargetServiceRequest, ConnectToTargetServiceResult, CommonError>
-for ConnectToTargetAttempts
+    for ConnectToTargetAttempts
 {
     type Future = futures_util::future::Ready<Self>;
 

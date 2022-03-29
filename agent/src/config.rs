@@ -38,6 +38,7 @@ pub(crate) struct Config {
     buffered_connection_number: Option<usize>,
     concurrent_connection_number: Option<usize>,
     rate_limit: Option<u64>,
+    decoder_timeout_seconds: Option<u64>,
 }
 
 impl Config {
@@ -91,5 +92,8 @@ impl Config {
     }
     pub fn rate_limit(&self) -> Option<u64> {
         self.rate_limit
+    }
+    pub fn decoder_timeout_seconds(&self) -> Option<u64> {
+        self.decoder_timeout_seconds
     }
 }

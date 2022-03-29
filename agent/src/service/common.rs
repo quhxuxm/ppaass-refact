@@ -21,6 +21,7 @@ const SOCKS4_PROTOCOL_FLAG: u8 = 4;
 pub const DEFAULT_BUFFER_SIZE: usize = 1024 * 64;
 pub const DEFAULT_MAX_FRAME_SIZE: usize = DEFAULT_BUFFER_SIZE * 2;
 pub const DEFAULT_RETRY_TIMES: u16 = 3;
+const DEFAULT_DECODER_TIMEOUT_SECONDS: u64 = 20;
 #[derive(Debug)]
 pub(crate) struct ClientConnectionInfo {
     pub client_stream: TcpStream,
@@ -257,5 +258,8 @@ pub fn generate_prepare_message_framed_service() -> PrepareMessageFramedService 
             .unwrap_or(DEFAULT_MAX_FRAME_SIZE),
         SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
         SERVER_CONFIG.compress().unwrap_or(true),
+        SERVER_CONFIG
+            .decoder_timeout_seconds()
+            .unwrap_or(DEFAULT_DECODER_TIMEOUT_SECONDS),
     ))
 }

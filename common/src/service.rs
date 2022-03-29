@@ -28,6 +28,7 @@ pub struct PrepareMessageFramedService {
     max_frame_size: usize,
     buffer_size: usize,
     compress: bool,
+    decoder_timeout_seconds: u64,
 }
 
 impl PrepareMessageFramedService {
@@ -37,6 +38,7 @@ impl PrepareMessageFramedService {
         max_frame_size: usize,
         buffer_size: usize,
         compress: bool,
+        decoder_timeout_seconds: u64,
     ) -> Self {
         Self {
             public_key,
@@ -44,6 +46,7 @@ impl PrepareMessageFramedService {
             max_frame_size,
             buffer_size,
             compress,
+            decoder_timeout_seconds,
         }
     }
 }
@@ -65,6 +68,7 @@ impl Service<TcpStream> for PrepareMessageFramedService {
                 &(*self.private_key),
                 self.max_frame_size,
                 self.compress,
+                self.decoder_timeout_seconds,
             ),
             self.buffer_size,
         );
