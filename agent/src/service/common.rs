@@ -13,8 +13,8 @@ use tracing::{debug, error};
 use common::{ready_and_call_service, CommonError, PrepareMessageFramedService};
 
 use crate::config::{AGENT_PRIVATE_KEY, PROXY_PUBLIC_KEY, SERVER_CONFIG};
-use crate::service::http::{HttpFlowRequest, HttpFlowResult, HttpFlowService};
-use crate::service::socks5::{Socks5FlowRequest, Socks5FlowResult, Socks5FlowService};
+use crate::service::http::{HttpFlowRequest, HttpFlowService};
+use crate::service::socks5::{Socks5FlowRequest, Socks5FlowService};
 
 const SOCKS5_PROTOCOL_FLAG: u8 = 5;
 const SOCKS4_PROTOCOL_FLAG: u8 = 4;
