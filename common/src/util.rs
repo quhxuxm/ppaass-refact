@@ -1,5 +1,6 @@
 use std::{any::type_name, fmt::Debug};
 
+use futures_util::TryFutureExt;
 use tower::{Service, ServiceExt};
 use tracing::error;
 use uuid::Uuid;
@@ -18,21 +19,11 @@ where
     S::Error: Debug,
 {
     let service_type_name = type_name::<S>();
-    let service_ready = match service.ready().await {
-        Ok(v) => v,
-        Err(e) => {
-            error!(
-                "Fail to invoke service: {:#?}\nErrors(not ready): {:#?}",
-                service_type_name, e
-            );
-            return Err(e);
-        }
-    };
-    match service_ready.call(request).await {
+    match service.ready().and_then(|v| v.call(request)).await {
         Ok(v) => Ok(v),
         Err(e) => {
             error!(
-                "Fail to invoke service: {:#?}\nErrors(on call): {:#?}",
+                "Fail to invoke service [{}] because of errors: {:#?}",
                 service_type_name, e
             );
             return Err(e);
