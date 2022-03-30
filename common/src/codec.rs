@@ -69,7 +69,7 @@ impl Decoder for MessageCodec {
                         match decode_original_result {
                             Ok(v)=> return Ok(v),
                             Err(e)=> {
-                                error!("Error happen when decode message, error: {:#?}", e)
+                                error!("Error happen when decode message, error: {:#?}", e);
                                 return Err(CommonError::CodecError)
                             }
                         }
