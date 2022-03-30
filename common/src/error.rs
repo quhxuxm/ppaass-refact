@@ -9,4 +9,6 @@ pub enum CommonError {
     },
     #[error("Unkown error happen.")]
     UnknownError,
+    #[error("Timeout error happen.")]
+    TimeoutError,
 }

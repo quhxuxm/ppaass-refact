@@ -1,12 +1,10 @@
-use std::io::Error;
 use std::time::Duration;
 
 use bytes::{Buf, Bytes, BytesMut};
 use lz4::block::{compress, decompress};
 use rand::rngs::OsRng;
 use tokio::runtime::Handle;
-use tokio::time::error::Elapsed;
-use tokio::time::timeout;
+use tokio::time::sleep;
 use tokio_util::codec::{Decoder, Encoder, LengthDelimitedCodec};
 use tracing::{debug, error};
 
@@ -62,26 +60,34 @@ impl Decoder for MessageCodec {
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
         let decoder_timeout_seconds = self.decoder_timeout_seconds;
         let length_delimited_codec = &mut self.length_delimited_codec;
-        let length_delimited_decode_result: Result<Result<Option<BytesMut>, Error>, Elapsed> =
-            tokio::task::block_in_place(|| {
-                Handle::current().block_on(async move {
-                    timeout(Duration::from_secs(decoder_timeout_seconds), async move {
-                        length_delimited_codec.decode(src)
-                    })
-                    .await
-                })
-            });
+
+        let length_delimited_decode_result = tokio::task::block_in_place(|| {
+            Handle::current().block_on(async move {
+                let decode_future = async move { length_delimited_codec.decode(src) };
+                tokio::select! {
+                    decode_original_result = decode_future => {
+                        match decode_original_result {
+                            Ok(v)=> return Ok(v),
+                            Err(e)=> {
+                                error!("Error happen when decode message, error: {:#?}", e)
+                                return Err(CommonError::CodecError)
+                            }
+                        }
+                    }
+                    _ =  sleep(Duration::from_secs(decoder_timeout_seconds))=>{
+                        error!("The decode operation timeout.")
+                      return Err(CommonError::TimeoutError)
+                    }
+                };
+            })
+        });
         let length_delimited_decode_result = match length_delimited_decode_result {
             Err(e) => {
                 error!("Fail to decode input message because of timeout: {:#?}", e);
                 return Err(CommonError::CodecError);
             }
-            Ok(Ok(None)) => return Ok(None),
-            Ok(Ok(Some(r))) => r,
-            Ok(Err(e)) => {
-                error!("Fail to decode input message because of error: {:#?}", e);
-                return Err(CommonError::CodecError);
-            }
+            Ok(None) => return Ok(None),
+            Ok(Some(r)) => r,
         };
         let mut message: Message = if self.compress {
             let lz4_decompress_result =
