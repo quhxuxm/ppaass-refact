@@ -85,7 +85,7 @@ impl AgentServer {
                 };
                 tokio::spawn(async move {
                     let mut handle_client_connection_service = ServiceBuilder::new()
-                        .buffer(SERVER_CONFIG.buffered_connection_number().unwrap_or(1024))
+                        // .buffer(SERVER_CONFIG.buffered_connection_number().unwrap_or(1024))
                         .concurrency_limit(
                             SERVER_CONFIG.concurrent_connection_number().unwrap_or(1024),
                         )
