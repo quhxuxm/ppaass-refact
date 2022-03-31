@@ -162,9 +162,9 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                         Ok(Some((buf.freeze(), target_stream_read)))
                     };
 
-                    let buf = tokio::select! {
-                        target_data = read_target_data_future => {
-                            target_data
+                    let read_target_data_future_result = tokio::select! {
+                        future_result = read_target_data_future => {
+                            future_result
                         }
                         _ =  sleep(Duration::from_secs(SERVER_CONFIG.read_target_timeout_seconds().unwrap_or(DEFAULT_READ_TARGET_TIMEOUT_SECONDS))) => {
                             error!("The read target data timeout.");
@@ -172,9 +172,9 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                         }
                     };
 
-                    let (buf, inner_target_stream_read) = match buf {
+                    let (buf, inner_target_stream_read) = match read_target_data_future_result {
                         Ok(None) => {
-                            debug!("Nothing to read from target.");
+                            info!("Nothing to read from target, return from read target future.");
                             return;
                         }
                         Ok(Some(v)) => v,
@@ -183,7 +183,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                             return;
                         }
                     };
-                    
+
                     target_stream_read = inner_target_stream_read;
 
                     let proxy_message_payload = MessagePayload::new(
