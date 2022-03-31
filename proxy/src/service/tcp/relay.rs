@@ -189,7 +189,6 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                         };
 
                     target_stream_read = inner_target_stream_read;
-                    info!("Read {} bytes from target.", read_size);
 
                     let proxy_message_payload = MessagePayload::new(
                         agent_connect_message_source_address.clone(),
