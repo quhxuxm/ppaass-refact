@@ -143,7 +143,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                         let mut buf = BytesMut::with_capacity(
                             SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
                         );
-                        let read_size = match target_stream_read.read(&mut buf).await {
+                        let read_size = match target_stream_read.read_buf(&mut buf).await {
                             Err(e) => {
                                 error!("Fail to read data from target because of error: {:#?}", e);
                                 return Err(CommonError::IoError { source: e });
