@@ -192,13 +192,13 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                                 info!(
                                     "Nothing to read from target, return from read target future."
                                 );
-                                debug!("Exit read target data loop, agent: {}", req.agent_address);
+                                info!("Exit read target data loop, agent: {}", req.agent_address);
                                 return;
                             }
                             Ok(Some(v)) => v,
                             Err(e) => {
                                 error!("Fail to read target data because of error: {:#?}", e);
-                                debug!("Exit read target data loop, agent: {}", req.agent_address);
+                                info!("Exit read target data loop, agent: {}", req.agent_address);
                                 return;
                             }
                         };
@@ -226,7 +226,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                                 "Fail to select payload encryption type because of error: {:#?}",
                                 e
                             );
-                            debug!("Exit read target data loop, agent: {}", req.agent_address);
+                            info!("Exit read target data loop, agent: {}", req.agent_address);
                             return;
                         }
                         Ok(v) => v,
@@ -245,7 +245,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                     match write_proxy_message_result {
                         Err(e) => {
                             error!("Fail to read from target because of error(ready): {:#?}", e);
-                            debug!("Exit read target data loop, agent: {}", req.agent_address);
+                            info!("Exit read target data loop, agent: {}", req.agent_address);
                             return;
                         }
                         Ok(proxy_message_write_result) => {
