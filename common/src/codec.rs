@@ -67,16 +67,16 @@ impl Decoder for MessageCodec {
                 tokio::select! {
                     decode_original_result = decode_future => {
                         match decode_original_result {
-                            Ok(v)=> return Ok(v),
+                            Ok(v)=> Ok(v),
                             Err(e)=> {
                                 error!("Error happen when decode message, error: {:#?}", e);
-                                return Err(CommonError::CodecError)
+                                Err(CommonError::CodecError)
                             }
                         }
                     }
-                    _ =  sleep(Duration::from_secs(decoder_timeout_seconds)) =>{
-                        error!("The decode operation timeout.");
-                      return Err(CommonError::TimeoutError)
+                    _ =  sleep(Duration::from_secs(decoder_timeout_seconds)) => {
+                        error!("The decode operation timeout in {} seconds.", decoder_timeout_seconds);
+                      Err(CommonError::TimeoutError)
                     }
                 }
             })

@@ -74,7 +74,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                 ServiceBuilder::new().service(PayloadEncryptionTypeSelectService);
             tokio::spawn(async move {
                 loop {
-                    info!("Enter read agent data loop.");
+                    info!("Enter read agent data loop - 1.");
                     let read_agent_message_result = ready_and_call_service(
                         &mut read_agent_message_service,
                         ReadMessageServiceRequest {
@@ -82,6 +82,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                         },
                     )
                     .await;
+                    info!("Enter read agent data loop - 2.");
                     let ReadMessageServiceResult {
                         message_payload: MessagePayload { data, .. },
                         message_framed_read: message_framed_read_from_read_agent_result,
@@ -116,7 +117,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                             return;
                         }
                     };
-                    message_framed_read = message_framed_read_from_read_agent_result;
+
                     if let Err(e) = target_stream_write.write(data.as_ref()).await {
                         error!(
                             "Fail to write from agent to target because of error: {:#?}",
@@ -133,11 +134,12 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                         info!("Exit read agent data loop.");
                         return;
                     };
+                    message_framed_read = message_framed_read_from_read_agent_result;
                 }
             });
             tokio::spawn(async move {
                 loop {
-                    info!("Enter read target data loop.");
+                    debug!("Enter read target data loop.");
                     let read_target_data_future = async move {
                         let mut buf = BytesMut::with_capacity(
                             SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
@@ -145,12 +147,12 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                         let read_size = match target_stream_read.read_buf(&mut buf).await {
                             Err(e) => {
                                 error!("Fail to read data from target because of error: {:#?}", e);
-                                info!("Exit read target data loop.");
+                                debug!("Exit read target data loop.");
                                 return Err(CommonError::IoError { source: e });
                             }
                             Ok(0) => {
                                 info!("Read all data from target, agent: {:#?}", req.agent_address);
-                                info!("Exit read target data loop.");
+                                debug!("Exit read target data loop.");
                                 return Ok(None);
                             }
                             Ok(size) => {
@@ -177,13 +179,13 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                                 info!(
                                     "Nothing to read from target, return from read target future."
                                 );
-                                info!("Exit read target data loop.");
+                                debug!("Exit read target data loop.");
                                 return;
                             }
                             Ok(Some(v)) => v,
                             Err(e) => {
                                 error!("Fail to read target data because of error: {:#?}", e);
-                                info!("Exit read target data loop.");
+                                debug!("Exit read target data loop.");
                                 return;
                             }
                         };
@@ -211,7 +213,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                                 "Fail to select payload encryption type because of error: {:#?}",
                                 e
                             );
-                            info!("Exit read target data loop.");
+                            debug!("Exit read target data loop.");
                             return;
                         }
                         Ok(v) => v,
@@ -230,7 +232,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                     match write_proxy_message_result {
                         Err(e) => {
                             error!("Fail to read from target because of error(ready): {:#?}", e);
-                            info!("Exit read target data loop.");
+                            debug!("Exit read target data loop.");
                             return;
                         }
                         Ok(proxy_message_write_result) => {
