@@ -74,7 +74,10 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                 ServiceBuilder::new().service(PayloadEncryptionTypeSelectService);
             tokio::spawn(async move {
                 loop {
-                    info!("Enter read agent data loop - 1.");
+                    info!(
+                        "Enter read agent data loop - 1, agent: {}.",
+                        req.agent_address
+                    );
                     let read_agent_message_result = ready_and_call_service(
                         &mut read_agent_message_service,
                         ReadMessageServiceRequest {
@@ -82,7 +85,10 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                         },
                     )
                     .await;
-                    info!("Enter read agent data loop - 2.");
+                    info!(
+                        "Enter read agent data loop - 2, agent: {}",
+                        req.agent_address
+                    );
                     let ReadMessageServiceResult {
                         message_payload: MessagePayload { data, .. },
                         message_framed_read: message_framed_read_from_read_agent_result,
