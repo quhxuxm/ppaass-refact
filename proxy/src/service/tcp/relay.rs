@@ -143,7 +143,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                         let mut buf = BytesMut::with_capacity(
                             SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
                         );
-                        match target_stream_read.read_buf(&mut buf).await {
+                        let read_size = match target_stream_read.read_buf(&mut buf).await {
                             Err(e) => {
                                 error!("Fail to read data from target because of error: {:#?}", e);
                                 return Err(CommonError::IoError { source: e });
@@ -157,9 +157,10 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                             }
                             Ok(size) => {
                                 debug!("Read {} bytes from target.", size);
+                                size
                             }
                         };
-                        Ok(Some((buf.freeze(), target_stream_read)))
+                        Ok(Some((buf.freeze(), target_stream_read, read_size)))
                     };
 
                     let read_target_data_future_result = tokio::select! {
@@ -172,19 +173,23 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                         }
                     };
 
-                    let (buf, inner_target_stream_read) = match read_target_data_future_result {
-                        Ok(None) => {
-                            info!("Nothing to read from target, return from read target future.");
-                            return;
-                        }
-                        Ok(Some(v)) => v,
-                        Err(e) => {
-                            error!("Fail to read target data because of error: {:#?}", e);
-                            return;
-                        }
-                    };
+                    let (buf, inner_target_stream_read, read_size) =
+                        match read_target_data_future_result {
+                            Ok(None) => {
+                                info!(
+                                    "Nothing to read from target, return from read target future."
+                                );
+                                return;
+                            }
+                            Ok(Some(v)) => v,
+                            Err(e) => {
+                                error!("Fail to read target data because of error: {:#?}", e);
+                                return;
+                            }
+                        };
 
                     target_stream_read = inner_target_stream_read;
+                    info!("Read {} bytes from target.", read_size);
 
                     let proxy_message_payload = MessagePayload::new(
                         agent_connect_message_source_address.clone(),
