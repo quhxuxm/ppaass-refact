@@ -173,7 +173,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                         }
                     };
 
-                    let (buf, inner_target_stream_read, read_size) =
+                    let (buf, inner_target_stream_read, _read_size) =
                         match read_target_data_future_result {
                             Ok(None) => {
                                 info!(
@@ -187,8 +187,6 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                                 return;
                             }
                         };
-
-                    target_stream_read = inner_target_stream_read;
 
                     let proxy_message_payload = MessagePayload::new(
                         agent_connect_message_source_address.clone(),
@@ -235,6 +233,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                         }
                         Ok(proxy_message_write_result) => {
                             message_framed_write = proxy_message_write_result.message_framed_write;
+                            target_stream_read = inner_target_stream_read;
                         }
                     }
                 }
