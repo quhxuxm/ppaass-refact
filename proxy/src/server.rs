@@ -6,7 +6,7 @@ use tokio::runtime::Runtime;
 use tower::ServiceBuilder;
 use tracing::{error, info};
 
-use common::{ready_and_call_service, CommonError};
+use common::ready_and_call_service;
 
 use crate::config::SERVER_CONFIG;
 use crate::service::{AgentConnectionInfo, HandleAgentConnectionService};
@@ -73,7 +73,7 @@ impl ProxyServer {
                 }
             };
             loop {
-                let (mut agent_stream, agent_address) = match listener.accept().await {
+                let (agent_stream, agent_address) = match listener.accept().await {
                     Err(e) => {
                         error!(
                             "Fail to accept agent connection because of error: {:#?}",
