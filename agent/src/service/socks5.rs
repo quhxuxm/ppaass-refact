@@ -6,7 +6,7 @@ use tokio::net::TcpStream;
 use tower::Service;
 use tower::ServiceBuilder;
 
-use common::{CommonError, ready_and_call_service};
+use common::{ready_and_call_service, CommonError};
 
 use crate::service::socks5::authenticate::{
     Socks5AuthCommandService, Socks5AuthenticateFlowRequest,
@@ -53,7 +53,7 @@ impl Service<Socks5FlowRequest> for Socks5FlowService {
                     client_address: req.client_address,
                 },
             )
-                .await?;
+            .await?;
             let connect_flow_result = ready_and_call_service(
                 &mut connect_service,
                 Socks5ConnectCommandServiceRequest {
@@ -61,7 +61,7 @@ impl Service<Socks5FlowRequest> for Socks5FlowService {
                     client_address: authenticate_result.client_address,
                 },
             )
-                .await?;
+            .await?;
             let relay_flow_result = ready_and_call_service(
                 &mut relay_service,
                 Socks5RelayServiceRequest {
@@ -75,7 +75,7 @@ impl Service<Socks5FlowRequest> for Socks5FlowService {
                     target_address: connect_flow_result.target_address,
                 },
             )
-                .await?;
+            .await?;
             Ok(Socks5FlowResult {
                 client_address: relay_flow_result.client_address,
             })
