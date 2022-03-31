@@ -137,6 +137,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                         return;
                     };
                 }
+                info!("Exit read agent data loop.");
             });
             tokio::spawn(async move {
                 loop {
@@ -239,6 +240,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                         }
                     }
                 }
+                info!("Exit read target data loop.");
             });
             Ok(TcpRelayServiceResult {
                 target_address: target_address_for_return,
