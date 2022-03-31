@@ -64,8 +64,6 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
         let agent_connect_message_source_address = req.source_address;
         let agent_connect_message_target_address = req.target_address;
         let target_address_for_return = agent_connect_message_target_address.clone();
-        let agent_address_for_proxy_to_target = req.agent_address.clone();
-        let agent_address_for_target_to_proxy = req.agent_address.clone();
         let (mut target_stream_read, mut target_stream_write) = target_stream.into_split();
         Box::pin(async move {
             let mut read_agent_message_service =
@@ -90,10 +88,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                         ..
                     } = match read_agent_message_result {
                         Ok(None) => {
-                            info!(
-                                "Read all data from agent: {:#?}",
-                                agent_address_for_proxy_to_target
-                            );
+                            info!("Read all data from agent: {:#?}", req.agent_address);
                             info!("Exit read agent data loop.");
                             return;
                         }
@@ -111,10 +106,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                             },
                         )) => v,
                         Ok(_) => {
-                            error!(
-                                "Invalid payload type from agent: {:#?}",
-                                agent_address_for_proxy_to_target
-                            );
+                            error!("Invalid payload type from agent: {:#?}", req.agent_address);
                             info!("Exit read agent data loop.");
                             return;
                         }
@@ -157,10 +149,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                                 return Err(CommonError::IoError { source: e });
                             }
                             Ok(0) => {
-                                info!(
-                                    "Read all data from target, agent: {:#?}",
-                                    agent_address_for_target_to_proxy
-                                );
+                                info!("Read all data from target, agent: {:#?}", req.agent_address);
                                 info!("Exit read target data loop.");
                                 return Ok(None);
                             }
