@@ -74,7 +74,7 @@ impl Decoder for MessageCodec {
                             }
                         }
                     }
-                    _ =  sleep(Duration::from_secs(decoder_timeout_seconds))=>{
+                    _ =  sleep(Duration::from_secs(decoder_timeout_seconds)) =>{
                         error!("The decode operation timeout.");
                       return Err(CommonError::TimeoutError)
                     }

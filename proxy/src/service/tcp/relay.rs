@@ -1,10 +1,13 @@
-use std::net::SocketAddr;
 use std::task::{Context, Poll};
+use std::{net::SocketAddr, time::Duration};
 
 use bytes::BytesMut;
 use futures_util::future::BoxFuture;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    time::sleep,
+};
 use tower::Service;
 use tower::ServiceBuilder;
 use tracing::{debug, error, info};
@@ -21,7 +24,7 @@ use common::{
 use crate::SERVER_CONFIG;
 
 const DEFAULT_BUFFER_SIZE: usize = 64 * 1024;
-
+const DEFAULT_READ_TARGET_TIMEOUT_SECONDS: u64 = 20;
 #[allow(unused)]
 pub(crate) struct TcpRelayServiceRequest {
     pub message_framed_read: MessageFramedRead,
@@ -136,30 +139,58 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
             });
             tokio::spawn(async move {
                 loop {
-                    let mut buf = BytesMut::with_capacity(
-                        SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
-                    );
-                    match target_stream_read.read_buf(&mut buf).await {
-                        Err(e) => {
-                            error!("Fail to read data from target because of error: {:#?}", e);
-                            return;
+                    let read_target_data_future = async move {
+                        let mut buf = BytesMut::with_capacity(
+                            SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
+                        );
+                        match target_stream_read.read_buf(&mut buf).await {
+                            Err(e) => {
+                                error!("Fail to read data from target because of error: {:#?}", e);
+                                return Err(CommonError::IoError { source: e });
+                            }
+                            Ok(0) => {
+                                info!(
+                                    "Read all data from target, agent: {:#?}",
+                                    agent_address_for_target_to_proxy
+                                );
+                                return Ok(None);
+                            }
+                            Ok(size) => {
+                                debug!("Read {} bytes from target.", size);
+                            }
+                        };
+                        Ok(Some((buf.freeze(), target_stream_read)))
+                    };
+
+                    let buf = tokio::select! {
+                        target_data = read_target_data_future => {
+                            target_data
                         }
-                        Ok(0) => {
-                            info!(
-                                "Read all data from target, agent: {:#?}",
-                                agent_address_for_target_to_proxy
-                            );
-                            return;
-                        }
-                        Ok(size) => {
-                            debug!("Read {} bytes from target.", size);
+                        _ =  sleep(Duration::from_secs(SERVER_CONFIG.read_target_timeout_seconds().unwrap_or(DEFAULT_READ_TARGET_TIMEOUT_SECONDS))) => {
+                            error!("The read target data timeout.");
+                            Err(CommonError::TimeoutError)
                         }
                     };
+
+                    let (buf, inner_target_stream_read) = match buf {
+                        Ok(None) => {
+                            debug!("Nothing to read from target.");
+                            return;
+                        }
+                        Ok(Some(v)) => v,
+                        Err(e) => {
+                            error!("Fail to read target data because of error: {:#?}", e);
+                            return;
+                        }
+                    };
+                    
+                    target_stream_read = inner_target_stream_read;
+
                     let proxy_message_payload = MessagePayload::new(
                         agent_connect_message_source_address.clone(),
                         agent_connect_message_target_address.clone(),
                         PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::TcpData),
-                        buf.freeze(),
+                        buf,
                     );
                     let PayloadEncryptionTypeSelectServiceResult {
                         payload_encryption_type,
