@@ -76,6 +76,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                 ServiceBuilder::new().service(PayloadEncryptionTypeSelectService);
             tokio::spawn(async move {
                 loop {
+                    info!("Enter read agent data loop.");
                     let read_agent_message_result = ready_and_call_service(
                         &mut read_agent_message_service,
                         ReadMessageServiceRequest {
@@ -139,6 +140,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
             });
             tokio::spawn(async move {
                 loop {
+                    info!("Enter read target data loop.");
                     let read_target_data_future = async move {
                         let mut buf = BytesMut::with_capacity(
                             SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
