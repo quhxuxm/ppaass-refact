@@ -192,7 +192,7 @@ impl Service<ReadMessageServiceRequest> for ReadMessageService {
                 },
                 _ =  sleep(Duration::from_secs(read_timeout_seconds)) => {
                     error!("The read timeout in {} seconds.", read_timeout_seconds);
-                  return Err(CommonError::TimeoutError)
+                    return Err(CommonError::TimeoutError)
                 }
             };
 

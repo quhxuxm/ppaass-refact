@@ -1,5 +1,6 @@
 use std::net::SocketAddr;
 use std::task::{Context, Poll};
+use std::time::Duration;
 
 use bytes::{BufMut, BytesMut};
 use futures_util::future::BoxFuture;
@@ -18,7 +19,9 @@ use common::{
     WriteMessageServiceRequest,
 };
 
-use crate::service::common::{DEFAULT_BUFFER_SIZE, DEFAULT_READ_PROXY_TIMEOUT_SECONDS};
+use crate::service::common::{
+    DEFAULT_BUFFER_SIZE, DEFAULT_READ_CLIENT_TIMEOUT_SECONDS, DEFAULT_READ_PROXY_TIMEOUT_SECONDS,
+};
 use crate::SERVER_CONFIG;
 
 pub(crate) struct HttpRelayServiceRequest {
@@ -121,20 +124,31 @@ impl Service<HttpRelayServiceRequest> for HttpRelayService {
                     let mut buf = BytesMut::with_capacity(
                         SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
                     );
-                    match client_stream_read_half.read_buf(&mut buf).await {
-                        Err(e) => {
-                            error!(
-                                "Fail to read client data from {:#?} because of error: {:#?}",
-                                target_address_a2t, e
-                            );
-                            return;
+                    let read_client_timeout_seconds = SERVER_CONFIG
+                        .read_client_timeout_seconds()
+                        .unwrap_or(DEFAULT_READ_CLIENT_TIMEOUT_SECONDS);
+                    tokio::select! {
+                        client_read_result=client_stream_read_half.read_buf(&mut buf)=>{
+                            match client_read_result {
+                                Err(e) => {
+                                    error!(
+                                        "Fail to read client data from {:#?} because of error: {:#?}",
+                                        target_address_a2t, e
+                                    );
+                                    return;
+                                }
+                                Ok(0) if buf.remaining_mut() > 0 => {
+                                    debug!("Read all data from agent");
+                                    return;
+                                }
+                                Ok(size) => {
+                                    debug!("Read {} bytes from client", size);
+                                }
+                            }
                         }
-                        Ok(0) if buf.remaining_mut() > 0 => {
-                            debug!("Read all data from agent");
+                        _=tokio::time::sleep(Duration::from_secs(read_client_timeout_seconds))=>{
+                            error!("The read client data timeout in {} seconds.", read_client_timeout_seconds);
                             return;
-                        }
-                        Ok(size) => {
-                            debug!("Read {} bytes from client", size);
                         }
                     }
                     let PayloadEncryptionTypeSelectServiceResult {

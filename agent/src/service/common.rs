@@ -22,6 +22,7 @@ pub const DEFAULT_BUFFER_SIZE: usize = 1024 * 64;
 pub const DEFAULT_MAX_FRAME_SIZE: usize = DEFAULT_BUFFER_SIZE * 2;
 pub const DEFAULT_RETRY_TIMES: u16 = 3;
 pub const DEFAULT_READ_PROXY_TIMEOUT_SECONDS: u64 = 20;
+pub const DEFAULT_READ_CLIENT_TIMEOUT_SECONDS: u64 = 20;
 #[derive(Debug)]
 pub(crate) struct ClientConnectionInfo {
     pub client_stream: TcpStream,
