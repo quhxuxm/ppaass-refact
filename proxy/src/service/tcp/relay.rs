@@ -94,6 +94,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                                 "Read all data from agent: {:#?}",
                                 agent_address_for_proxy_to_target
                             );
+                            info!("Exit read agent data loop.");
                             return;
                         }
                         Ok(Some(
@@ -114,10 +115,12 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                                 "Invalid payload type from agent: {:#?}",
                                 agent_address_for_proxy_to_target
                             );
+                            info!("Exit read agent data loop.");
                             return;
                         }
                         Err(e) => {
                             error!("Fail to read from agent because of error: {:#?}", e);
+                            info!("Exit read agent data loop.");
                             return;
                         }
                     };
@@ -127,6 +130,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                             "Fail to write from agent to target because of error: {:#?}",
                             e
                         );
+                        info!("Exit read agent data loop.");
                         return;
                     };
                     if let Err(e) = target_stream_write.flush().await {
@@ -134,10 +138,10 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                             "Fail to flush from agent to target because of error: {:#?}",
                             e
                         );
+                        info!("Exit read agent data loop.");
                         return;
                     };
                 }
-                info!("Exit read agent data loop.");
             });
             tokio::spawn(async move {
                 loop {
@@ -149,6 +153,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                         let read_size = match target_stream_read.read_buf(&mut buf).await {
                             Err(e) => {
                                 error!("Fail to read data from target because of error: {:#?}", e);
+                                info!("Exit read target data loop.");
                                 return Err(CommonError::IoError { source: e });
                             }
                             Ok(0) => {
@@ -156,6 +161,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                                     "Read all data from target, agent: {:#?}",
                                     agent_address_for_target_to_proxy
                                 );
+                                info!("Exit read target data loop.");
                                 return Ok(None);
                             }
                             Ok(size) => {
@@ -182,11 +188,13 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                                 info!(
                                     "Nothing to read from target, return from read target future."
                                 );
+                                info!("Exit read target data loop.");
                                 return;
                             }
                             Ok(Some(v)) => v,
                             Err(e) => {
                                 error!("Fail to read target data because of error: {:#?}", e);
+                                info!("Exit read target data loop.");
                                 return;
                             }
                         };
@@ -214,6 +222,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                                 "Fail to select payload encryption type because of error: {:#?}",
                                 e
                             );
+                            info!("Exit read target data loop.");
                             return;
                         }
                         Ok(v) => v,
@@ -232,6 +241,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                     match write_proxy_message_result {
                         Err(e) => {
                             error!("Fail to read from target because of error(ready): {:#?}", e);
+                            info!("Exit read target data loop.");
                             return;
                         }
                         Ok(proxy_message_write_result) => {
@@ -240,7 +250,6 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                         }
                     }
                 }
-                info!("Exit read target data loop.");
             });
             Ok(TcpRelayServiceResult {
                 target_address: target_address_for_return,
