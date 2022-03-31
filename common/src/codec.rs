@@ -78,7 +78,7 @@ impl Decoder for MessageCodec {
                         error!("The decode operation timeout.");
                       return Err(CommonError::TimeoutError)
                     }
-                };
+                }
             })
         });
         let length_delimited_decode_result = match length_delimited_decode_result {
