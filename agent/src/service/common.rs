@@ -137,6 +137,12 @@ impl ConnectToProxyService {
                 let proxy_stream = TcpStream::connect(&request.proxy_address)
                     .await
                     .map_err(|e| CommonError::IoError { source: e })?;
+                proxy_stream
+                    .set_nodelay(true)
+                    .map_err(|e| CommonError::IoError { source: e })?;
+                proxy_stream
+                    .set_linger(None)
+                    .map_err(|e| CommonError::IoError { source: e })?;
                 debug!(
                     "Client {}, success connect to proxy: {}",
                     request.client_address, request.proxy_address

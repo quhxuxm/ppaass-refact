@@ -134,7 +134,12 @@ impl ConnectToTargetService {
                             );
                             CommonError::IoError { source: e }
                         })?;
-                target_stream.set_nodelay(true)?;
+                target_stream
+                    .set_nodelay(true)
+                    .map_err(|e| CommonError::IoError { source: e })?;
+                target_stream
+                    .set_linger(None)
+                    .map_err(|e| CommonError::IoError { source: e })?;
                 debug!("Success connect to target: {}", request.target_address);
                 Ok(ConnectToTargetServiceResult { target_stream })
             }),

@@ -6,7 +6,7 @@ use tokio::runtime::Runtime;
 use tower::ServiceBuilder;
 use tracing::{error, info};
 
-use common::ready_and_call_service;
+use common::{ready_and_call_service, CommonError};
 
 use crate::config::SERVER_CONFIG;
 use crate::service::{AgentConnectionInfo, HandleAgentConnectionService};
@@ -73,16 +73,32 @@ impl ProxyServer {
                 }
             };
             loop {
-                let (agent_stream, agent_address) = match listener.accept().await {
+                let (mut agent_stream, agent_address) = match listener.accept().await {
                     Err(e) => {
                         error!(
-                            "Fail to accept client connection because of error: {:#?}",
+                            "Fail to accept agent connection because of error: {:#?}",
                             e
                         );
                         continue;
                     }
                     Ok((agent_stream, agent_address)) => (agent_stream, agent_address),
                 };
+               if let Err(e)= agent_stream
+                    .set_nodelay(true){
+                   error!(
+                            "Fail to set agent connection no delay because of error: {:#?}",
+                            e
+                        );
+                   continue;
+               }
+                if let Err(e)= agent_stream
+                    .set_linger(None){
+                    error!(
+                            "Fail to set agent connection linger because of error: {:#?}",
+                            e
+                        );
+                    continue;
+                }
                 tokio::spawn(async move {
                     let mut handle_agent_connection_service = ServiceBuilder::new()
                         // .buffer(SERVER_CONFIG.buffered_connection_number().unwrap_or(1024))

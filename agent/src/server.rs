@@ -83,6 +83,22 @@ impl AgentServer {
                     }
                     Ok((client_stream, client_address)) => (client_stream, client_address),
                 };
+                if let Err(e)= client_stream
+                    .set_nodelay(true){
+                    error!(
+                            "Fail to set client connection no delay because of error: {:#?}",
+                            e
+                        );
+                    continue;
+                }
+                if let Err(e)= client_stream
+                    .set_linger(None){
+                    error!(
+                            "Fail to set client connection linger because of error: {:#?}",
+                            e
+                        );
+                    continue;
+                }
                 tokio::spawn(async move {
                     let mut handle_client_connection_service = ServiceBuilder::new()
                         // .buffer(SERVER_CONFIG.buffered_connection_number().unwrap_or(1024))
