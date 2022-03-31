@@ -21,6 +21,8 @@ lazy_static! {
             .expect("Fail to read proxy private key.");
 }
 
+pub const DEFAULT_READ_AGENT_TIMEOUT_SECONDS: u64 = 20;
+
 #[derive(Serialize, Deserialize)]
 pub(crate) struct Config {
     port: Option<u16>,
@@ -38,8 +40,8 @@ pub(crate) struct Config {
     buffered_connection_number: Option<usize>,
     concurrent_connection_number: Option<usize>,
     rate_limit: Option<u64>,
-    decoder_timeout_seconds: Option<u64>,
-    read_target_timeout_seconds: Option<u64>
+    read_agent_timeout_seconds: Option<u64>,
+    read_target_timeout_seconds: Option<u64>,
 }
 
 impl Config {
@@ -99,10 +101,10 @@ impl Config {
     pub fn rate_limit(&self) -> Option<u64> {
         self.rate_limit
     }
-    pub fn decoder_timeout_seconds(&self) -> Option<u64> {
-        self.decoder_timeout_seconds
+    pub fn read_agent_timeout_seconds(&self) -> Option<u64> {
+        self.read_agent_timeout_seconds
     }
-    pub fn read_target_timeout_seconds(&self)->Option<u64>{
+    pub fn read_target_timeout_seconds(&self) -> Option<u64> {
         self.read_target_timeout_seconds
     }
 }

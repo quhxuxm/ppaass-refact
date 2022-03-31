@@ -26,7 +26,7 @@ where
                 "Fail to invoke service [{}] because of errors: {:#?}",
                 service_type_name, e
             );
-            return Err(e);
+            Err(e)
         }
     }
 }

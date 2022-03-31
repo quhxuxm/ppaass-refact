@@ -26,7 +26,8 @@ use common::{
 use crate::codec::http::HttpCodec;
 use crate::service::common::{
     generate_prepare_message_framed_service, ConnectToProxyService, ConnectToProxyServiceRequest,
-    ConnectToProxyServiceResult, DEFAULT_BUFFER_SIZE, DEFAULT_RETRY_TIMES,
+    ConnectToProxyServiceResult, DEFAULT_BUFFER_SIZE, DEFAULT_READ_PROXY_TIMEOUT_SECONDS,
+    DEFAULT_RETRY_TIMES,
 };
 use crate::SERVER_CONFIG;
 
@@ -96,7 +97,11 @@ impl Service<HttpConnectServiceRequest> for HttpConnectService {
             let mut write_agent_message_service =
                 ServiceBuilder::new().service(WriteMessageService::default());
             let mut read_proxy_message_service =
-                ServiceBuilder::new().service(ReadMessageService::default());
+                ServiceBuilder::new().service(ReadMessageService::new(
+                    SERVER_CONFIG
+                        .read_proxy_timeout_seconds()
+                        .unwrap_or(DEFAULT_READ_PROXY_TIMEOUT_SECONDS),
+                ));
             let mut connect_to_proxy_service =
                 ServiceBuilder::new().service(ConnectToProxyService::new(
                     SERVER_CONFIG

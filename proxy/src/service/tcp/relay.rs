@@ -21,6 +21,7 @@ use common::{
     WriteMessageServiceRequest,
 };
 
+use crate::config::DEFAULT_READ_AGENT_TIMEOUT_SECONDS;
 use crate::SERVER_CONFIG;
 
 const DEFAULT_BUFFER_SIZE: usize = 64 * 1024;
@@ -67,7 +68,11 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
         let (mut target_stream_read, mut target_stream_write) = target_stream.into_split();
         Box::pin(async move {
             let mut read_agent_message_service =
-                ServiceBuilder::new().service(ReadMessageService::default());
+                ServiceBuilder::new().service(ReadMessageService::new(
+                    SERVER_CONFIG
+                        .read_agent_timeout_seconds()
+                        .unwrap_or(DEFAULT_READ_AGENT_TIMEOUT_SECONDS),
+                ));
             let mut write_proxy_message_service =
                 ServiceBuilder::new().service(WriteMessageService::default());
             let mut payload_encryption_type_select_service =

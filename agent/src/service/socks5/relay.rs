@@ -18,7 +18,7 @@ use common::{
     WriteMessageServiceRequest,
 };
 
-use crate::service::common::DEFAULT_BUFFER_SIZE;
+use crate::service::common::{DEFAULT_BUFFER_SIZE, DEFAULT_READ_PROXY_TIMEOUT_SECONDS};
 use crate::SERVER_CONFIG;
 
 #[allow(unused)]
@@ -55,7 +55,11 @@ impl Service<Socks5RelayServiceRequest> for Socks5RelayService {
             let mut write_agent_message_service =
                 ServiceBuilder::new().service(WriteMessageService::default());
             let mut read_proxy_message_service =
-                ServiceBuilder::new().service(ReadMessageService::default());
+                ServiceBuilder::new().service(ReadMessageService::new(
+                    SERVER_CONFIG
+                        .read_proxy_timeout_seconds()
+                        .unwrap_or(DEFAULT_READ_PROXY_TIMEOUT_SECONDS),
+                ));
             let mut payload_encryption_type_select_service =
                 ServiceBuilder::new().service(PayloadEncryptionTypeSelectService);
             let client_stream = request.client_stream;

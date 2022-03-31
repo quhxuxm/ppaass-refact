@@ -18,6 +18,7 @@ use common::{
     WriteMessageServiceRequest,
 };
 
+use crate::config::DEFAULT_READ_AGENT_TIMEOUT_SECONDS;
 use crate::service::{
     ConnectToTargetService, ConnectToTargetServiceRequest, ConnectToTargetServiceResult,
 };
@@ -53,7 +54,11 @@ impl Service<TcpConnectServiceRequest> for TcpConnectService {
     fn call(&mut self, req: TcpConnectServiceRequest) -> Self::Future {
         Box::pin(async move {
             let mut read_agent_message_service =
-                ServiceBuilder::new().service(ReadMessageService::default());
+                ServiceBuilder::new().service(ReadMessageService::new(
+                    SERVER_CONFIG
+                        .read_agent_timeout_seconds()
+                        .unwrap_or(DEFAULT_READ_AGENT_TIMEOUT_SECONDS),
+                ));
             let mut write_proxy_message_service =
                 ServiceBuilder::new().service(WriteMessageService::default());
             let mut connect_to_target_service = ServiceBuilder::new().service(

@@ -1,10 +1,12 @@
 use std::task::{Context, Poll};
+use std::time::Duration;
 
 use bytes::Bytes;
 use futures_util::future::BoxFuture;
 use futures_util::stream::{SplitSink, SplitStream};
 use futures_util::{SinkExt, StreamExt};
 use tokio::net::TcpStream;
+use tokio::time::sleep;
 use tokio_util::codec::Framed;
 use tower::Service;
 use tracing::{debug, error};
@@ -28,7 +30,6 @@ pub struct PrepareMessageFramedService {
     max_frame_size: usize,
     buffer_size: usize,
     compress: bool,
-    decoder_timeout_seconds: u64,
 }
 
 impl PrepareMessageFramedService {
@@ -38,7 +39,6 @@ impl PrepareMessageFramedService {
         max_frame_size: usize,
         buffer_size: usize,
         compress: bool,
-        decoder_timeout_seconds: u64,
     ) -> Self {
         Self {
             public_key,
@@ -46,7 +46,6 @@ impl PrepareMessageFramedService {
             max_frame_size,
             buffer_size,
             compress,
-            decoder_timeout_seconds,
         }
     }
 }
@@ -68,7 +67,6 @@ impl Service<TcpStream> for PrepareMessageFramedService {
                 &(*self.private_key),
                 self.max_frame_size,
                 self.compress,
-                self.decoder_timeout_seconds,
             ),
             self.buffer_size,
         );
@@ -151,8 +149,18 @@ pub struct ReadMessageServiceResult {
     pub message_id: String,
 }
 
-#[derive(Clone, Default)]
-pub struct ReadMessageService;
+#[derive(Clone)]
+pub struct ReadMessageService {
+    pub read_timeout_seconds: u64,
+}
+
+impl ReadMessageService {
+    pub fn new(read_timeout_seconds: u64) -> Self {
+        Self {
+            read_timeout_seconds,
+        }
+    }
+}
 
 impl Service<ReadMessageServiceRequest> for ReadMessageService {
     type Response = Option<ReadMessageServiceResult>;
@@ -164,20 +172,30 @@ impl Service<ReadMessageServiceRequest> for ReadMessageService {
     }
 
     fn call(&mut self, mut req: ReadMessageServiceRequest) -> Self::Future {
+        let read_timeout_seconds = self.read_timeout_seconds;
         Box::pin(async move {
-            let message = match req.message_framed_read.next().await {
-                None => {
-                    debug!("No message any more.");
-                    return Ok(None);
-                }
-                Some(v) => match v {
-                    Ok(v) => v,
-                    Err(e) => {
-                        error!("Fail to decode message because of error: {:#?}", e);
-                        return Err(e);
+            let message = tokio::select! {
+                read_message_result = req.message_framed_read.next() => {
+                    match read_message_result {
+                         None => {
+                            debug!("No message any more.");
+                            return Ok(None);
+                        }
+                        Some(v) => match v {
+                            Ok(v) => v,
+                            Err(e) => {
+                                error!("Fail to decode message because of error: {:#?}", e);
+                                return Err(e);
+                            }
+                        },
                     }
                 },
+                _ =  sleep(Duration::from_secs(read_timeout_seconds)) => {
+                    error!("The read timeout in {} seconds.", read_timeout_seconds);
+                  return Err(CommonError::TimeoutError)
+                }
             };
+
             let payload: MessagePayload = match message.payload {
                 None => {
                     debug!("No payload in the message.",);

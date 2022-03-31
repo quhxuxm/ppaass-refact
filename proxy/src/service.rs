@@ -23,7 +23,6 @@ mod tcp;
 mod udp;
 const DEFAULT_BUFFER_SIZE: usize = 1024 * 64;
 const DEFAULT_MAX_FRAME_SIZE: usize = DEFAULT_BUFFER_SIZE * 2;
-const DEFAULT_DECODER_TIMEOUT_SECONDS: u64 = 20;
 #[derive(Debug)]
 pub(crate) struct AgentConnectionInfo {
     pub agent_stream: TcpStream,
@@ -55,9 +54,6 @@ impl Service<AgentConnectionInfo> for HandleAgentConnectionService {
                         .unwrap_or(DEFAULT_MAX_FRAME_SIZE),
                     SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
                     SERVER_CONFIG.compress().unwrap_or(true),
-                    SERVER_CONFIG
-                        .decoder_timeout_seconds()
-                        .unwrap_or(DEFAULT_DECODER_TIMEOUT_SECONDS),
                 ));
             let mut tcp_connect_service =
                 ServiceBuilder::new().service(TcpConnectService::default());

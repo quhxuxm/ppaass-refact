@@ -1,10 +1,6 @@
-use std::time::Duration;
-
 use bytes::{Buf, Bytes, BytesMut};
 use lz4::block::{compress, decompress};
 use rand::rngs::OsRng;
-use tokio::runtime::Handle;
-use tokio::time::sleep;
 use tokio_util::codec::{Decoder, Encoder, LengthDelimitedCodec};
 use tracing::{debug, error};
 
@@ -19,7 +15,6 @@ pub struct MessageCodec {
     rsa_crypto: RsaCrypto<OsRng>,
     length_delimited_codec: LengthDelimitedCodec,
     compress: bool,
-    decoder_timeout_seconds: u64,
 }
 
 impl MessageCodec {
@@ -28,7 +23,6 @@ impl MessageCodec {
         private_key: &'static str,
         max_frame_size: usize,
         compress: bool,
-        decoder_timeout_seconds: u64,
     ) -> Self {
         let mut length_delimited_codec_builder = LengthDelimitedCodec::builder();
         length_delimited_codec_builder.max_frame_length(max_frame_size);
@@ -48,7 +42,6 @@ impl MessageCodec {
             rsa_crypto,
             length_delimited_codec,
             compress,
-            decoder_timeout_seconds,
         }
     }
 }
@@ -58,29 +51,7 @@ impl Decoder for MessageCodec {
     type Error = CommonError;
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
-        let decoder_timeout_seconds = self.decoder_timeout_seconds;
-        let length_delimited_codec = &mut self.length_delimited_codec;
-
-        let length_delimited_decode_result = tokio::task::block_in_place(|| {
-            Handle::current().block_on(async move {
-                let decode_future = async move { length_delimited_codec.decode(src) };
-                tokio::select! {
-                    decode_original_result = decode_future => {
-                        match decode_original_result {
-                            Ok(v)=> Ok(v),
-                            Err(e)=> {
-                                error!("Error happen when decode message, error: {:#?}", e);
-                                Err(CommonError::CodecError)
-                            }
-                        }
-                    }
-                    _ =  sleep(Duration::from_secs(decoder_timeout_seconds)) => {
-                        error!("The decode operation timeout in {} seconds.", decoder_timeout_seconds);
-                      Err(CommonError::TimeoutError)
-                    }
-                }
-            })
-        });
+        let length_delimited_decode_result = self.length_delimited_codec.decode(src);
         let length_delimited_decode_result = match length_delimited_decode_result {
             Err(e) => {
                 error!("Fail to decode input message because of timeout: {:#?}", e);
