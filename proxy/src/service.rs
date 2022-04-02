@@ -4,6 +4,7 @@ use std::task::{Context, Poll};
 use futures_util::future;
 use futures_util::future::BoxFuture;
 use tokio::net::TcpStream;
+use tokio_tfo::TfoStream;
 use tower::util::BoxCloneService;
 use tower::{
     retry::{Policy, Retry},
@@ -23,9 +24,9 @@ mod tcp;
 mod udp;
 const DEFAULT_BUFFER_SIZE: usize = 1024 * 64;
 const DEFAULT_MAX_FRAME_SIZE: usize = DEFAULT_BUFFER_SIZE * 2;
-#[derive(Debug)]
+
 pub(crate) struct AgentConnectionInfo {
-    pub agent_stream: TcpStream,
+    pub agent_stream: TfoStream,
     pub agent_address: SocketAddr,
 }
 

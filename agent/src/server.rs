@@ -3,6 +3,7 @@ use std::time::Duration;
 
 use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
+use tokio_tfo::TfoStream;
 use tower::ServiceBuilder;
 use tracing::{error, info};
 
@@ -83,6 +84,7 @@ impl AgentServer {
                     }
                     Ok((client_stream, client_address)) => (client_stream, client_address),
                 };
+                let client_stream=TfoStream::from(client_stream);
                 if let Err(e)= client_stream
                     .set_nodelay(true){
                     error!(

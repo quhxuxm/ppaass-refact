@@ -4,7 +4,7 @@ use std::{fmt::Debug, net::SocketAddr};
 use bytes::Bytes;
 use futures_util::future::BoxFuture;
 use futures_util::{SinkExt, StreamExt};
-use tokio::net::TcpStream;
+use tokio_tfo::TfoStream;
 use tokio_util::codec::Framed;
 use tower::Service;
 use tower::ServiceBuilder;
@@ -30,14 +30,13 @@ use crate::service::common::{
 };
 use crate::SERVER_CONFIG;
 
-#[derive(Debug)]
 pub(crate) struct Socks5ConnectCommandServiceRequest {
-    pub client_stream: TcpStream,
+    pub client_stream: TfoStream,
     pub client_address: SocketAddr,
 }
 
 pub(crate) struct Socks5ConnectCommandServiceResult {
-    pub client_stream: TcpStream,
+    pub client_stream: TfoStream,
     pub message_framed_read: MessageFramedRead,
     pub message_framed_write: MessageFramedWrite,
     pub client_address: SocketAddr,
@@ -52,7 +51,7 @@ pub(crate) struct Socks5ConnectCommandService;
 
 impl Socks5ConnectCommandService {
     async fn send_socks5_failure(
-        socks5_client_framed: &mut Framed<&mut TcpStream, Socks5ConnectCodec>,
+        socks5_client_framed: &mut Framed<&mut TfoStream, Socks5ConnectCodec>,
     ) -> Result<Option<Socks5ConnectCommand>, CommonError> {
         let connect_result =
             Socks5ConnectCommandResult::new(Socks5ConnectCommandResultStatus::Failure, None);
@@ -76,7 +75,7 @@ impl Socks5ConnectCommandService {
     async fn call_service<'a, S, T, U>(
         service: &'a mut S,
         request: T,
-        socks5_client_framed: &mut Framed<&'a mut TcpStream, Socks5ConnectCodec>,
+        socks5_client_framed: &mut Framed<&'a mut TfoStream, Socks5ConnectCodec>,
     ) -> Result<U, CommonError>
     where
         S: Service<T, Response = U, Error = CommonError>,
