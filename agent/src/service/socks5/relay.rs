@@ -5,7 +5,7 @@ use std::time::Duration;
 use bytes::{BufMut, BytesMut};
 use futures_util::future::BoxFuture;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio_tfo::TfoStream;
+use tokio::net::TcpStream;
 use tower::Service;
 use tower::ServiceBuilder;
 use tracing::{debug, error};
@@ -26,7 +26,7 @@ use crate::SERVER_CONFIG;
 
 #[allow(unused)]
 pub(crate) struct Socks5RelayServiceRequest {
-    pub client_stream: TfoStream,
+    pub client_stream: TcpStream,
     pub client_address: SocketAddr,
     pub proxy_address_string: String,
     pub message_framed_write: MessageFramedWrite,

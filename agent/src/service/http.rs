@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 use std::task::{Context, Poll};
 
 use futures_util::future::BoxFuture;
-use tokio_tfo::TfoStream;
+use tokio::net::TcpStream;
 use tower::{Service, ServiceBuilder};
 
 use common::{ready_and_call_service, CommonError};
@@ -13,8 +13,9 @@ use crate::service::http::relay::{HttpRelayService, HttpRelayServiceRequest};
 mod connect;
 mod relay;
 
+#[derive(Debug)]
 pub(crate) struct HttpFlowRequest {
-    pub client_stream: TfoStream,
+    pub client_stream: TcpStream,
     pub client_address: SocketAddr,
 }
 #[derive(Debug)]

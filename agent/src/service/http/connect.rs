@@ -7,7 +7,7 @@ use bytes::Bytes;
 use futures_util::future::BoxFuture;
 use futures_util::{SinkExt, StreamExt};
 use httpcodec::{BodyEncoder, HttpVersion, ReasonPhrase, RequestEncoder, Response, StatusCode};
-use tokio_tfo::TfoStream;
+use tokio::net::TcpStream;
 use tokio_util::codec::Framed;
 use tower::Service;
 use tower::ServiceBuilder;
@@ -41,17 +41,17 @@ const ERROR_CODE: u16 = 400;
 const ERROR_REASON: &str = " ";
 const CONNECTION_ESTABLISHED: &str = "Connection Established";
 
-type HttpFramed<'a> = Framed<&'a mut TfoStream, HttpCodec>;
+type HttpFramed<'a> = Framed<&'a mut TcpStream, HttpCodec>;
 
 #[allow(unused)]
 pub(crate) struct HttpConnectServiceRequest {
-    pub client_stream: TfoStream,
+    pub client_stream: TcpStream,
     pub client_address: SocketAddr,
 }
 
 #[allow(unused)]
 pub(crate) struct HttpConnectServiceResult {
-    pub client_stream: TfoStream,
+    pub client_stream: TcpStream,
     pub client_address: SocketAddr,
     pub init_data: Option<Vec<u8>>,
     pub message_framed_read: MessageFramedRead,

@@ -5,7 +5,7 @@ use std::time::Duration;
 use bytes::{BufMut, BytesMut};
 use futures_util::future::BoxFuture;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio_tfo::TfoStream;
+use tokio::net::TcpStream;
 use tower::Service;
 use tower::ServiceBuilder;
 use tracing::{debug, error};
@@ -25,7 +25,7 @@ use crate::service::common::{
 use crate::SERVER_CONFIG;
 
 pub(crate) struct HttpRelayServiceRequest {
-    pub client_stream: TfoStream,
+    pub client_stream: TcpStream,
     pub client_address: SocketAddr,
     pub message_framed_write: MessageFramedWrite,
     pub message_framed_read: MessageFramedRead,

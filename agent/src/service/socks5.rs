@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 use std::task::{Context, Poll};
 
 use futures_util::future::BoxFuture;
-use tokio_tfo::TfoStream;
+use tokio::net::TcpStream;
 use tower::Service;
 use tower::ServiceBuilder;
 
@@ -21,7 +21,7 @@ mod connect;
 mod relay;
 
 pub(crate) struct Socks5FlowRequest {
-    pub client_stream: TfoStream,
+    pub client_stream: TcpStream,
     pub client_address: SocketAddr,
 }
 pub(crate) struct Socks5FlowResult {

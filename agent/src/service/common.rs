@@ -5,7 +5,6 @@ use std::task::{Context, Poll};
 use futures_util::future;
 use futures_util::future::BoxFuture;
 use tokio::net::TcpStream;
-use tokio_tfo::TfoStream;
 use tower::retry::{Policy, Retry};
 use tower::util::BoxCloneService;
 use tower::{service_fn, Service, ServiceBuilder};
@@ -24,9 +23,9 @@ pub const DEFAULT_MAX_FRAME_SIZE: usize = DEFAULT_BUFFER_SIZE * 2;
 pub const DEFAULT_RETRY_TIMES: u16 = 3;
 pub const DEFAULT_READ_PROXY_TIMEOUT_SECONDS: u64 = 20;
 pub const DEFAULT_READ_CLIENT_TIMEOUT_SECONDS: u64 = 20;
-
+#[derive(Debug)]
 pub(crate) struct ClientConnectionInfo {
-    pub client_stream: TfoStream,
+    pub client_stream: TcpStream,
     pub client_address: SocketAddr,
 }
 
@@ -111,7 +110,7 @@ struct ConcreteConnectToProxyRequest {
 }
 
 pub(crate) struct ConnectToProxyServiceResult {
-    pub proxy_stream: TfoStream,
+    pub proxy_stream: TcpStream,
     pub connected_proxy_address: String,
 }
 
@@ -138,7 +137,6 @@ impl ConnectToProxyService {
                 let proxy_stream = TcpStream::connect(&request.proxy_address)
                     .await
                     .map_err(|e| CommonError::IoError { source: e })?;
-                let proxy_stream = TfoStream::from(proxy_stream);
                 proxy_stream
                     .set_nodelay(true)
                     .map_err(|e| CommonError::IoError { source: e })?;

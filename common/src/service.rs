@@ -5,8 +5,8 @@ use bytes::Bytes;
 use futures_util::future::BoxFuture;
 use futures_util::stream::{SplitSink, SplitStream};
 use futures_util::{SinkExt, StreamExt};
+use tokio::net::TcpStream;
 use tokio::time::sleep;
-use tokio_tfo::TfoStream;
 use tokio_util::codec::Framed;
 use tower::Service;
 use tracing::{debug, error};
@@ -15,8 +15,8 @@ use crate::{
     generate_uuid, CommonError, Message, MessageCodec, MessagePayload, PayloadEncryptionType,
 };
 
-pub type MessageFramedRead = SplitStream<Framed<TfoStream, MessageCodec>>;
-pub type MessageFramedWrite = SplitSink<Framed<TfoStream, MessageCodec>, Message>;
+pub type MessageFramedRead = SplitStream<Framed<TcpStream, MessageCodec>>;
+pub type MessageFramedWrite = SplitSink<Framed<TcpStream, MessageCodec>, Message>;
 
 pub struct PrepareMessageFramedResult {
     pub message_framed_write: MessageFramedWrite,
@@ -50,7 +50,7 @@ impl PrepareMessageFramedService {
     }
 }
 
-impl Service<TfoStream> for PrepareMessageFramedService {
+impl Service<TcpStream> for PrepareMessageFramedService {
     type Response = PrepareMessageFramedResult;
     type Error = CommonError;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
@@ -59,7 +59,7 @@ impl Service<TfoStream> for PrepareMessageFramedService {
         Poll::Ready(Ok(()))
     }
 
-    fn call(&mut self, input_stream: TfoStream) -> Self::Future {
+    fn call(&mut self, input_stream: TcpStream) -> Self::Future {
         let framed = Framed::with_capacity(
             input_stream,
             MessageCodec::new(

@@ -4,7 +4,7 @@ use std::task::{Context, Poll};
 
 use futures_util::future::BoxFuture;
 use futures_util::{SinkExt, StreamExt};
-use tokio_tfo::TfoStream;
+use tokio::net::TcpStream;
 use tokio_util::codec::Framed;
 use tower::Service;
 use tracing::debug;
@@ -18,13 +18,13 @@ use crate::SERVER_CONFIG;
 
 #[allow(unused)]
 pub(crate) struct Socks5AuthenticateFlowRequest {
-    pub client_stream: TfoStream,
+    pub client_stream: TcpStream,
     pub client_address: SocketAddr,
 }
 
 #[allow(unused)]
 pub(crate) struct Socks5AuthenticateFlowResult {
-    pub client_stream: TfoStream,
+    pub client_stream: TcpStream,
     pub client_address: SocketAddr,
     pub auth_method: Socks5AuthMethod,
 }
