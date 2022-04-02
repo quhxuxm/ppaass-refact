@@ -1,9 +1,11 @@
 use std::net::SocketAddr;
 use std::task::{Context, Poll};
+use std::time::Duration;
 
 use futures_util::future;
 use futures_util::future::BoxFuture;
 use tokio::net::TcpStream;
+use tokio::time::sleep;
 use tower::util::BoxCloneService;
 use tower::{
     retry::{Policy, Retry},
@@ -119,21 +121,28 @@ pub(crate) struct ConnectToTargetService {
 }
 
 impl ConnectToTargetService {
-    pub(crate) fn new(retry: u16) -> Self {
+    pub(crate) fn new(retry: u16, connect_timeout_seconds: u64) -> Self {
+        let connect_timeout_seconds = connect_timeout_seconds;
         let concrete_service = Retry::new(
             ConnectToTargetAttempts { retry },
-            service_fn(|request: ConnectToTargetServiceRequest| async move {
+            service_fn(move |request: ConnectToTargetServiceRequest| async move {
                 debug!("Begin connect to target: {}", request.target_address);
-                let target_stream =
-                    TcpStream::connect(&request.target_address)
-                        .await
-                        .map_err(|e| {
-                            error!(
-                                "Fail connect to target {} because of error: {:#?}",
-                                &request.target_address, e
-                            );
-                            CommonError::IoError { source: e }
-                        })?;
+                let target_stream = tokio::select! {
+                    connect_result = TcpStream::connect(&request.target_address)=>{
+                        match connect_result {
+                            Err(e)=>{
+                                error!("Fail connect to target {} because of error: {:#?}",&request.target_address, e);
+                                return Err(CommonError::IoError { source: e })
+                            }
+                            Ok(v)=>v
+                        }
+                    }
+                    _= sleep(Duration::from_secs(connect_timeout_seconds))=>{
+                        error!("The connect to target timeout in {} seconds.", connect_timeout_seconds);
+                        return Err(CommonError::TimeoutError)
+                    }
+                };
+
                 target_stream
                     .set_nodelay(true)
                     .map_err(|e| CommonError::IoError { source: e })?;

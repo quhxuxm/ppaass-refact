@@ -18,7 +18,10 @@ use common::{
     WriteMessageServiceRequest,
 };
 
-use crate::config::DEFAULT_READ_AGENT_TIMEOUT_SECONDS;
+use crate::config::{
+    DEFAULT_CONNECT_TARGET_RETRY, DEFAULT_CONNECT_TARGET_TIMEOUT_SECONDS,
+    DEFAULT_READ_AGENT_TIMEOUT_SECONDS,
+};
 use crate::service::{
     ConnectToTargetService, ConnectToTargetServiceRequest, ConnectToTargetServiceResult,
 };
@@ -61,9 +64,15 @@ impl Service<TcpConnectServiceRequest> for TcpConnectService {
                 ));
             let mut write_proxy_message_service =
                 ServiceBuilder::new().service(WriteMessageService::default());
-            let mut connect_to_target_service = ServiceBuilder::new().service(
-                ConnectToTargetService::new(SERVER_CONFIG.target_connection_retry().unwrap_or(3)),
-            );
+            let mut connect_to_target_service =
+                ServiceBuilder::new().service(ConnectToTargetService::new(
+                    SERVER_CONFIG
+                        .target_connection_retry()
+                        .unwrap_or(DEFAULT_CONNECT_TARGET_RETRY),
+                    SERVER_CONFIG
+                        .connect_target_timeout_seconds()
+                        .unwrap_or(DEFAULT_CONNECT_TARGET_TIMEOUT_SECONDS),
+                ));
             let mut payload_encryption_type_select_service =
                 ServiceBuilder::new().service(PayloadEncryptionTypeSelectService);
             let read_agent_message_result = ready_and_call_service(

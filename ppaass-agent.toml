@@ -18,3 +18,4 @@ concurrent_connection_number = 65536
 rate_limit = 65536
 read_proxy_timeout_seconds = 600
 read_client_timeout_seconds = 600
+connect_proxy_timeout_seconds = 20

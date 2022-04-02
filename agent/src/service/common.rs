@@ -1,10 +1,12 @@
 use std::io::ErrorKind;
 use std::net::SocketAddr;
 use std::task::{Context, Poll};
+use std::time::Duration;
 
 use futures_util::future;
 use futures_util::future::BoxFuture;
 use tokio::net::TcpStream;
+use tokio::time::sleep;
 use tower::retry::{Policy, Retry};
 use tower::util::BoxCloneService;
 use tower::{service_fn, Service, ServiceBuilder};
@@ -22,6 +24,7 @@ pub const DEFAULT_BUFFER_SIZE: usize = 1024 * 64;
 pub const DEFAULT_MAX_FRAME_SIZE: usize = DEFAULT_BUFFER_SIZE * 2;
 pub const DEFAULT_RETRY_TIMES: u16 = 3;
 pub const DEFAULT_READ_PROXY_TIMEOUT_SECONDS: u64 = 20;
+pub const DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS: u64 = 20;
 pub const DEFAULT_READ_CLIENT_TIMEOUT_SECONDS: u64 = 20;
 #[derive(Debug)]
 pub(crate) struct ClientConnectionInfo {
@@ -126,17 +129,29 @@ pub(crate) struct ConnectToProxyService {
 }
 
 impl ConnectToProxyService {
-    pub(crate) fn new(retry: u16) -> Self {
+    pub(crate) fn new(retry: u16, connect_timeout_seconds: u64) -> Self {
         let concrete_service = Retry::new(
             ConnectToProxyAttempts { retry },
-            service_fn(|request: ConcreteConnectToProxyRequest| async move {
+            service_fn(move |request: ConcreteConnectToProxyRequest| async move {
                 debug!(
                     "Client {}, begin connect to proxy: {}",
                     request.client_address, request.proxy_address
                 );
-                let proxy_stream = TcpStream::connect(&request.proxy_address)
-                    .await
-                    .map_err(|e| CommonError::IoError { source: e })?;
+                let proxy_stream = tokio::select! {
+                    connect_result = TcpStream::connect(&request.proxy_address)=>{
+                        match connect_result{
+                            Err(e)=>{
+                                error!("Fail connect to proxy {} because of error: {:#?}",&request.proxy_address, e);
+                                return Err(CommonError::IoError { source: e })
+                            }
+                            Ok(v)=>v
+                        }
+                    }
+                    _=sleep(Duration::from_secs(connect_timeout_seconds))=>{
+                        error!("The connect to proxy timeout in {} seconds.", connect_timeout_seconds);
+                        return Err(CommonError::TimeoutError)
+                    }
+                };
                 proxy_stream
                     .set_nodelay(true)
                     .map_err(|e| CommonError::IoError { source: e })?;

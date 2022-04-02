@@ -22,6 +22,8 @@ lazy_static! {
 }
 
 pub const DEFAULT_READ_AGENT_TIMEOUT_SECONDS: u64 = 20;
+pub const DEFAULT_CONNECT_TARGET_RETRY: u16 = 2;
+pub const DEFAULT_CONNECT_TARGET_TIMEOUT_SECONDS: u64 = 20;
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct Config {
@@ -42,6 +44,7 @@ pub(crate) struct Config {
     rate_limit: Option<u64>,
     read_agent_timeout_seconds: Option<u64>,
     read_target_timeout_seconds: Option<u64>,
+    connect_target_timeout_seconds: Option<u64>,
 }
 
 impl Config {
@@ -106,5 +109,8 @@ impl Config {
     }
     pub fn read_target_timeout_seconds(&self) -> Option<u64> {
         self.read_target_timeout_seconds
+    }
+    pub fn connect_target_timeout_seconds(&self) -> Option<u64> {
+        self.connect_target_timeout_seconds
     }
 }

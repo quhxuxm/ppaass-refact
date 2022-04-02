@@ -26,7 +26,8 @@ use crate::command::socks5::{
 };
 use crate::service::common::{
     generate_prepare_message_framed_service, ConnectToProxyService, ConnectToProxyServiceRequest,
-    DEFAULT_BUFFER_SIZE, DEFAULT_READ_PROXY_TIMEOUT_SECONDS, DEFAULT_RETRY_TIMES,
+    DEFAULT_BUFFER_SIZE, DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS, DEFAULT_READ_PROXY_TIMEOUT_SECONDS,
+    DEFAULT_RETRY_TIMES,
 };
 use crate::SERVER_CONFIG;
 
@@ -115,6 +116,9 @@ impl Service<Socks5ConnectCommandServiceRequest> for Socks5ConnectCommandService
                     SERVER_CONFIG
                         .proxy_connection_retry()
                         .unwrap_or(DEFAULT_RETRY_TIMES),
+                    SERVER_CONFIG
+                        .connect_proxy_timeout_seconds()
+                        .unwrap_or(DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS),
                 ));
             let mut payload_encryption_type_select_service =
                 ServiceBuilder::new().service(PayloadEncryptionTypeSelectService);

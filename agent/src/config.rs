@@ -40,6 +40,7 @@ pub(crate) struct Config {
     rate_limit: Option<u64>,
     read_proxy_timeout_seconds: Option<u64>,
     read_client_timeout_seconds: Option<u64>,
+    connect_proxy_timeout_seconds: Option<u64>,
 }
 
 impl Config {
@@ -99,5 +100,8 @@ impl Config {
     }
     pub fn read_client_timeout_seconds(&self) -> Option<u64> {
         self.read_client_timeout_seconds
+    }
+    pub fn connect_proxy_timeout_seconds(&self) -> Option<u64> {
+        self.connect_proxy_timeout_seconds
     }
 }
