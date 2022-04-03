@@ -1,20 +1,20 @@
 [package]
+edition = "2021"
 name = "common"
 version = "0.1.0"
-edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dependencies]
-thiserror = "1.0.30"
-bytes = "1.1.0"
-rsa = "0.5.0"
-rand = "0.8.5"
-rust-crypto = "0.2.36"
-uuid = { version = "0.8.2", features = ["v4"] }
-tokio-util = { version = "0.7.0", features = ["codec"] }
-futures-util = { version = "0.3.21", features = ["sink"] }
-lz4 = "1.23.2"
-tracing = "0.1.31"
-tokio = { version = "1.17.0", features = ["full"] }
 async-trait = "0.1.52"
-tower = { version = "0.4.12", features = ["full"] }
+bytes = "1.1.0"
+futures-util = {version = "0.3.21", features = ["sink"]}
+lz4 = "1.23.2"
+rand = "0.8.5"
+rsa = "0.5.0"
+rust-crypto = "0.2.36"
+thiserror = "1.0.30"
+tokio = {version = "1.17.0", features = ["full"]}
+tokio-util = {version = "0.7.0", features = ["codec"]}
+tower = {version = "0.4.12", features = ["full"]}
+tracing = "0.1.31"
+uuid = {version = "0.8.2", features = ["v4"]}
