@@ -3,24 +3,19 @@ use std::task::{Context, Poll};
 
 use futures_util::future::BoxFuture;
 use tokio::net::TcpStream;
-use tokio_util::codec::Framed;
+
 use tower::Service;
 use tower::ServiceBuilder;
 
 use common::{ready_and_call_service, CommonError};
 
+use crate::service::socks5::auth::{Socks5AuthCommandService, Socks5AuthenticateFlowRequest};
 use crate::service::socks5::init::{Socks5InitCommandService, Socks5InitCommandServiceRequest};
 use crate::service::socks5::relay::{Socks5RelayService, Socks5RelayServiceRequest};
-use crate::{
-    codec::socks5::Socks5InitCodec,
-    service::socks5::auth::{Socks5AuthCommandService, Socks5AuthenticateFlowRequest},
-};
 
 mod auth;
 mod init;
 mod relay;
-
-pub(crate) type Socks5Framed<'a> = Framed<&'a mut TcpStream, Socks5InitCodec>;
 
 pub(crate) struct Socks5FlowRequest {
     pub client_stream: TcpStream,
