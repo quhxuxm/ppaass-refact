@@ -26,6 +26,9 @@ pub const DEFAULT_RETRY_TIMES: u16 = 3;
 pub const DEFAULT_READ_PROXY_TIMEOUT_SECONDS: u64 = 20;
 pub const DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS: u64 = 20;
 pub const DEFAULT_READ_CLIENT_TIMEOUT_SECONDS: u64 = 20;
+pub const DEFAULT_RATE_LIMIT: u64 = 1024;
+pub const DEFAULT_CONCURRENCY_LIMIT: usize = 1024;
+pub const DEFAULT_BUFFERED_CONNECTION_NUMBER: usize = 1024;
 #[derive(Debug)]
 pub(crate) struct ClientConnectionInfo {
     pub client_stream: TcpStream,

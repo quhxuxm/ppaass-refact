@@ -25,6 +25,9 @@ mod tcp;
 mod udp;
 const DEFAULT_BUFFER_SIZE: usize = 1024 * 64;
 const DEFAULT_MAX_FRAME_SIZE: usize = DEFAULT_BUFFER_SIZE * 2;
+pub const DEFAULT_BUFFERED_CONNECTION_NUMBER: usize = 1024;
+pub const DEFAULT_RATE_LIMIT: u64 = 1024;
+pub const DEFAULT_CONCURRENCY_LIMIT: usize = 1024;
 #[derive(Debug)]
 pub(crate) struct AgentConnectionInfo {
     pub agent_stream: TcpStream,

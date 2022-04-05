@@ -8,8 +8,11 @@ use tracing::{error, info};
 
 use common::ready_and_call_service;
 
-use crate::config::SERVER_CONFIG;
-use crate::service::{AgentConnectionInfo, HandleAgentConnectionService};
+use crate::service::{AgentConnectionInfo, HandleAgentConnectionService, DEFAULT_RATE_LIMIT};
+use crate::{
+    config::SERVER_CONFIG,
+    service::{DEFAULT_BUFFERED_CONNECTION_NUMBER, DEFAULT_CONCURRENCY_LIMIT},
+};
 
 const DEFAULT_SERVER_PORT: u16 = 80;
 
@@ -101,13 +104,13 @@ impl ProxyServer {
                 }
                 tokio::spawn(async move {
                     let mut handle_agent_connection_service = ServiceBuilder::new()
-                        // .buffer(SERVER_CONFIG.buffered_connection_number().unwrap_or(1024))
+                        .buffer(SERVER_CONFIG.buffered_connection_number().unwrap_or(DEFAULT_BUFFERED_CONNECTION_NUMBER))
                         .concurrency_limit(
-                            SERVER_CONFIG.concurrent_connection_number().unwrap_or(1024),
+                            SERVER_CONFIG.concurrent_connection_number().unwrap_or(DEFAULT_CONCURRENCY_LIMIT),
                         )
                         .rate_limit(
-                            SERVER_CONFIG.rate_limit().unwrap_or(1024),
-                            Duration::from_secs(1),
+                            SERVER_CONFIG.rate_limit().unwrap_or(DEFAULT_RATE_LIMIT),
+                            Duration::from_secs(60),
                         )
                         .service::<HandleAgentConnectionService>(Default::default());
                     if let Err(e) = ready_and_call_service(

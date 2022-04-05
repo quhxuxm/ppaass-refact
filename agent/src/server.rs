@@ -8,8 +8,13 @@ use tracing::{error, info};
 
 use common::ready_and_call_service;
 
-use crate::config::SERVER_CONFIG;
-use crate::service::common::{ClientConnectionInfo, HandleClientConnectionService};
+use crate::service::common::{
+    ClientConnectionInfo, HandleClientConnectionService, DEFAULT_BUFFERED_CONNECTION_NUMBER,
+};
+use crate::{
+    config::SERVER_CONFIG,
+    service::common::{DEFAULT_CONCURRENCY_LIMIT, DEFAULT_RATE_LIMIT},
+};
 
 const DEFAULT_SERVER_PORT: u16 = 10080;
 
@@ -101,13 +106,13 @@ impl AgentServer {
                 }
                 tokio::spawn(async move {
                     let mut handle_client_connection_service = ServiceBuilder::new()
-                        // .buffer(SERVER_CONFIG.buffered_connection_number().unwrap_or(1024))
+                        .buffer(SERVER_CONFIG.buffered_connection_number().unwrap_or(DEFAULT_BUFFERED_CONNECTION_NUMBER))
                         .concurrency_limit(
-                            SERVER_CONFIG.concurrent_connection_number().unwrap_or(1024),
+                            SERVER_CONFIG.concurrent_connection_number().unwrap_or(DEFAULT_CONCURRENCY_LIMIT),
                         )
                         .rate_limit(
-                            SERVER_CONFIG.rate_limit().unwrap_or(1024),
-                            Duration::from_secs(1),
+                            SERVER_CONFIG.rate_limit().unwrap_or(DEFAULT_RATE_LIMIT),
+                            Duration::from_secs(60),
                         )
                         .service::<HandleClientConnectionService>(Default::default());
                     if let Err(e) = ready_and_call_service(
