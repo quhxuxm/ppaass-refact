@@ -98,6 +98,7 @@ impl Service<Socks5InitCommandServiceRequest> for Socks5InitCommandService {
                     .await
                     {
                         Err(e) => {
+                            error!("Fail to handle socks5 init command (CONNECT) because of error: {:#?}", e);
                             send_socks5_init_failure(&mut socks5_init_framed).await?;
                             Err(e)
                         }
