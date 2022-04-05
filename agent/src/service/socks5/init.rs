@@ -31,13 +31,15 @@ use crate::service::common::{
 };
 use crate::SERVER_CONFIG;
 
+use super::Socks5Framed;
+
 #[derive(Debug)]
-pub(crate) struct Socks5ConnectCommandServiceRequest {
+pub(crate) struct Socks5InitCommandServiceRequest {
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,
 }
 
-pub(crate) struct Socks5ConnectCommandServiceResult {
+pub(crate) struct Socks5InitCommandServiceResult {
     pub client_stream: TcpStream,
     pub message_framed_read: MessageFramedRead,
     pub message_framed_write: MessageFramedWrite,
@@ -49,11 +51,11 @@ pub(crate) struct Socks5ConnectCommandServiceResult {
 }
 
 #[derive(Clone, Debug, Default)]
-pub(crate) struct Socks5ConnectCommandService;
+pub(crate) struct Socks5InitCommandService;
 
-impl Socks5ConnectCommandService {
+impl Socks5InitCommandService {
     async fn send_socks5_failure(
-        socks5_client_framed: &mut Framed<&mut TcpStream, Socks5ConnectCodec>,
+        socks5_client_framed: &mut Socks5Framed<'_>,
     ) -> Result<Option<Socks5ConnectCommand>, CommonError> {
         let connect_result =
             Socks5ConnectCommandResult::new(Socks5ConnectCommandResultStatus::Failure, None);
@@ -77,7 +79,7 @@ impl Socks5ConnectCommandService {
     async fn call_service<'a, S, T, U>(
         service: &'a mut S,
         request: T,
-        socks5_client_framed: &mut Framed<&'a mut TcpStream, Socks5ConnectCodec>,
+        socks5_client_framed: &mut Socks5Framed<'a>,
     ) -> Result<U, CommonError>
     where
         S: Service<T, Response = U, Error = CommonError>,
@@ -92,8 +94,8 @@ impl Socks5ConnectCommandService {
     }
 }
 
-impl Service<Socks5ConnectCommandServiceRequest> for Socks5ConnectCommandService {
-    type Response = Socks5ConnectCommandServiceResult;
+impl Service<Socks5InitCommandServiceRequest> for Socks5InitCommandService {
+    type Response = Socks5InitCommandServiceResult;
     type Error = CommonError;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
@@ -101,7 +103,7 @@ impl Service<Socks5ConnectCommandServiceRequest> for Socks5ConnectCommandService
         Poll::Ready(Ok(()))
     }
 
-    fn call(&mut self, mut request: Socks5ConnectCommandServiceRequest) -> Self::Future {
+    fn call(&mut self, mut request: Socks5InitCommandServiceRequest) -> Self::Future {
         Box::pin(async move {
             let mut write_agent_message_service =
                 ServiceBuilder::new().service(WriteMessageService::default());
@@ -223,7 +225,7 @@ impl Service<Socks5ConnectCommandServiceRequest> for Socks5ConnectCommandService
                 );
                 socks5_client_framed.send(connect_result).await?;
                 socks5_client_framed.flush().await?;
-                return Ok(Socks5ConnectCommandServiceResult {
+                return Ok(Socks5InitCommandServiceResult {
                     client_stream: request.client_stream,
                     client_address: request.client_address,
                     message_framed_read,
