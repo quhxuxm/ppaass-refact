@@ -13,10 +13,10 @@ use crate::service::socks5::init::{Socks5InitCommandService, Socks5InitCommandSe
 use crate::service::socks5::relay::{Socks5RelayService, Socks5RelayServiceRequest};
 use crate::{
     codec::socks5::Socks5InitCodec,
-    service::socks5::authenticate::{Socks5AuthCommandService, Socks5AuthenticateFlowRequest},
+    service::socks5::auth::{Socks5AuthCommandService, Socks5AuthenticateFlowRequest},
 };
 
-mod authenticate;
+mod auth;
 mod init;
 mod relay;
 
