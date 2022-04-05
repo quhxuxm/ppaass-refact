@@ -32,6 +32,10 @@ use crate::service::common::{
 use crate::SERVER_CONFIG;
 
 use super::Socks5Framed;
+mod tcp_connect;
+mod udp_associate;
+use tcp_connect::Socks5TcpConnectService;
+use udp_associate::Socks5UdpAssociateService;
 
 #[derive(Debug)]
 pub(crate) struct Socks5InitCommandServiceRequest {
