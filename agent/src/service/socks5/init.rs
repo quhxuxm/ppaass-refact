@@ -19,10 +19,10 @@ use common::{
     WriteMessageServiceRequest,
 };
 
-use crate::codec::socks5::Socks5ConnectCodec;
+use crate::codec::socks5::Socks5InitCodec;
 use crate::command::socks5::{
-    Socks5ConnectCommand, Socks5ConnectCommandResult, Socks5ConnectCommandResultStatus,
-    Socks5ConnectCommandType,
+    Socks5InitCommand, Socks5InitCommandResult, Socks5InitCommandResultStatus,
+    Socks5InitCommandType,
 };
 use crate::service::common::{
     generate_prepare_message_framed_service, ConnectToProxyService, ConnectToProxyServiceRequest,
@@ -56,9 +56,9 @@ pub(crate) struct Socks5InitCommandService;
 impl Socks5InitCommandService {
     async fn send_socks5_failure(
         socks5_client_framed: &mut Socks5Framed<'_>,
-    ) -> Result<Option<Socks5ConnectCommand>, CommonError> {
+    ) -> Result<Option<Socks5InitCommand>, CommonError> {
         let connect_result =
-            Socks5ConnectCommandResult::new(Socks5ConnectCommandResultStatus::Failure, None);
+            Socks5InitCommandResult::new(Socks5InitCommandResultStatus::Failure, None);
         if let Err(e) = socks5_client_framed.send(connect_result).await {
             error!(
                 "Fail to write socks5 connect fail result to client because of error: {:#?}",
@@ -127,7 +127,7 @@ impl Service<Socks5InitCommandServiceRequest> for Socks5InitCommandService {
             let mut prepare_message_framed_service = generate_prepare_message_framed_service();
             let mut socks5_client_framed = Framed::with_capacity(
                 &mut request.client_stream,
-                Socks5ConnectCodec,
+                Socks5InitCodec,
                 SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
             );
             let connect_command = match socks5_client_framed.next().await {
@@ -142,7 +142,7 @@ impl Service<Socks5InitCommandServiceRequest> for Socks5InitCommandService {
                 request.client_address, connect_command
             );
             let connect_to_proxy_service_result = match connect_command.request_type {
-                Socks5ConnectCommandType::Connect => {
+                Socks5InitCommandType::Connect => {
                     Self::call_service(
                         &mut connect_to_proxy_service,
                         ConnectToProxyServiceRequest {
@@ -153,10 +153,10 @@ impl Service<Socks5InitCommandServiceRequest> for Socks5InitCommandService {
                     )
                     .await?
                 }
-                Socks5ConnectCommandType::Bind => {
+                Socks5InitCommandType::Bind => {
                     todo!()
                 }
-                Socks5ConnectCommandType::UdpAssociate => {
+                Socks5InitCommandType::UdpAssociate => {
                     todo!()
                 }
             };
@@ -219,8 +219,8 @@ impl Service<Socks5InitCommandServiceRequest> for Socks5InitCommandService {
             } = read_proxy_message_result
             {
                 //Response for socks5 connect command
-                let connect_result = Socks5ConnectCommandResult::new(
-                    Socks5ConnectCommandResultStatus::Succeeded,
+                let connect_result = Socks5InitCommandResult::new(
+                    Socks5InitCommandResultStatus::Succeeded,
                     Some(connect_command.dest_address),
                 );
                 socks5_client_framed.send(connect_result).await?;

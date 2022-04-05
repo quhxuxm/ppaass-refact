@@ -5,8 +5,8 @@ use tracing::error;
 use common::CommonError;
 
 use crate::command::socks5::{
-    Socks5Addr, Socks5AuthCommand, Socks5AuthCommandResult, Socks5AuthMethod, Socks5ConnectCommand,
-    Socks5ConnectCommandResult, Socks5ConnectCommandType,
+    Socks5Addr, Socks5AuthCommand, Socks5AuthCommandResult, Socks5AuthMethod, Socks5InitCommand,
+    Socks5InitCommandResult, Socks5InitCommandType,
 };
 
 pub(crate) struct Socks5AuthCodec;
@@ -46,10 +46,10 @@ impl Encoder<Socks5AuthCommandResult> for Socks5AuthCodec {
     }
 }
 
-pub(crate) struct Socks5ConnectCodec;
+pub(crate) struct Socks5InitCodec;
 
-impl Decoder for Socks5ConnectCodec {
-    type Item = Socks5ConnectCommand;
+impl Decoder for Socks5InitCodec {
+    type Item = Socks5InitCommand;
     type Error = CommonError;
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
@@ -60,7 +60,7 @@ impl Decoder for Socks5ConnectCodec {
         if version != 5 {
             return Err(CommonError::CodecError);
         }
-        let request_type: Socks5ConnectCommandType = match src.get_u8().try_into() {
+        let request_type: Socks5InitCommandType = match src.get_u8().try_into() {
             Err(e) => {
                 error!(
                     "Fail to parse socks5 connect request type because of error: {:#?}",
@@ -81,16 +81,16 @@ impl Decoder for Socks5ConnectCodec {
             }
             Ok(v) => v,
         };
-        Ok(Some(Socks5ConnectCommand::new(request_type, dest_address)))
+        Ok(Some(Socks5InitCommand::new(request_type, dest_address)))
     }
 }
 
-impl Encoder<Socks5ConnectCommandResult> for Socks5ConnectCodec {
+impl Encoder<Socks5InitCommandResult> for Socks5InitCodec {
     type Error = CommonError;
 
     fn encode(
         &mut self,
-        item: Socks5ConnectCommandResult,
+        item: Socks5InitCommandResult,
         dst: &mut BytesMut,
     ) -> Result<(), Self::Error> {
         dst.put_u8(item.version);

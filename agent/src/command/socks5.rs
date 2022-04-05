@@ -45,19 +45,19 @@ impl From<Socks5AuthMethod> for u8 {
 }
 
 #[derive(Debug)]
-pub(crate) enum Socks5ConnectCommandType {
+pub(crate) enum Socks5InitCommandType {
     Connect,
     Bind,
     UdpAssociate,
 }
 
-impl TryFrom<u8> for Socks5ConnectCommandType {
+impl TryFrom<u8> for Socks5InitCommandType {
     type Error = CommonError;
     fn try_from(v: u8) -> Result<Self, CommonError> {
         match v {
-            1 => Ok(Socks5ConnectCommandType::Connect),
-            2 => Ok(Socks5ConnectCommandType::Bind),
-            3 => Ok(Socks5ConnectCommandType::UdpAssociate),
+            1 => Ok(Socks5InitCommandType::Connect),
+            2 => Ok(Socks5InitCommandType::Bind),
+            3 => Ok(Socks5InitCommandType::UdpAssociate),
             unknown_type => {
                 error!(
                     "Fail to decode socks 5 connect request type: {}",
@@ -70,7 +70,7 @@ impl TryFrom<u8> for Socks5ConnectCommandType {
 }
 
 #[derive(Debug)]
-pub(crate) enum Socks5ConnectCommandResultStatus {
+pub(crate) enum Socks5InitCommandResultStatus {
     Succeeded,
     Failure,
     ConnectionNotAllowedByRuleSet,
@@ -83,43 +83,43 @@ pub(crate) enum Socks5ConnectCommandResultStatus {
     Unassigned,
 }
 
-impl From<u8> for Socks5ConnectCommandResultStatus {
+impl From<u8> for Socks5InitCommandResultStatus {
     fn from(v: u8) -> Self {
         match v {
-            0 => Socks5ConnectCommandResultStatus::Succeeded,
-            1 => Socks5ConnectCommandResultStatus::Failure,
-            2 => Socks5ConnectCommandResultStatus::ConnectionNotAllowedByRuleSet,
-            3 => Socks5ConnectCommandResultStatus::NetworkUnReachable,
-            4 => Socks5ConnectCommandResultStatus::HostUnReachable,
-            5 => Socks5ConnectCommandResultStatus::ConnectionRefused,
-            6 => Socks5ConnectCommandResultStatus::TtlExpired,
-            7 => Socks5ConnectCommandResultStatus::CommandNotSupported,
-            8 => Socks5ConnectCommandResultStatus::AddressTypeNotSupported,
-            9 => Socks5ConnectCommandResultStatus::Unassigned,
+            0 => Socks5InitCommandResultStatus::Succeeded,
+            1 => Socks5InitCommandResultStatus::Failure,
+            2 => Socks5InitCommandResultStatus::ConnectionNotAllowedByRuleSet,
+            3 => Socks5InitCommandResultStatus::NetworkUnReachable,
+            4 => Socks5InitCommandResultStatus::HostUnReachable,
+            5 => Socks5InitCommandResultStatus::ConnectionRefused,
+            6 => Socks5InitCommandResultStatus::TtlExpired,
+            7 => Socks5InitCommandResultStatus::CommandNotSupported,
+            8 => Socks5InitCommandResultStatus::AddressTypeNotSupported,
+            9 => Socks5InitCommandResultStatus::Unassigned,
             unknown_status => {
                 error!(
                     "Fail to decode socks 5 connect response status: {}",
                     unknown_status
                 );
-                Socks5ConnectCommandResultStatus::Failure
+                Socks5InitCommandResultStatus::Failure
             }
         }
     }
 }
 
-impl From<Socks5ConnectCommandResultStatus> for u8 {
-    fn from(value: Socks5ConnectCommandResultStatus) -> Self {
+impl From<Socks5InitCommandResultStatus> for u8 {
+    fn from(value: Socks5InitCommandResultStatus) -> Self {
         match value {
-            Socks5ConnectCommandResultStatus::Succeeded => 0,
-            Socks5ConnectCommandResultStatus::Failure => 1,
-            Socks5ConnectCommandResultStatus::ConnectionNotAllowedByRuleSet => 2,
-            Socks5ConnectCommandResultStatus::NetworkUnReachable => 3,
-            Socks5ConnectCommandResultStatus::HostUnReachable => 4,
-            Socks5ConnectCommandResultStatus::ConnectionRefused => 5,
-            Socks5ConnectCommandResultStatus::TtlExpired => 6,
-            Socks5ConnectCommandResultStatus::CommandNotSupported => 7,
-            Socks5ConnectCommandResultStatus::AddressTypeNotSupported => 8,
-            Socks5ConnectCommandResultStatus::Unassigned => 9,
+            Socks5InitCommandResultStatus::Succeeded => 0,
+            Socks5InitCommandResultStatus::Failure => 1,
+            Socks5InitCommandResultStatus::ConnectionNotAllowedByRuleSet => 2,
+            Socks5InitCommandResultStatus::NetworkUnReachable => 3,
+            Socks5InitCommandResultStatus::HostUnReachable => 4,
+            Socks5InitCommandResultStatus::ConnectionRefused => 5,
+            Socks5InitCommandResultStatus::TtlExpired => 6,
+            Socks5InitCommandResultStatus::CommandNotSupported => 7,
+            Socks5InitCommandResultStatus::AddressTypeNotSupported => 8,
+            Socks5InitCommandResultStatus::Unassigned => 9,
         }
     }
 }
@@ -310,15 +310,15 @@ impl Socks5AuthCommandResult {
 }
 
 #[derive(Debug)]
-pub(crate) struct Socks5ConnectCommand {
+pub(crate) struct Socks5InitCommand {
     pub version: u8,
-    pub request_type: Socks5ConnectCommandType,
+    pub request_type: Socks5InitCommandType,
     pub dest_address: Socks5Addr,
 }
 
-impl Socks5ConnectCommand {
-    pub fn new(request_type: Socks5ConnectCommandType, dest_address: Socks5Addr) -> Self {
-        Socks5ConnectCommand {
+impl Socks5InitCommand {
+    pub fn new(request_type: Socks5InitCommandType, dest_address: Socks5Addr) -> Self {
+        Socks5InitCommand {
             version: 5,
             request_type,
             dest_address,
@@ -327,15 +327,15 @@ impl Socks5ConnectCommand {
 }
 
 #[derive(Debug)]
-pub(crate) struct Socks5ConnectCommandResult {
+pub(crate) struct Socks5InitCommandResult {
     pub version: u8,
-    pub status: Socks5ConnectCommandResultStatus,
+    pub status: Socks5InitCommandResultStatus,
     pub bind_address: Option<Socks5Addr>,
 }
 
-impl Socks5ConnectCommandResult {
-    pub fn new(status: Socks5ConnectCommandResultStatus, bind_address: Option<Socks5Addr>) -> Self {
-        Socks5ConnectCommandResult {
+impl Socks5InitCommandResult {
+    pub fn new(status: Socks5InitCommandResultStatus, bind_address: Option<Socks5Addr>) -> Self {
+        Socks5InitCommandResult {
             version: 5,
             status,
             bind_address,
