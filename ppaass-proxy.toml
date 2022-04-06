@@ -1,5 +1,5 @@
 buffer_size = 1310720
-buffered_connection_number = 1204
+buffered_connection_number = 4096
 concurrent_connection_number = 65536
 connect_target_timeout_seconds = 20
 log_dir = "./log"
