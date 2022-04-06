@@ -14,7 +14,7 @@ rsa = "0.5.0"
 rust-crypto = "0.2.36"
 thiserror = "1.0.30"
 tokio = {version = "1.17.0", features = ["full"]}
-tokio-util = {version = "0.7.0", features = ["codec"]}
+tokio-util = {version = "0.7.1", features = ["codec"]}
 tower = {version = "0.4.12", features = ["full"]}
 tracing = "0.1.31"
 uuid = {version = "0.8.2", features = ["v4"]}

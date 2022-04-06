@@ -31,7 +31,7 @@ serde = "1.0.136"
 serde_derive = "1.0.136"
 tokio = {version = "1.17.0", features = ["full"]}
 tokio-macros = "1.7.0"
-tokio-util = {version = "0.7.0", features = ["codec"]}
+tokio-util = {version = "0.7.1", features = ["codec"]}
 toml = "0.5.8"
 tower = {version = "0.4.12", features = ["full"]}
 tracing = "0.1.32"
