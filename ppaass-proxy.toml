@@ -11,7 +11,6 @@ port = 80
 #port = 9999
 rate_limit = 65536
 read_agent_timeout_seconds = 600
-read_client_timeout_seconds = 600
 read_target_timeout_seconds = 600
 target_connect_timeout = 20
 target_connection_retry = 2
