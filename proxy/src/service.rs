@@ -12,7 +12,7 @@ use tower::{
     ServiceBuilder,
 };
 use tower::{service_fn, Service};
-use tracing::{debug, error, info};
+use tracing::{debug, error};
 
 use common::{ready_and_call_service, CommonError, PrepareMessageFramedService};
 
@@ -94,7 +94,7 @@ impl Service<AgentConnectionInfo> for HandleAgentConnectionService {
                     error!("Error happen when relay agent connection, error: {:#?}", e);
                 }
                 Ok(r) => {
-                    info!("Relay process started for agent: {:#?}", r.agent_address);
+                    debug!("Relay process started for agent: {:#?}", r.agent_address);
                 }
             }
             Ok(())
