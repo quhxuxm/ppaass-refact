@@ -11,10 +11,13 @@ futures-util = {version = "0.3.21", features = ["sink"]}
 lz4 = "1.23.2"
 rand = "0.8.5"
 rsa = "0.5.0"
+chrono = "0.4.19"
 rust-crypto = "0.2.36"
 thiserror = "1.0.30"
 tokio = {version = "1.17.0", features = ["full"]}
 tokio-util = {version = "0.7.1", features = ["codec"]}
 tower = {version = "0.4.12", features = ["full"]}
 tracing = "0.1.31"
+tracing-subscriber = "0.3.9"
+tracing-appender = "0.2.1"
 uuid = {version = "0.8.2", features = ["v4"]}

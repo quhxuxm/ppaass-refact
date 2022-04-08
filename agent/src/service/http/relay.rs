@@ -4,7 +4,6 @@ use std::time::Duration;
 
 use bytes::{BufMut, BytesMut};
 use futures_util::future::BoxFuture;
-use futures_util::SinkExt;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tower::Service;
@@ -12,18 +11,18 @@ use tower::ServiceBuilder;
 use tracing::{debug, error};
 
 use common::{
-    generate_uuid, ready_and_call_service, AgentMessagePayloadTypeValue, CommonError,
-    MessageFramedRead, MessageFramedWrite, MessagePayload, NetAddress,
-    PayloadEncryptionTypeSelectService, PayloadEncryptionTypeSelectServiceRequest,
-    PayloadEncryptionTypeSelectServiceResult, PayloadType, ProxyMessagePayloadTypeValue,
-    ReadMessageService, ReadMessageServiceRequest, ReadMessageServiceResult, WriteMessageService,
+    AgentMessagePayloadTypeValue, CommonError, generate_uuid, MessageFramedRead,
+    MessageFramedWrite, MessagePayload, NetAddress, PayloadEncryptionTypeSelectService,
+    PayloadEncryptionTypeSelectServiceRequest, PayloadEncryptionTypeSelectServiceResult,
+    PayloadType, ProxyMessagePayloadTypeValue, ReadMessageService,
+    ReadMessageServiceRequest, ReadMessageServiceResult, ready_and_call_service, WriteMessageService,
     WriteMessageServiceRequest,
 };
 
+use crate::SERVER_CONFIG;
 use crate::service::common::{
     DEFAULT_BUFFER_SIZE, DEFAULT_READ_CLIENT_TIMEOUT_SECONDS, DEFAULT_READ_PROXY_TIMEOUT_SECONDS,
 };
-use crate::SERVER_CONFIG;
 
 pub(crate) struct HttpRelayServiceRequest {
     pub client_stream: TcpStream,
@@ -83,7 +82,7 @@ impl Service<HttpRelayServiceRequest> for HttpRelayService {
                             user_token: SERVER_CONFIG.user_token().clone().unwrap(),
                         },
                     )
-                    .await
+                        .await
                     {
                         Err(e) => {
                             error!(
@@ -109,7 +108,7 @@ impl Service<HttpRelayServiceRequest> for HttpRelayService {
                             )),
                         },
                     )
-                    .await;
+                        .await;
                     let _write_agent_message_result = match write_agent_message_result {
                         Err(e) => {
                             error!(
@@ -162,7 +161,7 @@ impl Service<HttpRelayServiceRequest> for HttpRelayService {
                             user_token: SERVER_CONFIG.user_token().clone().unwrap(),
                         },
                     )
-                    .await
+                        .await
                     {
                         Err(e) => {
                             error!(
@@ -188,7 +187,7 @@ impl Service<HttpRelayServiceRequest> for HttpRelayService {
                             )),
                         },
                     )
-                    .await;
+                        .await;
                     let write_agent_message_result = match write_agent_message_result {
                         Err(e) => {
                             error!(
@@ -210,14 +209,14 @@ impl Service<HttpRelayServiceRequest> for HttpRelayService {
                             message_framed_read,
                         },
                     )
-                    .await;
+                        .await;
                     let ReadMessageServiceResult {
                         message_framed_read: message_framed_read_in_result,
                         message_payload:
-                            MessagePayload {
-                                data: proxy_raw_data,
-                                ..
-                            },
+                        MessagePayload {
+                            data: proxy_raw_data,
+                            ..
+                        },
                         ..
                     } = match read_proxy_message_result {
                         Err(e) => {
@@ -227,13 +226,13 @@ impl Service<HttpRelayServiceRequest> for HttpRelayService {
                         Ok(Some(
                             value @ ReadMessageServiceResult {
                                 message_payload:
-                                    MessagePayload {
-                                        payload_type:
-                                            PayloadType::ProxyPayload(
-                                                ProxyMessagePayloadTypeValue::TcpData,
-                                            ),
-                                        ..
-                                    },
+                                MessagePayload {
+                                    payload_type:
+                                    PayloadType::ProxyPayload(
+                                        ProxyMessagePayloadTypeValue::TcpData,
+                                    ),
+                                    ..
+                                },
                                 ..
                             },
                         )) => value,
