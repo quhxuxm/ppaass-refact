@@ -125,10 +125,12 @@ impl Service<WriteMessageServiceRequest> for WriteMessageService {
             let mut message_frame_write = req.message_framed_write;
             if let Err(e) = message_frame_write.send(message).await {
                 error!("Fail to write message because of error: {:#?}", e);
+                let _ = message_frame_write.close().await;
                 return Err(e);
             }
             if let Err(e) = message_frame_write.flush().await {
                 error!("Fail to flash message because of error: {:#?}", e);
+                let _ = message_frame_write.close().await;
                 return Err(e);
             }
             Ok(WriteMessageServiceResult {

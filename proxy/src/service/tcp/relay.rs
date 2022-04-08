@@ -134,7 +134,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                             "Fail to write from agent to target because of error: {:#?}",
                             e
                         );
-
+                        let _ = target_stream_write.shutdown().await;
                         return;
                     };
                     if let Err(e) = target_stream_write.flush().await {
@@ -142,6 +142,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                             "Fail to flush from agent to target because of error: {:#?}",
                             e
                         );
+                        let _ = target_stream_write.shutdown().await;
                         return;
                     };
                     message_framed_read = message_framed_read_from_read_agent_result;
