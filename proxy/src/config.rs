@@ -33,7 +33,6 @@ pub(crate) struct Config {
     thread_number: Option<usize>,
     max_blocking_threads: Option<usize>,
     thread_timeout: Option<u64>,
-    target_connect_timeout: Option<u64>,
     log_dir: Option<String>,
     log_file: Option<String>,
     compress: Option<bool>,
@@ -66,10 +65,6 @@ impl Config {
 
     pub fn thread_timeout(&self) -> Option<u64> {
         self.thread_timeout
-    }
-
-    pub fn target_connect_timeout(&self) -> Option<u64> {
-        self.target_connect_timeout
     }
 
     pub fn log_dir(&self) -> &Option<String> {
