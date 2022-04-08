@@ -3,7 +3,7 @@ use std::task::{Context, Poll};
 use std::time::Duration;
 
 use bytes::{BufMut, BytesMut};
-use futures_util::future::BoxFuture;
+use futures_util::{future::BoxFuture, SinkExt};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tower::Service;
@@ -247,6 +247,7 @@ impl Service<HttpRelayServiceRequest> for HttpRelayService {
                             "Fail to write proxy data from {:#?} to client because of error: {:#?}",
                             target_address_t2a, e
                         );
+                        let _ = client_stream_write_half.shutdown().await;
                         return;
                     };
                     if let Err(e) = client_stream_write_half.flush().await {
@@ -254,6 +255,7 @@ impl Service<HttpRelayServiceRequest> for HttpRelayService {
                             "Fail to flush proxy data from {:#?} to client because of error: {:#?}",
                             target_address_t2a, e
                         );
+                        let _ = client_stream_write_half.shutdown().await;
                         return;
                     };
                 }
