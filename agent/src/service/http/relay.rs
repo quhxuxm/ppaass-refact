@@ -3,7 +3,8 @@ use std::task::{Context, Poll};
 use std::time::Duration;
 
 use bytes::{BufMut, BytesMut};
-use futures_util::{future::BoxFuture, SinkExt};
+use futures_util::future::BoxFuture;
+use futures_util::SinkExt;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tower::Service;
