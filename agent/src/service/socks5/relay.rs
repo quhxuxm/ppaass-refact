@@ -11,18 +11,18 @@ use tower::ServiceBuilder;
 use tracing::{debug, error};
 
 use common::{
-    generate_uuid, ready_and_call_service, AgentMessagePayloadTypeValue, CommonError,
-    MessageFramedRead, MessageFramedWrite, MessagePayload, NetAddress,
-    PayloadEncryptionTypeSelectService, PayloadEncryptionTypeSelectServiceRequest,
-    PayloadEncryptionTypeSelectServiceResult, PayloadType, ProxyMessagePayloadTypeValue,
-    ReadMessageService, ReadMessageServiceRequest, ReadMessageServiceResult, WriteMessageService,
+    AgentMessagePayloadTypeValue, CommonError, generate_uuid, MessageFramedRead,
+    MessageFramedWrite, MessagePayload, NetAddress, PayloadEncryptionTypeSelectService,
+    PayloadEncryptionTypeSelectServiceRequest, PayloadEncryptionTypeSelectServiceResult,
+    PayloadType, ProxyMessagePayloadTypeValue, ReadMessageService,
+    ReadMessageServiceRequest, ReadMessageServiceResult, ready_and_call_service, WriteMessageService,
     WriteMessageServiceRequest,
 };
 
+use crate::SERVER_CONFIG;
 use crate::service::common::{
     DEFAULT_BUFFER_SIZE, DEFAULT_READ_CLIENT_TIMEOUT_SECONDS, DEFAULT_READ_PROXY_TIMEOUT_SECONDS,
 };
-use crate::SERVER_CONFIG;
 
 #[allow(unused)]
 pub(crate) struct Socks5RelayServiceRequest {
@@ -55,25 +55,19 @@ impl Service<Socks5RelayServiceRequest> for Socks5RelayService {
 
     fn call(&mut self, request: Socks5RelayServiceRequest) -> Self::Future {
         Box::pin(async move {
-            let mut write_agent_message_service =
-                ServiceBuilder::new().service(WriteMessageService::default());
-            let mut read_proxy_message_service =
-                ServiceBuilder::new().service(ReadMessageService::new(
-                    SERVER_CONFIG
-                        .read_proxy_timeout_seconds()
-                        .unwrap_or(DEFAULT_READ_PROXY_TIMEOUT_SECONDS),
-                ));
-            let mut payload_encryption_type_select_service =
-                ServiceBuilder::new().service(PayloadEncryptionTypeSelectService);
             let client_stream = request.client_stream;
             let mut message_framed_read = request.message_framed_read;
             let mut message_framed_write = request.message_framed_write;
-            let (mut client_stream_read_half, mut client_stream_write_half) =
-                client_stream.into_split();
             let source_address_a2t = request.source_address.clone();
             let target_address_a2t = request.target_address.clone();
             let target_address_t2a = request.target_address.clone();
+            let (mut client_stream_read_half, mut client_stream_write_half) =
+                client_stream.into_split();
             tokio::spawn(async move {
+                let mut payload_encryption_type_select_service =
+                    ServiceBuilder::new().service(PayloadEncryptionTypeSelectService);
+                let mut write_agent_message_service =
+                    ServiceBuilder::new().service(WriteMessageService::default());
                 loop {
                     let mut buf = BytesMut::with_capacity(
                         SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
@@ -105,7 +99,6 @@ impl Service<Socks5RelayServiceRequest> for Socks5RelayService {
                             return;
                         }
                     }
-
                     let PayloadEncryptionTypeSelectServiceResult {
                         payload_encryption_type,
                         ..
@@ -116,7 +109,7 @@ impl Service<Socks5RelayServiceRequest> for Socks5RelayService {
                             user_token: SERVER_CONFIG.user_token().clone().unwrap(),
                         },
                     )
-                    .await
+                        .await
                     {
                         Err(e) => {
                             error!(
@@ -127,7 +120,6 @@ impl Service<Socks5RelayServiceRequest> for Socks5RelayService {
                         }
                         Ok(v) => v,
                     };
-
                     let write_agent_message_result = ready_and_call_service(
                         &mut write_agent_message_service,
                         WriteMessageServiceRequest {
@@ -143,7 +135,7 @@ impl Service<Socks5RelayServiceRequest> for Socks5RelayService {
                             )),
                         },
                     )
-                    .await;
+                        .await;
                     let write_agent_message_result = match write_agent_message_result {
                         Err(e) => {
                             error!(
@@ -158,6 +150,12 @@ impl Service<Socks5RelayServiceRequest> for Socks5RelayService {
                 }
             });
             tokio::spawn(async move {
+                let mut read_proxy_message_service =
+                    ServiceBuilder::new().service(ReadMessageService::new(
+                        SERVER_CONFIG
+                            .read_proxy_timeout_seconds()
+                            .unwrap_or(DEFAULT_READ_PROXY_TIMEOUT_SECONDS),
+                    ));
                 loop {
                     let read_proxy_message_result = ready_and_call_service(
                         &mut read_proxy_message_service,
@@ -165,14 +163,14 @@ impl Service<Socks5RelayServiceRequest> for Socks5RelayService {
                             message_framed_read,
                         },
                     )
-                    .await;
+                        .await;
                     let ReadMessageServiceResult {
                         message_framed_read: message_framed_read_in_result,
                         message_payload:
-                            MessagePayload {
-                                data: proxy_raw_data,
-                                ..
-                            },
+                        MessagePayload {
+                            data: proxy_raw_data,
+                            ..
+                        },
                         ..
                     } = match read_proxy_message_result {
                         Err(e) => {
@@ -182,13 +180,13 @@ impl Service<Socks5RelayServiceRequest> for Socks5RelayService {
                         Ok(Some(
                             value @ ReadMessageServiceResult {
                                 message_payload:
-                                    MessagePayload {
-                                        payload_type:
-                                            PayloadType::ProxyPayload(
-                                                ProxyMessagePayloadTypeValue::TcpData,
-                                            ),
-                                        ..
-                                    },
+                                MessagePayload {
+                                    payload_type:
+                                    PayloadType::ProxyPayload(
+                                        ProxyMessagePayloadTypeValue::TcpData,
+                                    ),
+                                    ..
+                                },
                                 ..
                             },
                         )) => value,

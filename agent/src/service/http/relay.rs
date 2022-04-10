@@ -52,16 +52,6 @@ impl Service<HttpRelayServiceRequest> for HttpRelayService {
 
     fn call(&mut self, request: HttpRelayServiceRequest) -> Self::Future {
         Box::pin(async move {
-            let mut write_agent_message_service =
-                ServiceBuilder::new().service(WriteMessageService::default());
-            let mut read_proxy_message_service =
-                ServiceBuilder::new().service(ReadMessageService::new(
-                    SERVER_CONFIG
-                        .read_proxy_timeout_seconds()
-                        .unwrap_or(DEFAULT_READ_PROXY_TIMEOUT_SECONDS),
-                ));
-            let mut payload_encryption_type_select_service =
-                ServiceBuilder::new().service(PayloadEncryptionTypeSelectService);
             let client_stream = request.client_stream;
             let mut message_framed_read = request.message_framed_read;
             let mut message_framed_write = request.message_framed_write;
@@ -71,6 +61,10 @@ impl Service<HttpRelayServiceRequest> for HttpRelayService {
             let target_address_a2t = request.target_address.clone();
             let target_address_t2a = request.target_address.clone();
             tokio::spawn(async move {
+                let mut payload_encryption_type_select_service =
+                    ServiceBuilder::new().service(PayloadEncryptionTypeSelectService);
+                let mut write_agent_message_service =
+                    ServiceBuilder::new().service(WriteMessageService::default());
                 if let Some(init_data) = request.init_data {
                     let PayloadEncryptionTypeSelectServiceResult {
                         payload_encryption_type,
@@ -202,6 +196,12 @@ impl Service<HttpRelayServiceRequest> for HttpRelayService {
                 }
             });
             tokio::spawn(async move {
+                let mut read_proxy_message_service =
+                    ServiceBuilder::new().service(ReadMessageService::new(
+                        SERVER_CONFIG
+                            .read_proxy_timeout_seconds()
+                            .unwrap_or(DEFAULT_READ_PROXY_TIMEOUT_SECONDS),
+                    ));
                 loop {
                     let read_proxy_message_result = ready_and_call_service(
                         &mut read_proxy_message_service,
