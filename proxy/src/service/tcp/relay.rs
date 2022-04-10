@@ -1,6 +1,4 @@
 use std::{net::SocketAddr, time::Duration};
-use std::future::Future;
-use std::pin::Pin;
 use std::task::{Context, Poll};
 
 use bytes::BytesMut;
