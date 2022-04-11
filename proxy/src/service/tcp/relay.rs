@@ -75,10 +75,6 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                             .unwrap_or(DEFAULT_READ_AGENT_TIMEOUT_SECONDS),
                     ));
                 loop {
-                    debug!(
-                        "Enter read agent data loop - 1, agent: {}.",
-                        req.agent_address
-                    );
                     let read_agent_message_result = ready_and_call_service(
                         &mut read_agent_message_service,
                         ReadMessageServiceRequest {
@@ -86,10 +82,6 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                         },
                     )
                         .await;
-                    debug!(
-                        "Enter read agent data loop - 2, agent: {}",
-                        req.agent_address
-                    );
                     let ReadMessageServiceResult {
                         message_payload: MessagePayload { data, .. },
                         message_framed_read: message_framed_read_from_read_agent_result,
@@ -146,10 +138,6 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                 let mut payload_encryption_type_select_service =
                     ServiceBuilder::new().service(PayloadEncryptionTypeSelectService);
                 loop {
-                    debug!(
-                        "Enter read target data loop -1, agent: {}",
-                        req.agent_address
-                    );
                     let read_target_data_future = async move {
                         let mut buf = BytesMut::with_capacity(
                             SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
@@ -178,10 +166,6 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                             Err(CommonError::TimeoutError)
                         }
                     };
-                    debug!(
-                        "Enter read target data loop -2, agent: {}",
-                        req.agent_address
-                    );
                     let (buf, inner_target_stream_read, _read_size) =
                         match read_target_data_future_result {
                             Ok(None) => {
