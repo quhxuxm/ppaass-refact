@@ -92,10 +92,10 @@ impl Service<AgentConnectionInfo> for HandleAgentConnectionService {
             match relay_result {
                 Err(e) => {
                     error!("Error happen when relay agent connection, error: {:#?}", e);
-                }
+                },
                 Ok(r) => {
                     debug!("Relay process started for agent: {:#?}", r.agent_address);
-                }
+                },
             }
             Ok(())
         })
@@ -177,7 +177,7 @@ impl Policy<ConnectToTargetServiceRequest, ConnectToTargetServiceResult, CommonE
                 // Treat all `Response`s as success,
                 // so don't retry...
                 None
-            }
+            },
             Err(_) => {
                 // Treat all errors as failures...
                 // But we limit the number of attempts...
@@ -189,7 +189,7 @@ impl Policy<ConnectToTargetServiceRequest, ConnectToTargetServiceResult, CommonE
                 }
                 // Used all our attempts, no retry...
                 None
-            }
+            },
         }
     }
 
@@ -223,7 +223,7 @@ impl Service<ConnectToTargetServiceRequest> for ConnectToTargetService {
                         request.agent_address, request.target_address, e
                     );
                     Err(e)
-                }
+                },
             }
         })
     }

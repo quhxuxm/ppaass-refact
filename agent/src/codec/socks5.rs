@@ -67,7 +67,7 @@ impl Decoder for Socks5InitCodec {
                     e
                 );
                 return Err(CommonError::CodecError);
-            }
+            },
             Ok(v) => v,
         };
         src.get_u8();
@@ -78,7 +78,7 @@ impl Decoder for Socks5InitCodec {
                     e
                 );
                 return Err(CommonError::CodecError);
-            }
+            },
             Ok(v) => v,
         };
         Ok(Some(Socks5InitCommand::new(request_type, dest_address)))

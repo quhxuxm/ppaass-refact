@@ -33,7 +33,7 @@ impl ToString for NetAddress {
                     "{}.{}.{}.{}:{}",
                     ip_content[0], ip_content[1], ip_content[2], ip_content[3], port
                 )
-            }
+            },
             Self::IpV6(ip_content, port) => {
                 let mut ip_content_bytes = Bytes::from(ip_content.to_vec());
                 format!(
@@ -48,10 +48,10 @@ impl ToString for NetAddress {
                     ip_content_bytes.get_u16(),
                     port
                 )
-            }
+            },
             Self::Domain(host, port) => {
                 format!("{}:{}", host, port)
-            }
+            },
         }
     }
 }
@@ -78,7 +78,7 @@ impl TryFrom<&mut Bytes> for NetAddress {
                 });
                 let port = value.get_u16();
                 NetAddress::IpV4(addr_content, port)
-            }
+            },
             IPV6_TYPE => {
                 //Convert the NetAddress::IpV6
                 //A ip v6 address is 18 bytes: 16 bytes for host, 2 bytes for port
@@ -92,7 +92,7 @@ impl TryFrom<&mut Bytes> for NetAddress {
                 });
                 let port = value.get_u16();
                 NetAddress::IpV6(addr_content, port)
-            }
+            },
             DOMAIN_TYPE => {
                 //Convert the NetAddress::Domain
                 if value.remaining() < 4 {
@@ -113,18 +113,18 @@ impl TryFrom<&mut Bytes> for NetAddress {
                             e
                         );
                         return Err(CommonError::CodecError);
-                    }
+                    },
                 };
                 let port = value.get_u16();
                 NetAddress::Domain(host, port)
-            }
+            },
             invalid_address_type => {
                 error!(
                     "Fail to parse NetAddress because of invalide address type {}.",
                     invalid_address_type
                 );
                 return Err(CommonError::CodecError);
-            }
+            },
         };
         Ok(address)
     }
@@ -157,18 +157,18 @@ impl From<NetAddress> for Bytes {
                 result.put_u8(IPV4_TYPE);
                 result.put_slice(&addr_content);
                 result.put_u16(port);
-            }
+            },
             NetAddress::IpV6(addr_content, port) => {
                 result.put_u8(IPV6_TYPE);
                 result.put_slice(&addr_content);
                 result.put_u16(port);
-            }
+            },
             NetAddress::Domain(addr_content, port) => {
                 result.put_u8(DOMAIN_TYPE);
                 result.put_u32(addr_content.len() as u32);
                 result.put_slice(addr_content.as_bytes());
                 result.put_u16(port);
-            }
+            },
         }
         result.into()
     }
@@ -288,7 +288,7 @@ impl TryFrom<u8> for PayloadType {
             invalid_type => {
                 error!("Fail to parse payload type: {}", invalid_type);
                 Err(CommonError::CodecError)
-            }
+            },
         }
     }
 }
@@ -318,7 +318,7 @@ impl TryFrom<&mut Bytes> for PayloadEncryptionType {
                     invalid_type
                 );
                 Err(CommonError::CodecError)
-            }
+            },
         }
     }
 }
@@ -339,17 +339,17 @@ impl From<PayloadEncryptionType> for Bytes {
             PayloadEncryptionType::Plain => {
                 result.put_u8(ENCRYPTION_TYPE_PLAIN);
                 result.put_u32(0);
-            }
+            },
             PayloadEncryptionType::Blowfish(token) => {
                 result.put_u8(ENCRYPTION_TYPE_BLOWFISH);
                 result.put_u32(token.len() as u32);
                 result.put(token);
-            }
+            },
             PayloadEncryptionType::Aes(token) => {
                 result.put_u8(ENCRYPTION_TYPE_AES);
                 result.put_u32(token.len() as u32);
                 result.put(token);
-            }
+            },
         }
         result.into()
     }
@@ -408,21 +408,21 @@ impl TryFrom<Bytes> for MessagePayload {
             Err(e) => {
                 error!("Fail to parse message payload because of error: {:#?}", e);
                 return Err(CommonError::CodecError);
-            }
+            },
         };
         let source_address: NetAddress = match (&mut value).try_into() {
             Ok(v) => v,
             Err(e) => {
                 error!("Fail to parse source address because of error: {:#?}", e);
                 return Err(CommonError::CodecError);
-            }
+            },
         };
         let target_address: NetAddress = match (&mut value).try_into() {
             Ok(v) => v,
             Err(e) => {
                 error!("Fail to parse target address because of error: {:#?}", e);
                 return Err(CommonError::CodecError);
-            }
+            },
         };
         if value.remaining() < 8 {
             error!("Fail to parse message payload because of no remaining");
@@ -509,7 +509,7 @@ impl TryFrom<Bytes> for Message {
             Err(e) => {
                 error!("Fail to parse message because of error: {:#?}", e);
                 return Err(CommonError::CodecError);
-            }
+            },
         };
         if value.remaining() < 8 {
             error!("Fail to parse message because of no remaining");
@@ -526,7 +526,7 @@ impl TryFrom<Bytes> for Message {
             Err(e) => {
                 error!("Fail to parse message because of error: {:#?}", e);
                 return Err(CommonError::CodecError);
-            }
+            },
         };
         if value.remaining() < 8 {
             error!("Fail to parse message because of no remaining");
@@ -543,14 +543,14 @@ impl TryFrom<Bytes> for Message {
             Err(e) => {
                 error!("Fail to parse message because of error: {:#?}", e);
                 return Err(CommonError::CodecError);
-            }
+            },
         };
         let payload_encryption_type: PayloadEncryptionType = match (&mut value).try_into() {
             Ok(v) => v,
             Err(e) => {
                 error!("Fail to parse message because of error: {:#?}", e);
                 return Err(CommonError::CodecError);
-            }
+            },
         };
         if value.remaining() < 8 {
             error!("Fail to parse message because of no remaining");
@@ -585,10 +585,10 @@ impl From<Message> for Bytes {
             Some(v) => {
                 result.put_u32(v.len() as u32);
                 result.put_slice(v.as_bytes());
-            }
+            },
             None => {
                 result.put_u32(0);
-            }
+            },
         }
         result.put_u64(value.user_token.len() as u64);
         result.put_slice(value.user_token.as_bytes());
@@ -596,11 +596,11 @@ impl From<Message> for Bytes {
         match value.payload {
             None => {
                 result.put_u64(0);
-            }
+            },
             Some(p) => {
                 result.put_u64(p.len() as u64);
                 result.put(p);
-            }
+            },
         }
         result.into()
     }

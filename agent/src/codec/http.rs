@@ -34,7 +34,7 @@ impl Decoder for HttpCodec {
             Err(e) => {
                 error!("Fail to decode http protocol because of error: {:#?}", e);
                 return Err(CommonError::CodecError);
-            }
+            },
             Ok(v) => v,
         };
         Ok(Some(decode_result))
@@ -52,7 +52,7 @@ impl Encoder<Response<Vec<u8>>> for HttpCodec {
                     error!("Fail to encode http protocol because of error: {:#?}", e);
                     Err(CommonError::CodecError)
                 }
-            }
+            },
             Ok(v) => v,
         };
         dst.put_slice(encode_result.as_slice());

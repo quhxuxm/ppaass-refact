@@ -61,13 +61,15 @@ impl Service<ClientConnectionInfo> for HandleClientConnectionService {
                         e
                     );
                     return Err(CommonError::IoError { source: e });
-                }
+                },
                 Ok(1) => protocol_buf[0],
                 Ok(protocol_flag) => {
                     error!(
-                        "Fail to peek protocol from client stream because of unknown protocol flag: {}", protocol_flag);
+                        "Fail to peek protocol from client stream because of unknown protocol flag: {}",
+                        protocol_flag
+                    );
                     return Err(CommonError::CodecError);
-                }
+                },
             };
             if protocol == SOCKS4_PROTOCOL_FLAG {
                 error!("Can not support socks4 protocol.");
@@ -192,7 +194,7 @@ impl Policy<ConcreteConnectToProxyRequest, ConnectToProxyServiceResult, CommonEr
                 // Treat all `Response`s as success,
                 // so don't retry...
                 None
-            }
+            },
             Err(_) => {
                 // Treat all errors as failures...
                 // But we limit the number of attempts...
@@ -204,7 +206,7 @@ impl Policy<ConcreteConnectToProxyRequest, ConnectToProxyServiceResult, CommonEr
                 }
                 // Used all our attempts, no retry...
                 None
-            }
+            },
         }
     }
 
@@ -260,7 +262,7 @@ impl Service<ConnectToProxyServiceRequest> for ConnectToProxyService {
                             request.client_address, address, e
                         );
                         continue;
-                    }
+                    },
                 }
             }
             Err(CommonError::IoError {

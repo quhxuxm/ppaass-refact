@@ -60,7 +60,7 @@ impl Service<Socks5AuthenticateFlowRequest> for Socks5AuthCommandService {
                             "No authenticate frame.",
                         ),
                     });
-                }
+                },
                 Some(v) => match v {
                     Ok(v) => v,
                     Err(e) => {
@@ -69,7 +69,7 @@ impl Service<Socks5AuthenticateFlowRequest> for Socks5AuthCommandService {
                         framed.send(authentication_result).await?;
                         framed.flush().await?;
                         return Err(e);
-                    }
+                    },
                 },
             };
             debug!(

@@ -76,7 +76,7 @@ impl Service<Socks5InitCommandServiceRequest> for Socks5InitCommandService {
                 _ => {
                     send_socks5_init_failure(&mut socks5_init_framed).await?;
                     return Err(CommonError::CodecError);
-                }
+                },
             };
             debug!(
                 "Client {} send socks 5 connect command: {:#?}",
@@ -98,10 +98,13 @@ impl Service<Socks5InitCommandServiceRequest> for Socks5InitCommandService {
                     .await
                     {
                         Err(e) => {
-                            error!("Fail to handle socks5 init command (CONNECT) because of error: {:#?}", e);
+                            error!(
+                                "Fail to handle socks5 init command (CONNECT) because of error: {:#?}",
+                                e
+                            );
                             send_socks5_init_failure(&mut socks5_init_framed).await?;
                             Err(e)
-                        }
+                        },
                         Ok(Socks5TcpConnectServiceResponse {
                             message_framed_read,
                             message_framed_write,
@@ -128,15 +131,15 @@ impl Service<Socks5InitCommandServiceRequest> for Socks5InitCommandService {
                                 proxy_address_string,
                                 connect_response_message_id,
                             })
-                        }
+                        },
                     }
-                }
+                },
                 Socks5InitCommandType::Bind => {
                     todo!()
-                }
+                },
                 Socks5InitCommandType::UdpAssociate => {
                     todo!()
-                }
+                },
             }
         })
     }

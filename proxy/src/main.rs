@@ -13,16 +13,20 @@ pub(crate) mod server;
 pub(crate) mod service;
 
 fn main() -> Result<()> {
-    init_log(SERVER_CONFIG
-        .log_dir()
-        .as_ref()
-        .expect("No log directory given."), SERVER_CONFIG
-        .log_file()
-        .as_ref()
-        .expect("No log file name given."), SERVER_CONFIG
-        .max_log_level()
-        .as_ref()
-        .unwrap_or(&Level::Error.to_string()));
+    init_log(
+        SERVER_CONFIG
+            .log_dir()
+            .as_ref()
+            .expect("No log directory given."),
+        SERVER_CONFIG
+            .log_file()
+            .as_ref()
+            .expect("No log file name given."),
+        SERVER_CONFIG
+            .max_log_level()
+            .as_ref()
+            .unwrap_or(&Level::Error.to_string()),
+    );
     let proxy_server = ProxyServer::new();
     proxy_server.run();
     Ok(())

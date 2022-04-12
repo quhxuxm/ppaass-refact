@@ -42,7 +42,7 @@ impl AgentServer {
                     "Fail to create agent server runtime because of error: {:#?}",
                     e
                 );
-            }
+            },
             Ok(r) => r,
         };
         Self { runtime }
@@ -55,7 +55,10 @@ impl AgentServer {
                 SERVER_CONFIG.port().unwrap_or(DEFAULT_SERVER_PORT),
             )) {
                 Err(e) => {
-                    panic!("Fail to bind agent server port because of error: {:#?}", e);
+                    panic!(
+                        "Fail to bind agent server port because of error: {:#?}",
+                        e
+                    );
                 }
                 Ok(listener) => {
                     info!("Success to bind agent server port, start listening ... ");
@@ -70,7 +73,10 @@ impl AgentServer {
             };
             let listener = match TcpListener::from_std(std_listener) {
                 Err(e) => {
-                    panic!("Fail to generate agent server listener from std listener because of error: {:#?}", e);
+                    panic!(
+                        "Fail to generate agent server listener from std listener because of error: {:#?}",
+                        e
+                    );
                 }
                 Ok(listener) => {
                     info!("Success to generate agent server listener.");
@@ -88,27 +94,31 @@ impl AgentServer {
                     }
                     Ok((client_stream, client_address)) => (client_stream, client_address),
                 };
-                if let Err(e)= client_stream
-                    .set_nodelay(true){
+                if let Err(e) = client_stream.set_nodelay(true) {
                     error!(
-                            "Fail to set client connection no delay because of error: {:#?}",
-                            e
-                        );
+                        "Fail to set client connection no delay because of error: {:#?}",
+                        e
+                    );
                     continue;
                 }
-                if let Err(e)= client_stream
-                    .set_linger(None){
+                if let Err(e) = client_stream.set_linger(None) {
                     error!(
-                            "Fail to set client connection linger because of error: {:#?}",
-                            e
-                        );
+                        "Fail to set client connection linger because of error: {:#?}",
+                        e
+                    );
                     continue;
                 }
                 tokio::spawn(async move {
                     let mut handle_client_connection_service = ServiceBuilder::new()
-                        .buffer(SERVER_CONFIG.buffered_connection_number().unwrap_or(DEFAULT_BUFFERED_CONNECTION_NUMBER))
+                        .buffer(
+                            SERVER_CONFIG
+                                .buffered_connection_number()
+                                .unwrap_or(DEFAULT_BUFFERED_CONNECTION_NUMBER),
+                        )
                         .concurrency_limit(
-                            SERVER_CONFIG.concurrent_connection_number().unwrap_or(DEFAULT_CONCURRENCY_LIMIT),
+                            SERVER_CONFIG
+                                .concurrent_connection_number()
+                                .unwrap_or(DEFAULT_CONCURRENCY_LIMIT),
                         )
                         .rate_limit(
                             SERVER_CONFIG.rate_limit().unwrap_or(DEFAULT_RATE_LIMIT),
@@ -122,7 +132,7 @@ impl AgentServer {
                             client_address,
                         },
                     )
-                        .await
+                    .await
                     {
                         error!(
                             "Error happen when handle client connection [{}], error:{:#?}",

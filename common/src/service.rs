@@ -202,13 +202,13 @@ impl Service<ReadMessageServiceRequest> for ReadMessageService {
                 None => {
                     debug!("No payload in the message.",);
                     return Ok(None);
-                }
+                },
                 Some(payload_bytes) => match payload_bytes.try_into() {
                     Ok(v) => v,
                     Err(e) => {
                         error!("Fail to decode message payload because of error: {:#?}", e);
                         return Err(e);
-                    }
+                    },
                 },
             };
             Ok(Some(ReadMessageServiceResult {

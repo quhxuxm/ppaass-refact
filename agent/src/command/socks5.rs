@@ -64,7 +64,7 @@ impl TryFrom<u8> for Socks5InitCommandType {
                     unknown_type
                 );
                 Err(CommonError::CodecError)
-            }
+            },
         }
     }
 }
@@ -102,7 +102,7 @@ impl From<u8> for Socks5InitCommandResultStatus {
                     unknown_status
                 );
                 Socks5InitCommandResultStatus::Failure
-            }
+            },
         }
     }
 }
@@ -139,7 +139,7 @@ impl ToString for Socks5Addr {
                     "{}.{}.{}.{}:{}",
                     ip_content[0], ip_content[1], ip_content[2], ip_content[3], port
                 )
-            }
+            },
             Self::IpV6(ip_content, port) => {
                 let mut ip_content_bytes = Bytes::from(ip_content.to_vec());
                 format!(
@@ -154,10 +154,10 @@ impl ToString for Socks5Addr {
                     ip_content_bytes.get_u16(),
                     port
                 )
-            }
+            },
             Self::Domain(host, port) => {
                 format!("{}:{}", host, port)
-            }
+            },
         }
     }
 }
@@ -182,7 +182,7 @@ impl TryFrom<&mut Bytes> for Socks5Addr {
                 });
                 let port = value.get_u16();
                 Socks5Addr::IpV4(addr_content, port)
-            }
+            },
             4 => {
                 if value.remaining() < 18 {
                     error!("Fail to parse socks5 address (IpV6) because of not enough remaining in bytes buffer.");
@@ -194,7 +194,7 @@ impl TryFrom<&mut Bytes> for Socks5Addr {
                 });
                 let port = value.get_u16();
                 Socks5Addr::IpV6(addr_content, port)
-            }
+            },
             3 => {
                 if value.remaining() < 1 {
                     error!("Fail to parse socks5 address(Domain) because of not enough remaining in bytes buffer.");
@@ -214,15 +214,15 @@ impl TryFrom<&mut Bytes> for Socks5Addr {
                             e
                         );
                         return Err(CommonError::CodecError);
-                    }
+                    },
                 };
                 let port = value.get_u16();
                 Socks5Addr::Domain(domain_name, port)
-            }
+            },
             unknown_addr_type => {
                 error!("Fail to decode socks 5 address type: {}", unknown_addr_type);
                 return Err(CommonError::CodecError);
-            }
+            },
         };
         Ok(address)
     }
@@ -252,18 +252,18 @@ impl From<Socks5Addr> for Bytes {
                 result.put_u8(1);
                 result.put_slice(&addr_content);
                 result.put_u16(port);
-            }
+            },
             Socks5Addr::IpV6(addr_content, port) => {
                 result.put_u8(4);
                 result.put_slice(&addr_content);
                 result.put_u16(port);
-            }
+            },
             Socks5Addr::Domain(addr_content, port) => {
                 result.put_u8(3);
                 result.put_u8(addr_content.len() as u8);
                 result.put_slice(&addr_content.as_bytes());
                 result.put_u16(port);
-            }
+            },
         }
         result.into()
     }
@@ -366,7 +366,7 @@ impl TryFrom<Bytes> for Socks5UdpDataRequest {
                     e
                 );
                 return Err(CommonError::CodecError);
-            }
+            },
             Ok(v) => v,
         };
         Ok(Self {
@@ -413,19 +413,19 @@ impl From<Socks5UdpDataResponse> for Bytes {
                     result.put_u8(*item);
                 });
                 result.put_u16(port);
-            }
+            },
             Socks5Addr::IpV6(address_content, port) => {
                 result.put_u8(4);
                 address_content.iter().for_each(|item| {
                     result.put_u8(*item);
                 });
                 result.put_u16(port);
-            }
+            },
             Socks5Addr::Domain(address_content, port) => {
                 result.put_u8(3);
                 result.put_slice(address_content.as_bytes());
                 result.put_u16(port);
-            }
+            },
         }
         result.put_slice(value.data.chunk());
         result.into()

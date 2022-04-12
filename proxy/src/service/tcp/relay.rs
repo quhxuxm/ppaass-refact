@@ -1,23 +1,23 @@
-use std::{net::SocketAddr, time::Duration};
 use std::task::{Context, Poll};
+use std::{net::SocketAddr, time::Duration};
 
 use bytes::BytesMut;
 use futures_util::future::BoxFuture;
+use tokio::net::TcpStream;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     time::sleep,
 };
-use tokio::net::TcpStream;
 use tower::Service;
 use tower::ServiceBuilder;
 use tracing::{debug, error};
 
 use common::{
-    AgentMessagePayloadTypeValue, CommonError, generate_uuid, MessageFramedRead,
-    MessageFramedWrite, MessagePayload, NetAddress, PayloadEncryptionTypeSelectService,
-    PayloadEncryptionTypeSelectServiceRequest, PayloadEncryptionTypeSelectServiceResult,
-    PayloadType, ProxyMessagePayloadTypeValue, ReadMessageService,
-    ReadMessageServiceRequest, ReadMessageServiceResult, ready_and_call_service, WriteMessageService,
+    generate_uuid, ready_and_call_service, AgentMessagePayloadTypeValue, CommonError,
+    MessageFramedRead, MessageFramedWrite, MessagePayload, NetAddress,
+    PayloadEncryptionTypeSelectService, PayloadEncryptionTypeSelectServiceRequest,
+    PayloadEncryptionTypeSelectServiceResult, PayloadType, ProxyMessagePayloadTypeValue,
+    ReadMessageService, ReadMessageServiceRequest, ReadMessageServiceResult, WriteMessageService,
     WriteMessageServiceRequest,
 };
 
@@ -81,7 +81,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                             message_framed_read,
                         },
                     )
-                        .await;
+                    .await;
                     let ReadMessageServiceResult {
                         message_payload: MessagePayload { data, .. },
                         message_framed_read: message_framed_read_from_read_agent_result,
@@ -90,28 +90,28 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                         Ok(None) => {
                             debug!("Read all data from agent: {:#?}", req.agent_address);
                             return;
-                        }
+                        },
                         Ok(Some(
                             v @ ReadMessageServiceResult {
                                 message_payload:
-                                MessagePayload {
-                                    payload_type:
-                                    PayloadType::AgentPayload(
-                                        AgentMessagePayloadTypeValue::TcpData,
-                                    ),
-                                    ..
-                                },
+                                    MessagePayload {
+                                        payload_type:
+                                            PayloadType::AgentPayload(
+                                                AgentMessagePayloadTypeValue::TcpData,
+                                            ),
+                                        ..
+                                    },
                                 ..
                             },
                         )) => v,
                         Ok(_) => {
                             error!("Invalid payload type from agent: {:#?}", req.agent_address);
                             return;
-                        }
+                        },
                         Err(e) => {
                             error!("Fail to read from agent because of error: {:#?}", e);
                             return;
-                        }
+                        },
                     };
                     if let Err(e) = target_stream_write.write(data.as_ref()).await {
                         error!(
@@ -146,14 +146,14 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                             Err(e) => {
                                 error!("Fail to read data from target because of error: {:#?}", e);
                                 return Err(CommonError::IoError { source: e });
-                            }
+                            },
                             Ok(0) => {
                                 return Ok(None);
-                            }
+                            },
                             Ok(size) => {
                                 debug!("Read {} bytes from target.", size);
                                 size
-                            }
+                            },
                         };
                         Ok(Some((buf.freeze(), target_stream_read, read_size)))
                     };
@@ -173,12 +173,12 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                                     "Nothing to read from target, return from read target future."
                                 );
                                 return;
-                            }
+                            },
                             Ok(Some(v)) => v,
                             Err(e) => {
                                 error!("Fail to read target data because of error: {:#?}", e);
                                 return;
-                            }
+                            },
                         };
                     let proxy_message_payload = MessagePayload::new(
                         agent_connect_message_source_address.clone(),
@@ -196,7 +196,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                             user_token: user_token.clone(),
                         },
                     )
-                        .await
+                    .await
                     {
                         Err(e) => {
                             error!(
@@ -204,7 +204,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                                 e
                             );
                             return;
-                        }
+                        },
                         Ok(v) => v,
                     };
                     let write_proxy_message_result = ready_and_call_service(
@@ -217,16 +217,16 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                             message_payload: Some(proxy_message_payload),
                         },
                     )
-                        .await;
+                    .await;
                     match write_proxy_message_result {
                         Err(e) => {
                             error!("Fail to read from target because of error(ready): {:#?}", e);
                             return;
-                        }
+                        },
                         Ok(proxy_message_write_result) => {
                             message_framed_write = proxy_message_write_result.message_framed_write;
                             target_stream_read = inner_target_stream_read;
-                        }
+                        },
                     }
                 }
             });

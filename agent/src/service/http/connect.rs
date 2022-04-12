@@ -125,7 +125,7 @@ impl Service<HttpConnectServiceRequest> for HttpConnectService {
                         Self::send_error_to_client(http_client_framed).await?;
                         Err(CommonError::CodecError)
                     }
-                }
+                },
             };
             let (request_url, init_data) = if http_message.method().to_string().to_lowercase()
                 == CONNECT_METHOD
@@ -147,7 +147,7 @@ impl Service<HttpConnectServiceRequest> for HttpConnectService {
                         error!("Fail to encode http data because of error: {:#?} ", e);
                         Self::send_error_to_client(http_client_framed).await?;
                         return Err(CommonError::CodecError);
-                    }
+                    },
                     Ok(v) => v,
                 };
                 (request_url, Some(encode_result))
@@ -167,7 +167,7 @@ impl Service<HttpConnectServiceRequest> for HttpConnectService {
                 None => {
                     Self::send_error_to_client(http_client_framed).await?;
                     return Err(CommonError::CodecError);
-                }
+                },
                 Some(v) => v.to_string(),
             };
             let target_address = NetAddress::Domain(target_host, target_port);
@@ -186,7 +186,7 @@ impl Service<HttpConnectServiceRequest> for HttpConnectService {
                 Err(e) => {
                     Self::send_error_to_client(http_client_framed).await?;
                     return Err(e);
-                }
+                },
                 Ok(v) => v,
             };
             let framed_result =
@@ -196,7 +196,7 @@ impl Service<HttpConnectServiceRequest> for HttpConnectService {
                     Err(e) => {
                         Self::send_error_to_client(http_client_framed).await?;
                         return Err(e);
-                    }
+                    },
                     Ok(v) => v,
                 };
             let PayloadEncryptionTypeSelectServiceResult {
@@ -232,7 +232,7 @@ impl Service<HttpConnectServiceRequest> for HttpConnectService {
                 Err(e) => {
                     Self::send_error_to_client(http_client_framed).await?;
                     return Err(e);
-                }
+                },
                 Ok(v) => v,
             };
             let read_tcp_connect_response_result = match ready_and_call_service(
@@ -246,12 +246,12 @@ impl Service<HttpConnectServiceRequest> for HttpConnectService {
                 Err(e) => {
                     Self::send_error_to_client(http_client_framed).await?;
                     return Err(e);
-                }
+                },
                 Ok(Some(v)) => v,
                 Ok(_) => {
                     Self::send_error_to_client(http_client_framed).await?;
                     return Err(CommonError::UnknownError);
-                }
+                },
             };
             if let ReadMessageServiceResult {
                 message_payload:

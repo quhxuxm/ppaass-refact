@@ -36,7 +36,7 @@ impl MessageCodec {
             Err(e) => {
                 error!("Fail to create RSA Crypto because of error: {:#?}", e);
                 panic!("Fail to create RSA Crypto.")
-            }
+            },
         };
         Self {
             rsa_crypto,
@@ -56,7 +56,7 @@ impl Decoder for MessageCodec {
             Err(e) => {
                 error!("Fail to decode input message because of timeout: {:#?}", e);
                 return Err(CommonError::CodecError);
-            }
+            },
             Ok(None) => return Ok(None),
             Ok(Some(r)) => r,
         };
@@ -66,14 +66,14 @@ impl Decoder for MessageCodec {
                     Err(e) => {
                         error!("Fail to decompress message because of error: {:#?}", e);
                         return Err(CommonError::IoError { source: e });
-                    }
+                    },
                     Ok(r) => Bytes::from(r),
                 };
             match lz4_decompress_result.try_into() {
                 Err(e) => {
                     error!("Fail to parse message because of error: {:#?}", e);
                     return Err(e);
-                }
+                },
                 Ok(r) => r,
             }
         } else {
@@ -81,7 +81,7 @@ impl Decoder for MessageCodec {
                 Err(e) => {
                     error!("Fail to parse message because of error: {:#?}", e);
                     return Err(e);
-                }
+                },
                 Ok(r) => r,
             }
         };
@@ -90,7 +90,7 @@ impl Decoder for MessageCodec {
             PayloadEncryptionType::Blowfish(ref encryption_token) => match message.payload {
                 None => {
                     debug!("Nothing to decrypt for blowfish.")
-                }
+                },
                 Some(ref content) => {
                     let original_encryption_token = match self.rsa_crypto.decrypt(encryption_token)
                     {
@@ -100,18 +100,18 @@ impl Decoder for MessageCodec {
                                 e
                             );
                             return Err(e);
-                        }
+                        },
                         Ok(r) => r,
                     };
                     let decrypt_payload =
                         decrypt_with_blowfish(&original_encryption_token, content);
                     message.payload = Some(decrypt_payload);
-                }
+                },
             },
             PayloadEncryptionType::Aes(ref encryption_token) => match message.payload {
                 None => {
                     debug!("Nothing to decrypt for aes.")
-                }
+                },
                 Some(ref content) => {
                     let original_encryption_token = match self.rsa_crypto.decrypt(encryption_token)
                     {
@@ -121,14 +121,14 @@ impl Decoder for MessageCodec {
                                 e
                             );
                             return Err(e);
-                        }
+                        },
                         Ok(r) => r,
                     };
                     let decrypt_payload = decrypt_with_aes(&original_encryption_token, content);
                     message.payload = Some(decrypt_payload);
-                }
+                },
             },
-            PayloadEncryptionType::Plain => {}
+            PayloadEncryptionType::Plain => {},
         };
         debug!("Decode message from input(decrypted): {:?}", message);
         Ok(Some(message))
@@ -176,13 +176,13 @@ impl Encoder<Message> for MessageCodec {
                     Err(e) => {
                         error!("Fail the encrypt original message encryption token with rsa crypto for blowfish");
                         return Err(e);
-                    }
+                    },
                 };
                 (
                     Some(encrypt_with_blowfish(original_token, &payload.unwrap())),
                     PayloadEncryptionType::Blowfish(encrypted_payload_encryption_token),
                 )
-            }
+            },
             PayloadEncryptionType::Aes(ref original_token) => {
                 let encrypted_payload_encryption_token = match self
                     .rsa_crypto
@@ -192,13 +192,13 @@ impl Encoder<Message> for MessageCodec {
                     Err(e) => {
                         error!("Fail the encrypt original message encryption token with rsa crypto for aes");
                         return Err(e);
-                    }
+                    },
                 };
                 (
                     Some(encrypt_with_aes(original_token, &payload.unwrap())),
                     PayloadEncryptionType::Aes(encrypted_payload_encryption_token),
                 )
-            }
+            },
         };
         let message_to_encode = Message::new(
             id,

@@ -1,6 +1,6 @@
-use std::{any::type_name, fmt::Debug};
 use std::path::Path;
 use std::str::FromStr;
+use std::{any::type_name, fmt::Debug};
 
 use chrono::Local;
 use futures_util::TryFutureExt;
@@ -19,14 +19,18 @@ impl FormatTime for LogTimer {
     }
 }
 
-pub fn init_log(directory: impl AsRef<Path>, file_name_prefix: impl AsRef<Path>, max_log_level: &str) {
+pub fn init_log(
+    directory: impl AsRef<Path>,
+    file_name_prefix: impl AsRef<Path>,
+    max_log_level: &str,
+) {
     let file_appender = tracing_appender::rolling::daily(directory, file_name_prefix);
     let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
     let log_level_filter = match LevelFilter::from_str(max_log_level) {
         Err(e) => {
             panic!("Fail to initialize log because of error: {:#?}", e);
-        }
-        Ok(v) => v
+        },
+        Ok(v) => v,
     };
     tracing_subscriber::fmt()
         .with_max_level(log_level_filter)
@@ -63,6 +67,6 @@ where
                 service_type_name, e
             );
             Err(e)
-        }
+        },
     }
 }

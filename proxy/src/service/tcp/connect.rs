@@ -140,7 +140,7 @@ impl Service<TcpConnectServiceRequest> for TcpConnectService {
                         )
                         .await?;
                         return Err(e);
-                    }
+                    },
                     Ok(v) => v,
                 };
                 debug!(

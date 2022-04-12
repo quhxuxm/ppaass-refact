@@ -11,18 +11,18 @@ use tower::ServiceBuilder;
 use tracing::{debug, error};
 
 use common::{
-    AgentMessagePayloadTypeValue, CommonError, generate_uuid, MessageFramedRead,
-    MessageFramedWrite, MessagePayload, NetAddress, PayloadEncryptionTypeSelectService,
-    PayloadEncryptionTypeSelectServiceRequest, PayloadEncryptionTypeSelectServiceResult,
-    PayloadType, ProxyMessagePayloadTypeValue, ReadMessageService,
-    ReadMessageServiceRequest, ReadMessageServiceResult, ready_and_call_service, WriteMessageService,
+    generate_uuid, ready_and_call_service, AgentMessagePayloadTypeValue, CommonError,
+    MessageFramedRead, MessageFramedWrite, MessagePayload, NetAddress,
+    PayloadEncryptionTypeSelectService, PayloadEncryptionTypeSelectServiceRequest,
+    PayloadEncryptionTypeSelectServiceResult, PayloadType, ProxyMessagePayloadTypeValue,
+    ReadMessageService, ReadMessageServiceRequest, ReadMessageServiceResult, WriteMessageService,
     WriteMessageServiceRequest,
 };
 
-use crate::SERVER_CONFIG;
 use crate::service::common::{
     DEFAULT_BUFFER_SIZE, DEFAULT_READ_CLIENT_TIMEOUT_SECONDS, DEFAULT_READ_PROXY_TIMEOUT_SECONDS,
 };
+use crate::SERVER_CONFIG;
 
 #[allow(unused)]
 pub(crate) struct Socks5RelayServiceRequest {
@@ -109,7 +109,7 @@ impl Service<Socks5RelayServiceRequest> for Socks5RelayService {
                             user_token: SERVER_CONFIG.user_token().clone().unwrap(),
                         },
                     )
-                        .await
+                    .await
                     {
                         Err(e) => {
                             error!(
@@ -117,7 +117,7 @@ impl Service<Socks5RelayServiceRequest> for Socks5RelayService {
                                 e
                             );
                             return;
-                        }
+                        },
                         Ok(v) => v,
                     };
                     let write_agent_message_result = ready_and_call_service(
@@ -135,7 +135,7 @@ impl Service<Socks5RelayServiceRequest> for Socks5RelayService {
                             )),
                         },
                     )
-                        .await;
+                    .await;
                     let write_agent_message_result = match write_agent_message_result {
                         Err(e) => {
                             error!(
@@ -143,7 +143,7 @@ impl Service<Socks5RelayServiceRequest> for Socks5RelayService {
                                 e
                             );
                             return;
-                        }
+                        },
                         Ok(v) => v,
                     };
                     message_framed_write = write_agent_message_result.message_framed_write;
@@ -163,30 +163,30 @@ impl Service<Socks5RelayServiceRequest> for Socks5RelayService {
                             message_framed_read,
                         },
                     )
-                        .await;
+                    .await;
                     let ReadMessageServiceResult {
                         message_framed_read: message_framed_read_in_result,
                         message_payload:
-                        MessagePayload {
-                            data: proxy_raw_data,
-                            ..
-                        },
+                            MessagePayload {
+                                data: proxy_raw_data,
+                                ..
+                            },
                         ..
                     } = match read_proxy_message_result {
                         Err(e) => {
                             error!("Fail to read proxy data because of error: {:#?}", e);
                             return;
-                        }
+                        },
                         Ok(Some(
                             value @ ReadMessageServiceResult {
                                 message_payload:
-                                MessagePayload {
-                                    payload_type:
-                                    PayloadType::ProxyPayload(
-                                        ProxyMessagePayloadTypeValue::TcpData,
-                                    ),
-                                    ..
-                                },
+                                    MessagePayload {
+                                        payload_type:
+                                            PayloadType::ProxyPayload(
+                                                ProxyMessagePayloadTypeValue::TcpData,
+                                            ),
+                                        ..
+                                    },
                                 ..
                             },
                         )) => value,

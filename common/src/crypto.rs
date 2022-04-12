@@ -32,14 +32,14 @@ impl<T: Rng + Send> RsaCrypto<T> {
             Err(e) => {
                 error!("Fail to parse rsa key because of error: {:#?}", e);
                 return Err(CommonError::CodecError);
-            }
+            },
         };
         let private_key = match RsaPrivateKey::from_pkcs8_pem(private_key) {
             Ok(v) => v,
             Err(e) => {
                 error!("Fail to parse rsa key because of error: {:#?}", e);
                 return Err(CommonError::CodecError);
-            }
+            },
         };
         Ok(Self {
             public_key,

@@ -137,7 +137,7 @@ impl Service<Socks5TcpConnectServiceRequest> for Socks5TcpConnectService {
                 None => {
                     error!("Nothing read from proxy.");
                     Err(CommonError::CodecError)
-                }
+                },
                 Some(ReadMessageServiceResult {
                     message_payload:
                         MessagePayload {
@@ -172,11 +172,11 @@ impl Service<Socks5TcpConnectServiceRequest> for Socks5TcpConnectService {
                 }) => {
                     error!("Fail connect to target from proxy.");
                     Err(CommonError::UnknownError)
-                }
+                },
                 Some(_) => {
                     error!("Invalid payload type read from proxy.");
                     Err(CommonError::UnknownError)
-                }
+                },
             }
         })
     }
