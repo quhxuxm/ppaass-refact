@@ -6,7 +6,6 @@ use futures_util::future::BoxFuture;
 use futures_util::stream::{SplitSink, SplitStream};
 use futures_util::{SinkExt, StreamExt};
 use tokio::net::TcpStream;
-use tokio::time::sleep;
 use tokio_util::codec::Framed;
 use tower::Service;
 use tracing::{debug, error};
@@ -176,26 +175,25 @@ impl Service<ReadMessageServiceRequest> for ReadMessageService {
     fn call(&mut self, mut req: ReadMessageServiceRequest) -> Self::Future {
         let read_timeout_seconds = self.read_timeout_seconds;
         Box::pin(async move {
-            let message = tokio::select! {
-                read_message_result = req.message_framed_read.next() => {
-                    match read_message_result {
-                         None => {
-                            debug!("No message any more.");
-                            return Ok(None);
-                        }
-                        Some(v) => match v {
-                            Ok(v) => v,
-                            Err(e) => {
-                                error!("Fail to decode message because of error: {:#?}", e);
-                                return Err(e);
-                            }
-                        },
-                    }
+            let message = match tokio::time::timeout(
+                Duration::from_secs(read_timeout_seconds),
+                req.message_framed_read.next(),
+            )
+            .await
+            {
+                Err(e) => {
+                    error!("The read timeout in {} seconds.", e);
+                    return Err(CommonError::TimeoutError);
                 },
-                _ =  sleep(Duration::from_secs(read_timeout_seconds)) => {
-                    error!("The read timeout in {} seconds.", read_timeout_seconds);
-                    return Err(CommonError::TimeoutError)
-                }
+                Ok(None) => {
+                    debug!("No message any more.");
+                    return Ok(None);
+                },
+                Ok(Some(Ok(v))) => v,
+                Ok(Some(Err(e))) => {
+                    error!("Fail to decode message because of error: {:#?}", e);
+                    return Err(e);
+                },
             };
 
             let payload: MessagePayload = match message.payload {

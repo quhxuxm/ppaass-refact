@@ -5,7 +5,6 @@ use std::time::Duration;
 use futures_util::future;
 use futures_util::future::BoxFuture;
 use tokio::net::TcpStream;
-use tokio::time::sleep;
 use tower::util::BoxCloneService;
 use tower::{
     retry::{Policy, Retry},
@@ -130,20 +129,24 @@ impl ConnectToTargetService {
             ConnectToTargetAttempts { retry },
             service_fn(move |request: ConnectToTargetServiceRequest| async move {
                 debug!("Begin connect to target: {}", request.target_address);
-                let target_stream = tokio::select! {
-                    connect_result = TcpStream::connect(&request.target_address)=>{
-                        match connect_result {
-                            Err(e)=>{
-                                error!("Fail connect to target {} because of error: {:#?}",&request.target_address, e);
-                                return Err(CommonError::IoError { source: e })
-                            }
-                            Ok(v)=>v
-                        }
-                    }
-                    _= sleep(Duration::from_secs(connect_timeout_seconds))=>{
-                        error!("The connect to target timeout in {} seconds.", connect_timeout_seconds);
-                        return Err(CommonError::TimeoutError)
-                    }
+                let target_stream = match tokio::time::timeout(
+                    Duration::from_secs(connect_timeout_seconds),
+                    TcpStream::connect(&request.target_address),
+                )
+                .await
+                {
+                    Err(e) => {
+                        error!("The connect to target timeout: {:#?}.", e);
+                        return Err(CommonError::TimeoutError);
+                    },
+                    Ok(Ok(v)) => v,
+                    Ok(Err(e)) => {
+                        error!(
+                            "Fail connect to target {} because of error: {:#?}",
+                            &request.target_address, e
+                        );
+                        return Err(CommonError::IoError { source: e });
+                    },
                 };
 
                 target_stream

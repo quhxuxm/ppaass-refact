@@ -3,11 +3,8 @@ use std::{net::SocketAddr, time::Duration};
 
 use bytes::BytesMut;
 use futures_util::future::BoxFuture;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
-use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
-    time::sleep,
-};
 use tower::Service;
 use tower::ServiceBuilder;
 use tracing::{debug, error};
@@ -147,39 +144,37 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                                 error!("Fail to read data from target because of error: {:#?}", e);
                                 return Err(CommonError::IoError { source: e });
                             },
-                            Ok(0) => {
-                                return Ok(None);
-                            },
                             Ok(size) => {
                                 debug!("Read {} bytes from target.", size);
                                 size
                             },
                         };
-                        Ok(Some((buf.freeze(), target_stream_read, read_size)))
+                        Ok((buf.freeze(), target_stream_read, read_size))
                     };
-                    let read_target_data_future_result = tokio::select! {
-                        future_result = read_target_data_future => {
-                            future_result
-                        }
-                        _ =  sleep(Duration::from_secs(SERVER_CONFIG.read_target_timeout_seconds().unwrap_or(DEFAULT_READ_TARGET_TIMEOUT_SECONDS))) => {
-                            error!("The read target data timeout.");
-                            Err(CommonError::TimeoutError)
-                        }
+                    let (buf, inner_target_stream_read, _read_size) = match tokio::time::timeout(
+                        Duration::from_secs(
+                            SERVER_CONFIG
+                                .read_target_timeout_seconds()
+                                .unwrap_or(DEFAULT_READ_TARGET_TIMEOUT_SECONDS),
+                        ),
+                        read_target_data_future,
+                    )
+                    .await
+                    {
+                        Err(e) => {
+                            error!("The read target data timeout: {:#?}.", e);
+                            return;
+                        },
+                        Ok(Err(e)) => {
+                            error!("Fail to read target data because of error: {:#?}", e);
+                            return;
+                        },
+                        Ok(Ok((_, _, 0))) => {
+                            debug!("Nothing to read from target, return from read target future.");
+                            return;
+                        },
+                        Ok(Ok(v)) => v,
                     };
-                    let (buf, inner_target_stream_read, _read_size) =
-                        match read_target_data_future_result {
-                            Ok(None) => {
-                                debug!(
-                                    "Nothing to read from target, return from read target future."
-                                );
-                                return;
-                            },
-                            Ok(Some(v)) => v,
-                            Err(e) => {
-                                error!("Fail to read target data because of error: {:#?}", e);
-                                return;
-                            },
-                        };
                     let proxy_message_payload = MessagePayload::new(
                         agent_connect_message_source_address.clone(),
                         agent_connect_message_target_address.clone(),
