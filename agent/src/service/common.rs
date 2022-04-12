@@ -99,7 +99,7 @@ impl Service<ClientConnectionInfo> for HandleClientConnectionService {
                 },
             )
             .await?;
-            return Ok(());
+            Ok(())
         })
     }
 }
