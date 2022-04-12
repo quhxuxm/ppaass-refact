@@ -6,7 +6,6 @@ use std::time::Duration;
 use futures_util::future;
 use futures_util::future::BoxFuture;
 use tokio::net::TcpStream;
-use tokio::time::sleep;
 use tower::retry::{Policy, Retry};
 use tower::util::BoxCloneService;
 use tower::{service_fn, Service, ServiceBuilder};
@@ -142,20 +141,24 @@ impl ConnectToProxyService {
                     "Client {}, begin connect to proxy: {}",
                     request.client_address, request.proxy_address
                 );
-                let proxy_stream = tokio::select! {
-                    connect_result = TcpStream::connect(&request.proxy_address)=>{
-                        match connect_result{
-                            Err(e)=>{
-                                error!("Fail connect to proxy {} because of error: {:#?}",&request.proxy_address, e);
-                                return Err(CommonError::IoError { source: e })
-                            }
-                            Ok(v)=>v
-                        }
-                    }
-                    _=sleep(Duration::from_secs(connect_timeout_seconds))=>{
-                        error!("The connect to proxy timeout in {} seconds.", connect_timeout_seconds);
-                        return Err(CommonError::TimeoutError)
-                    }
+                let proxy_stream = match tokio::time::timeout(
+                    Duration::from_secs(connect_timeout_seconds),
+                    TcpStream::connect(&request.proxy_address),
+                )
+                .await
+                {
+                    Err(e) => {
+                        error!("The connect to proxy timeout: {:#?}.", e);
+                        return Err(CommonError::TimeoutError);
+                    },
+                    Ok(Err(e)) => {
+                        error!(
+                            "Fail connect to proxy {} because of error: {:#?}",
+                            &request.proxy_address, e
+                        );
+                        return Err(CommonError::IoError { source: e });
+                    },
+                    Ok(Ok(v)) => v,
                 };
                 proxy_stream
                     .set_nodelay(true)

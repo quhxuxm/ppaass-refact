@@ -75,30 +75,32 @@ impl Service<Socks5RelayServiceRequest> for Socks5RelayService {
                     let read_client_timeout_seconds = SERVER_CONFIG
                         .read_client_timeout_seconds()
                         .unwrap_or(DEFAULT_READ_CLIENT_TIMEOUT_SECONDS);
-                    tokio::select! {
-                        client_read_result=client_stream_read_half.read_buf(&mut buf)=>{
-                            match client_read_result {
-                                Err(e) => {
-                                    error!(
-                                        "Fail to read client data from {:#?} because of error: {:#?}",
-                                        target_address_a2t, e
-                                    );
-                                    return;
-                                }
-                                Ok(0) if buf.remaining_mut() > 0 => {
-                                    debug!("Read all data from agent");
-                                    return;
-                                }
-                                Ok(size) => {
-                                    debug!("Read {} bytes from client", size);
-                                }
-                            }
-                        }
-                        _=tokio::time::sleep(Duration::from_secs(read_client_timeout_seconds))=>{
-                            error!("The read client data timeout in {} seconds.", read_client_timeout_seconds);
+                    match tokio::time::timeout(
+                        Duration::from_secs(read_client_timeout_seconds),
+                        client_stream_read_half.read_buf(&mut buf),
+                    )
+                    .await
+                    {
+                        Err(e) => {
+                            error!("The read client data timeout: {:#?}.", e);
                             return;
-                        }
+                        },
+                        Ok(Err(e)) => {
+                            error!(
+                                "Fail to read client data from {:#?} because of error: {:#?}",
+                                target_address_a2t, e
+                            );
+                            return;
+                        },
+                        Ok(Ok(0)) if buf.remaining_mut() > 0 => {
+                            debug!("Read all data from agent");
+                            return;
+                        },
+                        Ok(Ok(size)) => {
+                            debug!("Read {} bytes from client", size);
+                        },
                     }
+
                     let PayloadEncryptionTypeSelectServiceResult {
                         payload_encryption_type,
                         ..
