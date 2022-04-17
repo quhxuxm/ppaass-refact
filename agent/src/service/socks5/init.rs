@@ -145,8 +145,8 @@ impl Service<Socks5InitCommandServiceRequest> for Socks5InitCommandService {
     }
 }
 
-async fn send_socks5_init_failure<'a>(
-    socks5_client_framed: &mut Socks5InitFramed<'a>,
+async fn send_socks5_init_failure(
+    socks5_client_framed: &mut Socks5InitFramed<'_>,
 ) -> Result<(), CommonError> {
     let connect_result = Socks5InitCommandResult::new(Socks5InitCommandResultStatus::Failure, None);
     if let Err(e) = socks5_client_framed.send(connect_result).await {
