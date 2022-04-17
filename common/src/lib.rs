@@ -1,5 +1,5 @@
-pub use codec::MessageCodec;
 /// Public use by outside
+pub use codec::MessageCodec;
 pub use error::CommonError;
 pub use message::AgentMessagePayloadTypeValue;
 pub use message::Message;
