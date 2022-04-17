@@ -6,7 +6,8 @@ use common::CommonError;
 
 use crate::command::socks5::{
     Socks5Addr, Socks5AuthCommand, Socks5AuthCommandResult, Socks5AuthMethod, Socks5InitCommand,
-    Socks5InitCommandResult, Socks5InitCommandType,
+    Socks5InitCommandResult, Socks5InitCommandType, Socks5UdpDataCommand,
+    Socks5UdpDataCommandResult,
 };
 
 pub(crate) struct Socks5AuthCodec;
@@ -99,6 +100,61 @@ impl Encoder<Socks5InitCommandResult> for Socks5InitCodec {
         if let Some(bind_address) = item.bind_address {
             dst.put::<Bytes>(bind_address.into());
         }
+        Ok(())
+    }
+}
+
+pub(crate) struct Socks5UdpDataCodec;
+
+impl Decoder for Socks5UdpDataCodec {
+    type Item = Socks5UdpDataCommand;
+    type Error = CommonError;
+
+    fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
+        // Check the buffer
+        if !src.has_remaining() {
+            return Ok(None);
+        }
+        // Check and skip the revision
+        if src.remaining() < 2 {
+            return Err(CommonError::CodecError);
+        }
+        src.get_u16();
+        if src.remaining() < 1 {
+            return Err(CommonError::CodecError);
+        }
+        let frag = src.get_u8();
+        let address: Socks5Addr = match src.try_into() {
+            Err(e) => {
+                error!(
+                    "Fail to decode socks5 udp data request because of error: {:#?}",
+                    e
+                );
+                return Err(CommonError::CodecError);
+            },
+            Ok(v) => v,
+        };
+        let data = src.copy_to_bytes(src.remaining());
+        Ok(Some(Socks5UdpDataCommand {
+            frag,
+            address,
+            data,
+        }))
+    }
+}
+
+impl Encoder<Socks5UdpDataCommandResult> for Socks5UdpDataCodec {
+    type Error = CommonError;
+
+    fn encode(
+        &mut self,
+        item: Socks5UdpDataCommandResult,
+        dst: &mut BytesMut,
+    ) -> Result<(), Self::Error> {
+        dst.put_u16(0);
+        dst.put_u8(item.frag);
+        dst.put::<Bytes>(item.dest_address.into());
+        dst.put_slice(item.data.chunk());
         Ok(())
     }
 }

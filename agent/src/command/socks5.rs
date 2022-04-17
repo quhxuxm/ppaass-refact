@@ -342,93 +342,29 @@ impl Socks5InitCommandResult {
         }
     }
 }
-/////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////
 
+/// Socks5 udp data request
 #[derive(Debug)]
-pub(crate) struct Socks5UdpDataRequest {
+pub(crate) struct Socks5UdpDataCommand {
     pub frag: u8,
     pub address: Socks5Addr,
     pub data: Bytes,
 }
 
-impl TryFrom<Bytes> for Socks5UdpDataRequest {
-    type Error = CommonError;
-
-    fn try_from(mut bytes: Bytes) -> Result<Self, Self::Error> {
-        bytes.get_u16();
-        let frag = bytes.get_u8();
-        let address: Socks5Addr = match (&mut bytes).try_into() {
-            Err(e) => {
-                error!(
-                    "Fail to decode socks5 udp data request because of error: {:#?}",
-                    e
-                );
-                return Err(CommonError::CodecError);
-            },
-            Ok(v) => v,
-        };
-        Ok(Self {
-            frag,
-            address,
-            data: bytes,
-        })
-    }
-}
-
 #[derive(Debug)]
-pub(crate) struct Socks5UdpDataResponse {
-    frag: u8,
-    source_address: Socks5Addr,
-    dest_address: Socks5Addr,
-    data: Bytes,
+pub(crate) struct Socks5UdpDataCommandResult {
+    pub frag: u8,
+    pub dest_address: Socks5Addr,
+    pub data: Bytes,
 }
 
-impl Socks5UdpDataResponse {
-    pub fn new(
-        frag: u8,
-        source_address: Socks5Addr,
-        dest_address: Socks5Addr,
-        data: Bytes,
-    ) -> Self {
+impl Socks5UdpDataCommandResult {
+    pub fn new(frag: u8, dest_address: Socks5Addr, data: Bytes) -> Self {
         Self {
             frag,
-            source_address,
             dest_address,
             data,
         }
-    }
-}
-
-impl From<Socks5UdpDataResponse> for Bytes {
-    fn from(value: Socks5UdpDataResponse) -> Self {
-        let mut result = BytesMut::new();
-        result.put_u16(0);
-        result.put_u8(value.frag);
-        match value.source_address {
-            Socks5Addr::IpV4(address_content, port) => {
-                result.put_u8(1);
-                address_content.iter().for_each(|item| {
-                    result.put_u8(*item);
-                });
-                result.put_u16(port);
-            },
-            Socks5Addr::IpV6(address_content, port) => {
-                result.put_u8(4);
-                address_content.iter().for_each(|item| {
-                    result.put_u8(*item);
-                });
-                result.put_u16(port);
-            },
-            Socks5Addr::Domain(address_content, port) => {
-                result.put_u8(3);
-                result.put_slice(address_content.as_bytes());
-                result.put_u16(port);
-            },
-        }
-        result.put_slice(value.data.chunk());
-        result.into()
     }
 }
 
