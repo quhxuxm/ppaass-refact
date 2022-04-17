@@ -12,8 +12,12 @@ use tracing::log::{debug, error};
 use common::{
     ready_and_call_service, CommonError, MessageFramedRead, MessageFramedWrite, NetAddress,
 };
+use tcp_connect::Socks5TcpConnectService;
 
 use crate::service::common::DEFAULT_BUFFER_SIZE;
+use crate::service::socks5::init::udp_associate::{
+    Socks5UdpAssociateService, Socks5UdpAssociateServiceRequest, Socks5UdpAssociateServiceResponse,
+};
 use crate::SERVER_CONFIG;
 use crate::{
     codec::socks5::Socks5InitCodec,
@@ -28,8 +32,6 @@ use crate::{
 
 mod tcp_connect;
 mod udp_associate;
-use tcp_connect::Socks5TcpConnectService;
-
 pub(crate) type Socks5InitFramed<'a> = Framed<&'a mut TcpStream, Socks5InitCodec>;
 
 #[derive(Debug)]
@@ -138,7 +140,50 @@ impl Service<Socks5InitCommandServiceRequest> for Socks5InitCommandService {
                     todo!()
                 },
                 Socks5InitCommandType::UdpAssociate => {
-                    todo!()
+                    let mut socks5_udp_associate_service =
+                        ServiceBuilder::new().service(Socks5UdpAssociateService::default());
+
+                    match ready_and_call_service(
+                        &mut socks5_udp_associate_service,
+                        Socks5UdpAssociateServiceRequest { client_address },
+                    )
+                    .await
+                    {
+                        Err(e) => {
+                            error!(
+                                "Fail to handle socks5 init command (UDP ASSOCIATE) because of error: {:#?}",
+                                e
+                            );
+                            send_socks5_init_failure(&mut socks5_init_framed).await?;
+                            Err(e)
+                        },
+                        Ok(Socks5UdpAssociateServiceResponse {
+                            message_framed_read,
+                            message_framed_write,
+                            source_address,
+                            target_address,
+                            proxy_address_string,
+                            connect_response_message_id,
+                        }) => {
+                            //Response for socks5 connect command
+                            let init_command_result = Socks5InitCommandResult::new(
+                                Socks5InitCommandResultStatus::Succeeded,
+                                Some(dest_address),
+                            );
+                            socks5_init_framed.send(init_command_result).await?;
+                            socks5_init_framed.flush().await?;
+                            Ok(Socks5InitCommandServiceResult {
+                                client_stream,
+                                client_address,
+                                message_framed_read,
+                                message_framed_write,
+                                source_address,
+                                target_address,
+                                proxy_address_string,
+                                connect_response_message_id,
+                            })
+                        },
+                    }
                 },
             }
         })

@@ -4,6 +4,7 @@ use std::net::{IpAddr, SocketAddr};
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use tracing::error;
 
+use crate::NetAddress::IpV4;
 use crate::{error::CommonError, util::generate_uuid};
 
 const ENCRYPTION_TYPE_PLAIN: u8 = 0;
@@ -23,6 +24,12 @@ pub enum NetAddress {
     IpV6([u8; 16], u16),
     /// Domain net address
     Domain(String, u16),
+}
+
+impl Default for NetAddress {
+    fn default() -> Self {
+        IpV4([0, 0, 0, 0], 0)
+    }
 }
 
 impl ToString for NetAddress {
