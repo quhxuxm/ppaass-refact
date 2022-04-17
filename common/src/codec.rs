@@ -10,7 +10,7 @@ use crate::crypto::{
 use crate::{CommonError, Message, PayloadEncryptionType};
 
 const LENGTH_DELIMITED_CODEC_LENGTH_FIELD_LENGTH: usize = 8;
-
+const RNG: OsRng = OsRng;
 pub struct MessageCodec {
     rsa_crypto: RsaCrypto<OsRng>,
     length_delimited_codec: LengthDelimitedCodec,
@@ -29,8 +29,7 @@ impl MessageCodec {
         length_delimited_codec_builder
             .length_field_length(LENGTH_DELIMITED_CODEC_LENGTH_FIELD_LENGTH);
         let length_delimited_codec = length_delimited_codec_builder.new_codec();
-        let rng = OsRng;
-        let rsa_crypto = RsaCrypto::new(public_key, private_key, rng);
+        let rsa_crypto = RsaCrypto::new(public_key, private_key, RNG);
         let rsa_crypto = match rsa_crypto {
             Ok(r) => r,
             Err(e) => {

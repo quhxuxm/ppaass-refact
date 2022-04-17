@@ -13,7 +13,7 @@ const AES_CHUNK_LENGTH: usize = 16;
 
 /// The util to do RSA encryption and decryption.
 #[derive(Debug)]
-pub(crate) struct RsaCrypto<T: Rng + Send> {
+pub(crate) struct RsaCrypto<T> {
     /// The private used to do decryption
     private_key: RsaPrivateKey,
     /// The public used to do encryption
@@ -21,7 +21,10 @@ pub(crate) struct RsaCrypto<T: Rng + Send> {
     rng: T,
 }
 
-impl<T: Rng + Send> RsaCrypto<T> {
+impl<T> RsaCrypto<T>
+where
+    T: Rng + Send + Sync,
+{
     pub fn new(
         public_key: &'static str,
         private_key: &'static str,
