@@ -16,6 +16,7 @@ mod auth;
 mod init;
 
 pub(crate) struct Socks5FlowRequest {
+    pub proxy_addresses: Vec<SocketAddr>,
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,
 }
@@ -52,6 +53,7 @@ impl Service<Socks5FlowRequest> for Socks5FlowService {
             let connect_flow_result = ready_and_call_service(
                 &mut connect_service,
                 Socks5InitCommandServiceRequest {
+                    proxy_addresses: req.proxy_addresses,
                     client_stream: authenticate_result.client_stream,
                     client_address: authenticate_result.client_address,
                 },

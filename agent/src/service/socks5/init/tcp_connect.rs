@@ -1,6 +1,10 @@
 use std::{net::SocketAddr, task::Poll};
 
 use bytes::Bytes;
+use futures_util::future::BoxFuture;
+use tower::{Service, ServiceBuilder};
+use tracing::error;
+
 use common::{
     generate_uuid, ready_and_call_service, AgentMessagePayloadTypeValue, CommonError,
     MessageFramedRead, MessageFramedWrite, MessagePayload, NetAddress,
@@ -9,10 +13,6 @@ use common::{
     ReadMessageService, ReadMessageServiceRequest, ReadMessageServiceResult, WriteMessageService,
     WriteMessageServiceRequest,
 };
-use futures_util::future::BoxFuture;
-
-use tower::{Service, ServiceBuilder};
-use tracing::error;
 
 use crate::{
     command::socks5::Socks5Addr,
@@ -26,6 +26,7 @@ use crate::{
 
 pub(crate) struct Socks5TcpConnectService;
 pub(crate) struct Socks5TcpConnectServiceRequest {
+    pub proxy_addresses: Vec<SocketAddr>,
     pub client_address: SocketAddr,
     pub dest_address: Socks5Addr,
 }
@@ -85,7 +86,7 @@ impl Service<Socks5TcpConnectServiceRequest> for Socks5TcpConnectService {
             let connect_to_proxy_service_result = ready_and_call_service(
                 &mut connect_to_proxy_service,
                 ConnectToProxyServiceRequest {
-                    proxy_address: None,
+                    proxy_addresses: request.proxy_addresses,
                     client_address: request.client_address,
                 },
             )

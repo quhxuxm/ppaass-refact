@@ -36,6 +36,7 @@ pub(crate) type Socks5InitFramed<'a> = Framed<&'a mut TcpStream, Socks5InitCodec
 
 #[derive(Debug)]
 pub(crate) struct Socks5InitCommandServiceRequest {
+    pub proxy_addresses: Vec<SocketAddr>,
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,
 }
@@ -92,6 +93,7 @@ impl Service<Socks5InitCommandServiceRequest> for Socks5InitCommandService {
                     match ready_and_call_service(
                         &mut socks5_tcp_connect_service,
                         Socks5TcpConnectServiceRequest {
+                            proxy_addresses: request.proxy_addresses,
                             client_address,
                             dest_address: dest_address.clone(),
                         },
@@ -142,7 +144,10 @@ impl Service<Socks5InitCommandServiceRequest> for Socks5InitCommandService {
 
                     match ready_and_call_service(
                         &mut socks5_udp_associate_service,
-                        Socks5UdpAssociateServiceRequest { client_address },
+                        Socks5UdpAssociateServiceRequest {
+                            proxy_addresses: request.proxy_addresses,
+                            client_address,
+                        },
                     )
                     .await
                     {

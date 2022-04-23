@@ -1,4 +1,5 @@
-use std::net::{Ipv4Addr, SocketAddrV4};
+use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
+use std::str::FromStr;
 use std::time::Duration;
 
 use tokio::net::TcpListener;
@@ -49,6 +50,24 @@ impl AgentServer {
     }
 
     pub(crate) fn run(&self) {
+        let proxy_addresses_from_config = SERVER_CONFIG
+            .proxy_addresses()
+            .as_ref()
+            .expect("No proxy addresses configuration item");
+        let mut proxy_addresses: Vec<SocketAddr> = Vec::new();
+        for address in proxy_addresses_from_config {
+            match SocketAddr::from_str(address) {
+                Ok(r) => {
+                    proxy_addresses.push(r);
+                },
+                Err(e) => {
+                    error!(
+                        "Fail to convert proxy address to socket address because of error: {:#?}",
+                        e
+                    )
+                },
+            }
+        }
         self.runtime.block_on(async {
             let std_listener = match std::net::TcpListener::bind(SocketAddrV4::new(
                 Ipv4Addr::new(0, 0, 0, 0),
@@ -108,6 +127,7 @@ impl AgentServer {
                     );
                     continue;
                 }
+                let proxy_addresses= proxy_addresses.clone();
                 tokio::spawn(async move {
                     let mut handle_client_connection_service = ServiceBuilder::new()
                         .buffer(
@@ -124,7 +144,7 @@ impl AgentServer {
                             SERVER_CONFIG.rate_limit().unwrap_or(DEFAULT_RATE_LIMIT),
                             Duration::from_secs(60),
                         )
-                        .service::<HandleClientConnectionService>(Default::default());
+                        .service(HandleClientConnectionService::new(proxy_addresses));
                     if let Err(e) = ready_and_call_service(
                         &mut handle_client_connection_service,
                         ClientConnectionInfo {

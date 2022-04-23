@@ -45,6 +45,7 @@ type HttpFramed<'a> = Framed<&'a mut TcpStream, HttpCodec>;
 
 #[allow(unused)]
 pub(crate) struct HttpConnectServiceRequest {
+    pub proxy_addresses: Vec<SocketAddr>,
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,
 }
@@ -59,7 +60,6 @@ pub(crate) struct HttpConnectServiceResult {
     pub message_id: String,
     pub source_address: NetAddress,
     pub target_address: NetAddress,
-    pub proxy_address_string: String,
 }
 #[derive(Clone, Debug, Default)]
 pub(crate) struct HttpConnectService;
@@ -171,13 +171,10 @@ impl Service<HttpConnectServiceRequest> for HttpConnectService {
                 Some(v) => v.to_string(),
             };
             let target_address = NetAddress::Domain(target_host, target_port);
-            let ConnectToProxyServiceResult {
-                connected_proxy_address,
-                proxy_stream,
-            } = match ready_and_call_service(
+            let ConnectToProxyServiceResult { proxy_stream } = match ready_and_call_service(
                 &mut connect_to_proxy_service,
                 ConnectToProxyServiceRequest {
-                    proxy_address: None,
+                    proxy_addresses: request.proxy_addresses,
                     client_address: request.client_address,
                 },
             )
@@ -287,7 +284,6 @@ impl Service<HttpConnectServiceRequest> for HttpConnectService {
                         message_id,
                         target_address,
                         source_address,
-                        proxy_address_string: connected_proxy_address,
                     });
                 }
                 return Ok(HttpConnectServiceResult {
@@ -299,7 +295,6 @@ impl Service<HttpConnectServiceRequest> for HttpConnectService {
                     message_id,
                     target_address,
                     source_address,
-                    proxy_address_string: connected_proxy_address,
                 });
             };
             Self::send_error_to_client(http_client_framed).await?;

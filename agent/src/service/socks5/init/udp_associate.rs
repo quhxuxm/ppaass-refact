@@ -22,6 +22,7 @@ use crate::service::common::{
 use crate::SERVER_CONFIG;
 
 pub(crate) struct Socks5UdpAssociateServiceRequest {
+    pub proxy_addresses: Vec<SocketAddr>,
     pub client_address: SocketAddr,
 }
 
@@ -64,7 +65,7 @@ impl Service<Socks5UdpAssociateServiceRequest> for Socks5UdpAssociateService {
             let connect_to_proxy_service_result = ready_and_call_service(
                 &mut connect_to_proxy_service,
                 ConnectToProxyServiceRequest {
-                    proxy_address: None,
+                    proxy_addresses: request.proxy_addresses,
                     client_address: request.client_address,
                 },
             )

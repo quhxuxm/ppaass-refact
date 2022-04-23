@@ -14,6 +14,7 @@ mod connect;
 
 #[derive(Debug)]
 pub(crate) struct HttpFlowRequest {
+    pub proxy_addresses: Vec<SocketAddr>,
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,
 }
@@ -42,6 +43,7 @@ impl Service<HttpFlowRequest> for HttpFlowService {
             let connect_result = ready_and_call_service(
                 &mut connect_service,
                 HttpConnectServiceRequest {
+                    proxy_addresses: req.proxy_addresses,
                     client_address: req.client_address,
                     client_stream: req.client_stream,
                 },
