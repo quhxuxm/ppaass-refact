@@ -3,19 +3,17 @@ use std::task::{Context, Poll};
 
 use futures_util::future::BoxFuture;
 use tokio::net::TcpStream;
-
 use tower::Service;
 use tower::ServiceBuilder;
 
 use common::{ready_and_call_service, CommonError};
 
+use crate::service::common::{RelayService, RelayServiceRequest};
 use crate::service::socks5::auth::{Socks5AuthCommandService, Socks5AuthenticateFlowRequest};
 use crate::service::socks5::init::{Socks5InitCommandService, Socks5InitCommandServiceRequest};
-use crate::service::socks5::relay::{Socks5RelayService, Socks5RelayServiceRequest};
 
 mod auth;
 mod init;
-mod relay;
 
 pub(crate) struct Socks5FlowRequest {
     pub client_stream: TcpStream,
@@ -42,7 +40,7 @@ impl Service<Socks5FlowRequest> for Socks5FlowService {
                 ServiceBuilder::new().service(Socks5AuthCommandService::default());
             let mut connect_service =
                 ServiceBuilder::new().service(Socks5InitCommandService::default());
-            let mut relay_service = ServiceBuilder::new().service(Socks5RelayService::default());
+            let mut relay_service = ServiceBuilder::new().service(RelayService::default());
             let authenticate_result = ready_and_call_service(
                 &mut authenticate_service,
                 Socks5AuthenticateFlowRequest {
@@ -61,15 +59,15 @@ impl Service<Socks5FlowRequest> for Socks5FlowService {
             .await?;
             let relay_flow_result = ready_and_call_service(
                 &mut relay_service,
-                Socks5RelayServiceRequest {
+                RelayServiceRequest {
                     client_address: connect_flow_result.client_address,
                     client_stream: connect_flow_result.client_stream,
                     message_framed_write: connect_flow_result.message_framed_write,
                     message_framed_read: connect_flow_result.message_framed_read,
                     connect_response_message_id: connect_flow_result.connect_response_message_id,
-                    proxy_address_string: connect_flow_result.proxy_address_string,
                     source_address: connect_flow_result.source_address,
                     target_address: connect_flow_result.target_address,
+                    init_data: None,
                 },
             )
             .await?;

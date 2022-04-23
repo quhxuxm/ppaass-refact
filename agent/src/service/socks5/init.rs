@@ -47,7 +47,6 @@ pub(crate) struct Socks5InitCommandServiceResult {
     pub client_address: SocketAddr,
     pub source_address: NetAddress,
     pub target_address: NetAddress,
-    pub proxy_address_string: String,
     pub connect_response_message_id: String,
 }
 
@@ -113,7 +112,6 @@ impl Service<Socks5InitCommandServiceRequest> for Socks5InitCommandService {
                             client_address,
                             source_address,
                             target_address,
-                            proxy_address_string,
                             connect_response_message_id,
                         }) => {
                             //Response for socks5 connect command
@@ -130,7 +128,6 @@ impl Service<Socks5InitCommandServiceRequest> for Socks5InitCommandService {
                                 message_framed_write,
                                 source_address,
                                 target_address,
-                                proxy_address_string,
                                 connect_response_message_id,
                             })
                         },
@@ -162,7 +159,6 @@ impl Service<Socks5InitCommandServiceRequest> for Socks5InitCommandService {
                             message_framed_write,
                             source_address,
                             target_address,
-                            proxy_address_string,
                             connect_response_message_id,
                         }) => {
                             //Response for socks5 connect command
@@ -179,7 +175,6 @@ impl Service<Socks5InitCommandServiceRequest> for Socks5InitCommandService {
                                 message_framed_write,
                                 source_address,
                                 target_address,
-                                proxy_address_string,
                                 connect_response_message_id,
                             })
                         },

@@ -31,7 +31,6 @@ pub(crate) struct Socks5UdpAssociateServiceResponse {
     pub message_framed_write: MessageFramedWrite,
     pub source_address: NetAddress,
     pub target_address: NetAddress,
-    pub proxy_address_string: String,
     pub connect_response_message_id: String,
 }
 pub(crate) struct Socks5UdpAssociateService;
@@ -146,7 +145,6 @@ impl Service<Socks5UdpAssociateServiceRequest> for Socks5UdpAssociateService {
                     message_framed_write: write_message_result.message_framed_write,
                     source_address,
                     target_address,
-                    proxy_address_string: connect_to_proxy_service_result.connected_proxy_address,
                     connect_response_message_id: message_id,
                 }),
                 Some(ReadMessageServiceResult {

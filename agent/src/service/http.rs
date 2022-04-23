@@ -7,11 +7,10 @@ use tower::{Service, ServiceBuilder};
 
 use common::{ready_and_call_service, CommonError};
 
+use crate::service::common::{RelayService, RelayServiceRequest};
 use crate::service::http::connect::{HttpConnectService, HttpConnectServiceRequest};
-use crate::service::http::relay::{HttpRelayService, HttpRelayServiceRequest};
 
 mod connect;
-mod relay;
 
 #[derive(Debug)]
 pub(crate) struct HttpFlowRequest {
@@ -39,7 +38,7 @@ impl Service<HttpFlowRequest> for HttpFlowService {
     fn call(&mut self, req: HttpFlowRequest) -> Self::Future {
         Box::pin(async move {
             let mut connect_service = ServiceBuilder::new().service(HttpConnectService::default());
-            let mut relay_service = ServiceBuilder::new().service(HttpRelayService::default());
+            let mut relay_service = ServiceBuilder::new().service(RelayService::default());
             let connect_result = ready_and_call_service(
                 &mut connect_service,
                 HttpConnectServiceRequest {
@@ -50,7 +49,7 @@ impl Service<HttpFlowRequest> for HttpFlowService {
             .await?;
             let relay_result = ready_and_call_service(
                 &mut relay_service,
-                HttpRelayServiceRequest {
+                RelayServiceRequest {
                     client_address: connect_result.client_address,
                     client_stream: connect_result.client_stream,
                     message_framed_write: connect_result.message_framed_write,

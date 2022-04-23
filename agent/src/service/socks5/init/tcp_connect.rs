@@ -36,7 +36,6 @@ pub(crate) struct Socks5TcpConnectServiceResponse {
     pub client_address: SocketAddr,
     pub source_address: NetAddress,
     pub target_address: NetAddress,
-    pub proxy_address_string: String,
     pub connect_response_message_id: String,
 }
 
@@ -158,7 +157,6 @@ impl Service<Socks5TcpConnectServiceRequest> for Socks5TcpConnectService {
                     message_framed_write: write_message_result.message_framed_write,
                     source_address,
                     target_address,
-                    proxy_address_string: connect_to_proxy_service_result.connected_proxy_address,
                     connect_response_message_id: message_id,
                 }),
                 Some(ReadMessageServiceResult {
