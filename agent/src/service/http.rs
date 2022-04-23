@@ -1,11 +1,12 @@
 use std::net::SocketAddr;
+use std::sync::Arc;
 use std::task::{Context, Poll};
 
 use futures_util::future::BoxFuture;
 use tokio::net::TcpStream;
 use tower::{Service, ServiceBuilder};
 
-use common::{ready_and_call_service, CommonError};
+use common::{CommonError, ready_and_call_service};
 
 use crate::service::common::{TcpRelayService, TcpRelayServiceRequest};
 use crate::service::http::connect::{HttpConnectService, HttpConnectServiceRequest};
@@ -14,7 +15,7 @@ mod connect;
 
 #[derive(Debug)]
 pub(crate) struct HttpFlowRequest {
-    pub proxy_addresses: Vec<SocketAddr>,
+    pub proxy_addresses: Arc<Vec<SocketAddr>>,
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,
 }
@@ -48,7 +49,7 @@ impl Service<HttpFlowRequest> for HttpFlowService {
                     client_stream: req.client_stream,
                 },
             )
-            .await?;
+                .await?;
             let relay_result = ready_and_call_service(
                 &mut relay_service,
                 TcpRelayServiceRequest {
@@ -62,7 +63,7 @@ impl Service<HttpFlowRequest> for HttpFlowService {
                     connect_response_message_id: connect_result.message_id,
                 },
             )
-            .await?;
+                .await?;
             Ok(HttpFlowResult {
                 client_address: relay_result.client_address,
             })

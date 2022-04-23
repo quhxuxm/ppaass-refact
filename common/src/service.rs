@@ -2,16 +2,16 @@ use std::task::{Context, Poll};
 use std::time::Duration;
 
 use bytes::Bytes;
+use futures_util::{SinkExt, StreamExt};
 use futures_util::future::BoxFuture;
 use futures_util::stream::{SplitSink, SplitStream};
-use futures_util::{SinkExt, StreamExt};
 use tokio::net::TcpStream;
 use tokio_util::codec::Framed;
 use tower::Service;
 use tracing::{debug, error};
 
 use crate::{
-    generate_uuid, CommonError, Message, MessageCodec, MessagePayload, PayloadEncryptionType,
+    CommonError, generate_uuid, Message, MessageCodec, MessagePayload, PayloadEncryptionType,
 };
 
 pub type MessageFramedRead = SplitStream<Framed<TcpStream, MessageCodec>>;
@@ -179,7 +179,7 @@ impl Service<ReadMessageServiceRequest> for ReadMessageService {
                 Duration::from_secs(read_timeout_seconds),
                 req.message_framed_read.next(),
             )
-            .await
+                .await
             {
                 Err(e) => {
                     error!("The read timeout in {} seconds.", e);
@@ -195,7 +195,6 @@ impl Service<ReadMessageServiceRequest> for ReadMessageService {
                     return Err(e);
                 },
             };
-
             let payload: MessagePayload = match message.payload {
                 None => {
                     debug!("No payload in the message.",);

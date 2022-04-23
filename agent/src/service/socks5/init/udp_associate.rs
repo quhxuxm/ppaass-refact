@@ -1,4 +1,5 @@
 use std::net::SocketAddr;
+use std::sync::Arc;
 use std::task::{Context, Poll};
 
 use bytes::Bytes;
@@ -7,22 +8,22 @@ use tower::{Service, ServiceBuilder};
 use tracing::error;
 
 use common::{
-    generate_uuid, ready_and_call_service, AgentMessagePayloadTypeValue, CommonError,
-    MessageFramedRead, MessageFramedWrite, MessagePayload, NetAddress,
-    PayloadEncryptionTypeSelectService, PayloadEncryptionTypeSelectServiceRequest,
-    PayloadEncryptionTypeSelectServiceResult, PayloadType, ProxyMessagePayloadTypeValue,
-    ReadMessageService, ReadMessageServiceRequest, ReadMessageServiceResult, WriteMessageService,
+    AgentMessagePayloadTypeValue, CommonError, generate_uuid, MessageFramedRead,
+    MessageFramedWrite, MessagePayload, NetAddress, PayloadEncryptionTypeSelectService,
+    PayloadEncryptionTypeSelectServiceRequest, PayloadEncryptionTypeSelectServiceResult,
+    PayloadType, ProxyMessagePayloadTypeValue, ReadMessageService,
+    ReadMessageServiceRequest, ReadMessageServiceResult, ready_and_call_service, WriteMessageService,
     WriteMessageServiceRequest,
 };
 
-use crate::service::common::{
-    generate_prepare_message_framed_service, ConnectToProxyService, ConnectToProxyServiceRequest,
-    DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS, DEFAULT_READ_PROXY_TIMEOUT_SECONDS, DEFAULT_RETRY_TIMES,
-};
 use crate::SERVER_CONFIG;
+use crate::service::common::{
+    ConnectToProxyService, ConnectToProxyServiceRequest, DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS,
+    DEFAULT_READ_PROXY_TIMEOUT_SECONDS, DEFAULT_RETRY_TIMES, generate_prepare_message_framed_service,
+};
 
 pub(crate) struct Socks5UdpAssociateServiceRequest {
-    pub proxy_addresses: Vec<SocketAddr>,
+    pub proxy_addresses: Arc<Vec<SocketAddr>>,
     pub client_address: SocketAddr,
 }
 
@@ -69,14 +70,13 @@ impl Service<Socks5UdpAssociateServiceRequest> for Socks5UdpAssociateService {
                     client_address: request.client_address,
                 },
             )
-            .await?;
+                .await?;
             let mut prepare_message_framed_service = generate_prepare_message_framed_service();
             let framed_result = ready_and_call_service(
                 &mut prepare_message_framed_service,
                 connect_to_proxy_service_result.proxy_stream,
             )
-            .await?;
-
+                .await?;
             let mut payload_encryption_type_select_service =
                 ServiceBuilder::new().service(PayloadEncryptionTypeSelectService);
             let PayloadEncryptionTypeSelectServiceResult {
@@ -89,8 +89,7 @@ impl Service<Socks5UdpAssociateServiceRequest> for Socks5UdpAssociateService {
                     user_token: SERVER_CONFIG.user_token().clone().unwrap(),
                 },
             )
-            .await?;
-
+                .await?;
             let mut write_agent_message_service =
                 ServiceBuilder::new().service(WriteMessageService::default());
             let write_message_result = ready_and_call_service(
@@ -108,7 +107,7 @@ impl Service<Socks5UdpAssociateServiceRequest> for Socks5UdpAssociateService {
                     )),
                 },
             )
-            .await?;
+                .await?;
             let mut read_proxy_message_service =
                 ServiceBuilder::new().service(ReadMessageService::new(
                     SERVER_CONFIG
@@ -121,7 +120,7 @@ impl Service<Socks5UdpAssociateServiceRequest> for Socks5UdpAssociateService {
                     message_framed_read: framed_result.message_framed_read,
                 },
             )
-            .await?
+                .await?
             {
                 None => {
                     error!("Nothing read from proxy.");
@@ -129,15 +128,15 @@ impl Service<Socks5UdpAssociateServiceRequest> for Socks5UdpAssociateService {
                 },
                 Some(ReadMessageServiceResult {
                     message_payload:
-                        MessagePayload {
-                            payload_type:
-                                PayloadType::ProxyPayload(
-                                    ProxyMessagePayloadTypeValue::UdpAssociateSuccess,
-                                ),
-                            source_address,
-                            target_address,
-                            ..
-                        },
+                    MessagePayload {
+                        payload_type:
+                        PayloadType::ProxyPayload(
+                            ProxyMessagePayloadTypeValue::UdpAssociateSuccess,
+                        ),
+                        source_address,
+                        target_address,
+                        ..
+                    },
                     message_framed_read,
                     message_id,
                     ..
@@ -150,13 +149,13 @@ impl Service<Socks5UdpAssociateServiceRequest> for Socks5UdpAssociateService {
                 }),
                 Some(ReadMessageServiceResult {
                     message_payload:
-                        MessagePayload {
-                            payload_type:
-                                PayloadType::ProxyPayload(
-                                    ProxyMessagePayloadTypeValue::UdpAssociateFail,
-                                ),
-                            ..
-                        },
+                    MessagePayload {
+                        payload_type:
+                        PayloadType::ProxyPayload(
+                            ProxyMessagePayloadTypeValue::UdpAssociateFail,
+                        ),
+                        ..
+                    },
                     ..
                 }) => {
                     error!("Fail connect to target from proxy.");

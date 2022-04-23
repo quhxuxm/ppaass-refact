@@ -1,5 +1,5 @@
-use std::task::{Context, Poll};
 use std::{net::SocketAddr, time::Duration};
+use std::task::{Context, Poll};
 
 use bytes::BytesMut;
 use futures_util::future::BoxFuture;
@@ -10,11 +10,11 @@ use tower::ServiceBuilder;
 use tracing::{debug, error};
 
 use common::{
-    generate_uuid, ready_and_call_service, AgentMessagePayloadTypeValue, CommonError,
-    MessageFramedRead, MessageFramedWrite, MessagePayload, NetAddress,
-    PayloadEncryptionTypeSelectService, PayloadEncryptionTypeSelectServiceRequest,
-    PayloadEncryptionTypeSelectServiceResult, PayloadType, ProxyMessagePayloadTypeValue,
-    ReadMessageService, ReadMessageServiceRequest, ReadMessageServiceResult, WriteMessageService,
+    AgentMessagePayloadTypeValue, CommonError, generate_uuid, MessageFramedRead,
+    MessageFramedWrite, MessagePayload, NetAddress, PayloadEncryptionTypeSelectService,
+    PayloadEncryptionTypeSelectServiceRequest, PayloadEncryptionTypeSelectServiceResult,
+    PayloadType, ProxyMessagePayloadTypeValue, ReadMessageService,
+    ReadMessageServiceRequest, ReadMessageServiceResult, ready_and_call_service, WriteMessageService,
     WriteMessageServiceRequest,
 };
 
@@ -78,7 +78,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                             message_framed_read,
                         },
                     )
-                    .await;
+                        .await;
                     let ReadMessageServiceResult {
                         message_payload: MessagePayload { data, .. },
                         message_framed_read: message_framed_read_from_read_agent_result,
@@ -91,13 +91,13 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                         Ok(Some(
                             v @ ReadMessageServiceResult {
                                 message_payload:
-                                    MessagePayload {
-                                        payload_type:
-                                            PayloadType::AgentPayload(
-                                                AgentMessagePayloadTypeValue::TcpData,
-                                            ),
-                                        ..
-                                    },
+                                MessagePayload {
+                                    payload_type:
+                                    PayloadType::AgentPayload(
+                                        AgentMessagePayloadTypeValue::TcpData,
+                                    ),
+                                    ..
+                                },
                                 ..
                             },
                         )) => v,
@@ -159,7 +159,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                         ),
                         read_target_data_future,
                     )
-                    .await
+                        .await
                     {
                         Err(e) => {
                             error!("The read target data timeout: {:#?}.", e);
@@ -191,7 +191,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                             user_token: user_token.clone(),
                         },
                     )
-                    .await
+                        .await
                     {
                         Err(e) => {
                             error!(
@@ -212,7 +212,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                             message_payload: Some(proxy_message_payload),
                         },
                     )
-                    .await;
+                        .await;
                     match write_proxy_message_result {
                         Err(e) => {
                             error!("Fail to read from target because of error(ready): {:#?}", e);

@@ -130,7 +130,7 @@ impl ProxyServer {
                             agent_address,
                         },
                     )
-                    .await
+                        .await
                     {
                         error!(
                             "Error happen when handle agent connection [{}], error:{:#?}",

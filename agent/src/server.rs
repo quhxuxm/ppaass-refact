@@ -1,5 +1,6 @@
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 use std::str::FromStr;
+use std::sync::Arc;
 use std::time::Duration;
 
 use tokio::net::TcpListener;
@@ -9,12 +10,12 @@ use tracing::{error, info};
 
 use common::ready_and_call_service;
 
-use crate::service::common::{
-    ClientConnectionInfo, HandleClientConnectionService, DEFAULT_BUFFERED_CONNECTION_NUMBER,
-};
 use crate::{
     config::SERVER_CONFIG,
     service::common::{DEFAULT_CONCURRENCY_LIMIT, DEFAULT_RATE_LIMIT},
+};
+use crate::service::common::{
+    ClientConnectionInfo, DEFAULT_BUFFERED_CONNECTION_NUMBER, HandleClientConnectionService,
 };
 
 const DEFAULT_SERVER_PORT: u16 = 10080;
@@ -68,6 +69,7 @@ impl AgentServer {
                 },
             }
         }
+        let proxy_addresses = Arc::new(proxy_addresses);
         self.runtime.block_on(async {
             let std_listener = match std::net::TcpListener::bind(SocketAddrV4::new(
                 Ipv4Addr::new(0, 0, 0, 0),
@@ -127,7 +129,7 @@ impl AgentServer {
                     );
                     continue;
                 }
-                let proxy_addresses= proxy_addresses.clone();
+                let proxy_addresses = proxy_addresses.clone();
                 tokio::spawn(async move {
                     let mut handle_client_connection_service = ServiceBuilder::new()
                         .buffer(
@@ -152,7 +154,7 @@ impl AgentServer {
                             client_address,
                         },
                     )
-                    .await
+                        .await
                     {
                         error!(
                             "Error happen when handle client connection [{}], error:{:#?}",

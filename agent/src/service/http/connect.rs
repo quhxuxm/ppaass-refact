@@ -1,11 +1,12 @@
 use std::net::SocketAddr;
+use std::sync::Arc;
 use std::task::{Context, Poll};
 
 use bytecodec::bytes::BytesEncoder;
 use bytecodec::EncodeExt;
 use bytes::Bytes;
-use futures_util::future::BoxFuture;
 use futures_util::{SinkExt, StreamExt};
+use futures_util::future::BoxFuture;
 use httpcodec::{BodyEncoder, HttpVersion, ReasonPhrase, RequestEncoder, Response, StatusCode};
 use tokio::net::TcpStream;
 use tokio_util::codec::Framed;
@@ -15,21 +16,21 @@ use tracing::error;
 use url::Url;
 
 use common::{
-    generate_uuid, ready_and_call_service, AgentMessagePayloadTypeValue, CommonError,
-    MessageFramedRead, MessageFramedWrite, MessagePayload, NetAddress,
-    PayloadEncryptionTypeSelectService, PayloadEncryptionTypeSelectServiceRequest,
-    PayloadEncryptionTypeSelectServiceResult, PayloadType, ProxyMessagePayloadTypeValue,
-    ReadMessageService, ReadMessageServiceRequest, ReadMessageServiceResult, WriteMessageService,
+    AgentMessagePayloadTypeValue, CommonError, generate_uuid, MessageFramedRead,
+    MessageFramedWrite, MessagePayload, NetAddress, PayloadEncryptionTypeSelectService,
+    PayloadEncryptionTypeSelectServiceRequest, PayloadEncryptionTypeSelectServiceResult,
+    PayloadType, ProxyMessagePayloadTypeValue, ReadMessageService,
+    ReadMessageServiceRequest, ReadMessageServiceResult, ready_and_call_service, WriteMessageService,
     WriteMessageServiceRequest, WriteMessageServiceResult,
 };
 
 use crate::codec::http::HttpCodec;
-use crate::service::common::{
-    generate_prepare_message_framed_service, ConnectToProxyService, ConnectToProxyServiceRequest,
-    ConnectToProxyServiceResult, DEFAULT_BUFFER_SIZE, DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS,
-    DEFAULT_READ_PROXY_TIMEOUT_SECONDS, DEFAULT_RETRY_TIMES,
-};
 use crate::SERVER_CONFIG;
+use crate::service::common::{
+    ConnectToProxyService, ConnectToProxyServiceRequest, ConnectToProxyServiceResult,
+    DEFAULT_BUFFER_SIZE, DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS, DEFAULT_READ_PROXY_TIMEOUT_SECONDS,
+    DEFAULT_RETRY_TIMES, generate_prepare_message_framed_service,
+};
 
 const HTTPS_SCHEMA: &str = "https";
 const SCHEMA_SEP: &str = "://";
@@ -45,7 +46,7 @@ type HttpFramed<'a> = Framed<&'a mut TcpStream, HttpCodec>;
 
 #[allow(unused)]
 pub(crate) struct HttpConnectServiceRequest {
-    pub proxy_addresses: Vec<SocketAddr>,
+    pub proxy_addresses: Arc<Vec<SocketAddr>>,
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,
 }
@@ -178,7 +179,7 @@ impl Service<HttpConnectServiceRequest> for HttpConnectService {
                     client_address: request.client_address,
                 },
             )
-            .await
+                .await
             {
                 Err(e) => {
                     Self::send_error_to_client(http_client_framed).await?;
@@ -206,7 +207,7 @@ impl Service<HttpConnectServiceRequest> for HttpConnectService {
                     user_token: SERVER_CONFIG.user_token().clone().unwrap(),
                 },
             )
-            .await?;
+                .await?;
             let WriteMessageServiceResult {
                 message_framed_write,
             } = match ready_and_call_service(
@@ -224,7 +225,7 @@ impl Service<HttpConnectServiceRequest> for HttpConnectService {
                     )),
                 },
             )
-            .await
+                .await
             {
                 Err(e) => {
                     Self::send_error_to_client(http_client_framed).await?;
@@ -238,7 +239,7 @@ impl Service<HttpConnectServiceRequest> for HttpConnectService {
                     message_framed_read: framed_result.message_framed_read,
                 },
             )
-            .await
+                .await
             {
                 Err(e) => {
                     Self::send_error_to_client(http_client_framed).await?;
@@ -252,13 +253,13 @@ impl Service<HttpConnectServiceRequest> for HttpConnectService {
             };
             if let ReadMessageServiceResult {
                 message_payload:
-                    MessagePayload {
-                        target_address,
-                        source_address,
-                        payload_type:
-                            PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::TcpConnectSuccess),
-                        ..
-                    },
+                MessagePayload {
+                    target_address,
+                    source_address,
+                    payload_type:
+                    PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::TcpConnectSuccess),
+                    ..
+                },
                 message_framed_read,
                 message_id,
                 ..

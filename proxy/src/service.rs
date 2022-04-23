@@ -5,20 +5,20 @@ use std::time::Duration;
 use futures_util::future;
 use futures_util::future::BoxFuture;
 use tokio::net::TcpStream;
-use tower::util::BoxCloneService;
 use tower::{
     retry::{Policy, Retry},
     ServiceBuilder,
 };
-use tower::{service_fn, Service};
+use tower::{Service, service_fn};
+use tower::util::BoxCloneService;
 use tracing::{debug, error};
 
-use common::{ready_and_call_service, CommonError, PrepareMessageFramedService};
+use common::{CommonError, PrepareMessageFramedService, ready_and_call_service};
 
 use crate::config::{AGENT_PUBLIC_KEY, PROXY_PRIVATE_KEY};
+use crate::SERVER_CONFIG;
 use crate::service::tcp::connect::{TcpConnectService, TcpConnectServiceRequest};
 use crate::service::tcp::relay::{TcpRelayService, TcpRelayServiceRequest};
-use crate::SERVER_CONFIG;
 
 mod tcp;
 mod udp;
@@ -73,7 +73,7 @@ impl Service<AgentConnectionInfo> for HandleAgentConnectionService {
                     agent_address: req.agent_address,
                 },
             )
-            .await?;
+                .await?;
             let relay_result = ready_and_call_service(
                 &mut tcp_relay_service,
                 TcpRelayServiceRequest {
@@ -87,7 +87,7 @@ impl Service<AgentConnectionInfo> for HandleAgentConnectionService {
                     agent_tcp_connect_message_id: tcp_connect_result.agent_tcp_connect_message_id,
                 },
             )
-            .await;
+                .await;
             match relay_result {
                 Err(e) => {
                     error!("Error happen when relay agent connection, error: {:#?}", e);
@@ -119,7 +119,7 @@ struct ConnectToTargetAttempts {
 #[derive(Clone)]
 pub(crate) struct ConnectToTargetService {
     concrete_service:
-        BoxCloneService<ConnectToTargetServiceRequest, ConnectToTargetServiceResult, CommonError>,
+    BoxCloneService<ConnectToTargetServiceRequest, ConnectToTargetServiceResult, CommonError>,
 }
 
 impl ConnectToTargetService {
@@ -133,7 +133,7 @@ impl ConnectToTargetService {
                     Duration::from_secs(connect_timeout_seconds),
                     TcpStream::connect(&request.target_address),
                 )
-                .await
+                    .await
                 {
                     Err(e) => {
                         error!("The connect to target timeout: {:#?}.", e);
@@ -148,7 +148,6 @@ impl ConnectToTargetService {
                         return Err(CommonError::IoError { source: e });
                     },
                 };
-
                 target_stream
                     .set_nodelay(true)
                     .map_err(|e| CommonError::IoError { source: e })?;
@@ -166,7 +165,7 @@ impl ConnectToTargetService {
 }
 
 impl Policy<ConnectToTargetServiceRequest, ConnectToTargetServiceResult, CommonError>
-    for ConnectToTargetAttempts
+for ConnectToTargetAttempts
 {
     type Future = futures_util::future::Ready<Self>;
 
