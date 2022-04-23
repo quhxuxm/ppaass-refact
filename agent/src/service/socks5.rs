@@ -8,7 +8,7 @@ use tower::ServiceBuilder;
 
 use common::{ready_and_call_service, CommonError};
 
-use crate::service::common::{RelayService, RelayServiceRequest};
+use crate::service::common::{TcpRelayService, TcpRelayServiceRequest};
 use crate::service::socks5::auth::{Socks5AuthCommandService, Socks5AuthenticateFlowRequest};
 use crate::service::socks5::init::{Socks5InitCommandService, Socks5InitCommandServiceRequest};
 
@@ -40,7 +40,7 @@ impl Service<Socks5FlowRequest> for Socks5FlowService {
                 ServiceBuilder::new().service(Socks5AuthCommandService::default());
             let mut connect_service =
                 ServiceBuilder::new().service(Socks5InitCommandService::default());
-            let mut relay_service = ServiceBuilder::new().service(RelayService::default());
+            let mut relay_service = ServiceBuilder::new().service(TcpRelayService::default());
             let authenticate_result = ready_and_call_service(
                 &mut authenticate_service,
                 Socks5AuthenticateFlowRequest {
@@ -59,7 +59,7 @@ impl Service<Socks5FlowRequest> for Socks5FlowService {
             .await?;
             let relay_flow_result = ready_and_call_service(
                 &mut relay_service,
-                RelayServiceRequest {
+                TcpRelayServiceRequest {
                     client_address: connect_flow_result.client_address,
                     client_stream: connect_flow_result.client_stream,
                     message_framed_write: connect_flow_result.message_framed_write,

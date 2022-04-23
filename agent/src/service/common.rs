@@ -301,7 +301,7 @@ pub fn generate_prepare_message_framed_service() -> PrepareMessageFramedService 
 }
 
 #[allow(unused)]
-pub(crate) struct RelayServiceRequest {
+pub(crate) struct TcpRelayServiceRequest {
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,
     pub message_framed_write: MessageFramedWrite,
@@ -313,15 +313,15 @@ pub(crate) struct RelayServiceRequest {
 }
 
 #[allow(unused)]
-pub(crate) struct RelayServiceResult {
+pub(crate) struct TcpRelayServiceResult {
     pub client_address: SocketAddr,
 }
 
 #[derive(Clone, Default)]
-pub(crate) struct RelayService;
+pub(crate) struct TcpRelayService;
 
-impl Service<RelayServiceRequest> for RelayService {
-    type Response = RelayServiceResult;
+impl Service<TcpRelayServiceRequest> for TcpRelayService {
+    type Response = TcpRelayServiceResult;
     type Error = CommonError;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
@@ -329,7 +329,7 @@ impl Service<RelayServiceRequest> for RelayService {
         Poll::Ready(Ok(()))
     }
 
-    fn call(&mut self, request: RelayServiceRequest) -> Self::Future {
+    fn call(&mut self, request: TcpRelayServiceRequest) -> Self::Future {
         Box::pin(async move {
             let client_stream = request.client_stream;
             let mut message_framed_read = request.message_framed_read;
@@ -540,7 +540,7 @@ impl Service<RelayServiceRequest> for RelayService {
                     };
                 }
             });
-            Ok(RelayServiceResult {
+            Ok(TcpRelayServiceResult {
                 client_address: request.client_address,
             })
         })
