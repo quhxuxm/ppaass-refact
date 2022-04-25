@@ -118,7 +118,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                             return;
                         },
                         Err(e) => {
-                            error!("Fail to read from agent because of error: {:#?}", e);
+                            debug!("Fail to read from agent because of error: {:#?}", e);
                             return;
                         },
                     };
