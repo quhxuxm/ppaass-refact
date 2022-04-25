@@ -1,9 +1,10 @@
+use std::fmt::{Debug, Formatter};
 use std::io::ErrorKind;
 use std::net::SocketAddr;
 use std::task::{Context, Poll};
 
-use futures_util::{SinkExt, StreamExt};
 use futures_util::future::BoxFuture;
+use futures_util::{SinkExt, StreamExt};
 use tokio::net::TcpStream;
 use tokio_util::codec::Framed;
 use tower::Service;
@@ -13,13 +14,23 @@ use common::CommonError;
 
 use crate::codec::socks5::Socks5AuthCodec;
 use crate::command::socks5::{Socks5AuthCommandResult, Socks5AuthMethod};
-use crate::SERVER_CONFIG;
 use crate::service::common::DEFAULT_BUFFER_SIZE;
+use crate::SERVER_CONFIG;
 
 #[allow(unused)]
 pub(crate) struct Socks5AuthenticateFlowRequest {
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,
+}
+
+impl Debug for Socks5AuthenticateFlowRequest {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Socks5AuthenticateFlowRequest: client_address={}",
+            self.client_address
+        )
+    }
 }
 
 #[allow(unused)]
@@ -29,8 +40,14 @@ pub(crate) struct Socks5AuthenticateFlowResult {
     pub auth_method: Socks5AuthMethod,
 }
 
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Default)]
 pub(crate) struct Socks5AuthCommandService;
+
+impl Debug for Socks5AuthCommandService {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Socks5AuthCommandService")
+    }
+}
 
 impl Service<Socks5AuthenticateFlowRequest> for Socks5AuthCommandService {
     type Response = Socks5AuthenticateFlowResult;

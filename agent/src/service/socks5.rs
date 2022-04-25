@@ -1,3 +1,4 @@
+use std::fmt::{Debug, Formatter};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::task::{Context, Poll};
@@ -7,7 +8,7 @@ use tokio::net::TcpStream;
 use tower::Service;
 use tower::ServiceBuilder;
 
-use common::{CommonError, ready_and_call_service};
+use common::{ready_and_call_service, CommonError};
 
 use crate::service::common::{TcpRelayService, TcpRelayServiceRequest};
 use crate::service::socks5::auth::{Socks5AuthCommandService, Socks5AuthenticateFlowRequest};
@@ -21,6 +22,17 @@ pub(crate) struct Socks5FlowRequest {
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,
 }
+
+impl Debug for Socks5FlowRequest {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Socks5FlowRequest: proxy_addresses={:#?}, client_address={}",
+            self.proxy_addresses, self.client_address
+        )
+    }
+}
+
 pub(crate) struct Socks5FlowResult {
     pub client_address: SocketAddr,
 }
@@ -50,7 +62,7 @@ impl Service<Socks5FlowRequest> for Socks5FlowService {
                     client_address: req.client_address,
                 },
             )
-                .await?;
+            .await?;
             let connect_flow_result = ready_and_call_service(
                 &mut connect_service,
                 Socks5InitCommandServiceRequest {
@@ -59,7 +71,7 @@ impl Service<Socks5FlowRequest> for Socks5FlowService {
                     client_address: authenticate_result.client_address,
                 },
             )
-                .await?;
+            .await?;
             let relay_flow_result = ready_and_call_service(
                 &mut relay_service,
                 TcpRelayServiceRequest {
@@ -73,7 +85,7 @@ impl Service<Socks5FlowRequest> for Socks5FlowService {
                     init_data: None,
                 },
             )
-                .await?;
+            .await?;
             Ok(Socks5FlowResult {
                 client_address: relay_flow_result.client_address,
             })

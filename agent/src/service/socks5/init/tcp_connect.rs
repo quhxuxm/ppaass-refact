@@ -1,5 +1,6 @@
-use std::{net::SocketAddr, task::Poll};
+use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
+use std::{net::SocketAddr, task::Poll};
 
 use bytes::Bytes;
 use futures_util::future::BoxFuture;
@@ -7,11 +8,11 @@ use tower::{Service, ServiceBuilder};
 use tracing::error;
 
 use common::{
-    AgentMessagePayloadTypeValue, CommonError, generate_uuid, MessageFramedRead,
-    MessageFramedWrite, MessagePayload, NetAddress, PayloadEncryptionTypeSelectService,
-    PayloadEncryptionTypeSelectServiceRequest, PayloadEncryptionTypeSelectServiceResult,
-    PayloadType, ProxyMessagePayloadTypeValue, ReadMessageService,
-    ReadMessageServiceRequest, ReadMessageServiceResult, ready_and_call_service, WriteMessageService,
+    generate_uuid, ready_and_call_service, AgentMessagePayloadTypeValue, CommonError,
+    MessageFramedRead, MessageFramedWrite, MessagePayload, NetAddress,
+    PayloadEncryptionTypeSelectService, PayloadEncryptionTypeSelectServiceRequest,
+    PayloadEncryptionTypeSelectServiceResult, PayloadType, ProxyMessagePayloadTypeValue,
+    ReadMessageService, ReadMessageServiceRequest, ReadMessageServiceResult, WriteMessageService,
     WriteMessageServiceRequest,
 };
 
@@ -19,17 +20,25 @@ use crate::{
     command::socks5::Socks5Addr,
     config::SERVER_CONFIG,
     service::common::{
-        ConnectToProxyService, ConnectToProxyServiceRequest,
-        DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS, DEFAULT_READ_PROXY_TIMEOUT_SECONDS,
-        DEFAULT_RETRY_TIMES, generate_prepare_message_framed_service,
+        generate_prepare_message_framed_service, ConnectToProxyService,
+        ConnectToProxyServiceRequest, DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS,
+        DEFAULT_READ_PROXY_TIMEOUT_SECONDS, DEFAULT_RETRY_TIMES,
     },
 };
 
 pub(crate) struct Socks5TcpConnectService;
+
 pub(crate) struct Socks5TcpConnectServiceRequest {
     pub proxy_addresses: Arc<Vec<SocketAddr>>,
     pub client_address: SocketAddr,
     pub dest_address: Socks5Addr,
+}
+
+impl Debug for Socks5TcpConnectServiceRequest {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Socks5TcpConnectServiceRequest: proxy_addresses={:#?}, client_address={}, dest_address={}", 
+        self.proxy_addresses, self.client_address, self.dest_address.to_string())
+    }
 }
 
 pub(crate) struct Socks5TcpConnectServiceResponse {
@@ -91,12 +100,12 @@ impl Service<Socks5TcpConnectServiceRequest> for Socks5TcpConnectService {
                     client_address: request.client_address,
                 },
             )
-                .await?;
+            .await?;
             let framed_result = ready_and_call_service(
                 &mut prepare_message_framed_service,
                 connect_to_proxy_service_result.proxy_stream,
             )
-                .await?;
+            .await?;
             let PayloadEncryptionTypeSelectServiceResult {
                 payload_encryption_type,
                 ..
@@ -107,7 +116,7 @@ impl Service<Socks5TcpConnectServiceRequest> for Socks5TcpConnectService {
                     user_token: SERVER_CONFIG.user_token().clone().unwrap(),
                 },
             )
-                .await?;
+            .await?;
             let write_message_result = ready_and_call_service(
                 &mut write_agent_message_service,
                 WriteMessageServiceRequest {
@@ -123,14 +132,14 @@ impl Service<Socks5TcpConnectServiceRequest> for Socks5TcpConnectService {
                     )),
                 },
             )
-                .await?;
+            .await?;
             match ready_and_call_service(
                 &mut read_proxy_message_service,
                 ReadMessageServiceRequest {
                     message_framed_read: framed_result.message_framed_read,
                 },
             )
-                .await?
+            .await?
             {
                 None => {
                     error!("Nothing read from proxy.");
@@ -138,15 +147,15 @@ impl Service<Socks5TcpConnectServiceRequest> for Socks5TcpConnectService {
                 },
                 Some(ReadMessageServiceResult {
                     message_payload:
-                    MessagePayload {
-                        payload_type:
-                        PayloadType::ProxyPayload(
-                            ProxyMessagePayloadTypeValue::TcpConnectSuccess,
-                        ),
-                        source_address,
-                        target_address,
-                        ..
-                    },
+                        MessagePayload {
+                            payload_type:
+                                PayloadType::ProxyPayload(
+                                    ProxyMessagePayloadTypeValue::TcpConnectSuccess,
+                                ),
+                            source_address,
+                            target_address,
+                            ..
+                        },
                     message_framed_read,
                     message_id,
                     ..
@@ -160,11 +169,11 @@ impl Service<Socks5TcpConnectServiceRequest> for Socks5TcpConnectService {
                 }),
                 Some(ReadMessageServiceResult {
                     message_payload:
-                    MessagePayload {
-                        payload_type:
-                        PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::TcpConnectFail),
-                        ..
-                    },
+                        MessagePayload {
+                            payload_type:
+                                PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::TcpConnectFail),
+                            ..
+                        },
                     ..
                 }) => {
                     error!("Fail connect to target from proxy.");

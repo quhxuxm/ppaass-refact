@@ -1,9 +1,10 @@
-use std::{fmt::Debug, net::SocketAddr};
+use std::fmt::Formatter;
 use std::sync::Arc;
 use std::task::Poll;
+use std::{fmt::Debug, net::SocketAddr};
 
-use futures_util::{SinkExt, StreamExt};
 use futures_util::future::BoxFuture;
+use futures_util::{SinkExt, StreamExt};
 use tokio::net::TcpStream;
 use tokio_util::codec::Framed;
 use tower::Service;
@@ -11,10 +12,15 @@ use tower::ServiceBuilder;
 use tracing::log::{debug, error};
 
 use common::{
-    CommonError, MessageFramedRead, MessageFramedWrite, NetAddress, ready_and_call_service,
+    ready_and_call_service, CommonError, MessageFramedRead, MessageFramedWrite, NetAddress,
 };
 use tcp_connect::Socks5TcpConnectService;
 
+use crate::service::common::DEFAULT_BUFFER_SIZE;
+use crate::service::socks5::init::udp_associate::{
+    Socks5UdpAssociateService, Socks5UdpAssociateServiceRequest, Socks5UdpAssociateServiceResponse,
+};
+use crate::SERVER_CONFIG;
 use crate::{
     codec::socks5::Socks5InitCodec,
     service::socks5::init::tcp_connect::Socks5TcpConnectServiceRequest,
@@ -25,21 +31,25 @@ use crate::{
     },
     service::socks5::init::tcp_connect::Socks5TcpConnectServiceResponse,
 };
-use crate::SERVER_CONFIG;
-use crate::service::common::DEFAULT_BUFFER_SIZE;
-use crate::service::socks5::init::udp_associate::{
-    Socks5UdpAssociateService, Socks5UdpAssociateServiceRequest, Socks5UdpAssociateServiceResponse,
-};
 
 mod tcp_connect;
 mod udp_associate;
 pub(crate) type Socks5InitFramed<'a> = Framed<&'a mut TcpStream, Socks5InitCodec>;
 
-#[derive(Debug)]
 pub(crate) struct Socks5InitCommandServiceRequest {
     pub proxy_addresses: Arc<Vec<SocketAddr>>,
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,
+}
+
+impl Debug for Socks5InitCommandServiceRequest {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Socks5InitCommandServiceRequest: proxy_addresses={:#?}, client_address={}",
+            self.proxy_addresses, self.client_address
+        )
+    }
 }
 
 pub(crate) struct Socks5InitCommandServiceResult {
@@ -97,7 +107,7 @@ impl Service<Socks5InitCommandServiceRequest> for Socks5InitCommandService {
                             dest_address: dest_address.clone(),
                         },
                     )
-                        .await
+                    .await
                     {
                         Err(e) => {
                             error!(
@@ -147,7 +157,7 @@ impl Service<Socks5InitCommandServiceRequest> for Socks5InitCommandService {
                             client_address,
                         },
                     )
-                        .await
+                    .await
                     {
                         Err(e) => {
                             error!(

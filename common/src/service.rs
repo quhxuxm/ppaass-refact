@@ -1,3 +1,4 @@
+use std::fmt::{Debug, Formatter};
 use std::task::{Context, Poll};
 use std::time::Duration;
 
@@ -87,6 +88,18 @@ pub struct WriteMessageServiceRequest {
     pub payload_encryption_type: PayloadEncryptionType,
 }
 
+impl Debug for WriteMessageServiceRequest {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "WriteMessageServiceRequest: ref_id={}, user_token={}, payload_encryption_type={:#?}",
+            self.ref_id.as_ref().unwrap_or(&"".to_string()),
+            self.user_token,
+            self.payload_encryption_type
+        )
+    }
+}
+
 pub struct WriteMessageServiceResult {
     pub message_framed_write: MessageFramedWrite,
 }
@@ -141,6 +154,12 @@ impl Service<WriteMessageServiceRequest> for WriteMessageService {
 
 pub struct ReadMessageServiceRequest {
     pub message_framed_read: MessageFramedRead,
+}
+
+impl Debug for ReadMessageServiceRequest {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ReadMessageServiceRequest")
+    }
 }
 
 pub struct ReadMessageServiceResult {
@@ -218,6 +237,7 @@ impl Service<ReadMessageServiceRequest> for ReadMessageService {
     }
 }
 
+#[derive(Debug)]
 pub struct PayloadEncryptionTypeSelectServiceRequest {
     pub user_token: String,
     pub encryption_token: Bytes,

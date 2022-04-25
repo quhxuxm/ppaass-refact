@@ -1,3 +1,4 @@
+use std::fmt::{Debug, Formatter};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::task::{Context, Poll};
@@ -37,16 +38,36 @@ pub const DEFAULT_READ_CLIENT_TIMEOUT_SECONDS: u64 = 20;
 pub const DEFAULT_RATE_LIMIT: u64 = 1024;
 pub const DEFAULT_CONCURRENCY_LIMIT: usize = 1024;
 pub const DEFAULT_BUFFERED_CONNECTION_NUMBER: usize = 1024;
-#[derive(Debug)]
+
 pub(crate) struct ClientConnectionInfo {
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,
 }
 
-#[derive(Debug)]
+impl Debug for ClientConnectionInfo {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "ClientConnectionInfo: client_address={}",
+            self.client_address
+        )
+    }
+}
+
 pub(crate) struct HandleClientConnectionService {
     pub proxy_addresses: Arc<Vec<SocketAddr>>,
 }
+
+impl Debug for HandleClientConnectionService {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "HandleClientConnectionService: proxy_addresses={:#?}",
+            self.proxy_addresses
+        )
+    }
+}
+
 impl HandleClientConnectionService {
     pub(crate) fn new(proxy_addresses: Arc<Vec<SocketAddr>>) -> Self {
         Self { proxy_addresses }
@@ -128,12 +149,31 @@ pub(crate) struct ConnectToProxyServiceRequest {
     pub client_address: SocketAddr,
 }
 
+impl Debug for ConnectToProxyServiceRequest {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "ConnectToProxyServiceRequest: proxy_addresses={:#?}, client_address={}",
+            self.proxy_addresses, self.client_address
+        )
+    }
+}
+
 #[derive(Clone)]
 struct ConcreteConnectToProxyRequest {
     proxy_addresses: Arc<Vec<SocketAddr>>,
     client_address: SocketAddr,
 }
 
+impl Debug for ConcreteConnectToProxyRequest {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "ConcreteConnectToProxyRequest: proxy_addresses={:#?}, client_address={}",
+            self.proxy_addresses, self.client_address
+        )
+    }
+}
 pub(crate) struct ConnectToProxyServiceResult {
     pub proxy_stream: TcpStream,
 }
@@ -286,6 +326,18 @@ pub(crate) struct TcpRelayServiceRequest {
     pub source_address: NetAddress,
     pub target_address: NetAddress,
     pub init_data: Option<Vec<u8>>,
+}
+
+impl Debug for TcpRelayServiceRequest {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "TcpRelayServiceRequest: client_address={}, source_address={}, target_address={}",
+            self.client_address,
+            self.source_address.to_string(),
+            self.target_address.to_string()
+        )
+    }
 }
 
 #[allow(unused)]

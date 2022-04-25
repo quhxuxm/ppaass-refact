@@ -1,11 +1,12 @@
 #![allow(unused)]
+use std::fmt::{Display, Formatter};
 use std::net::{IpAddr, SocketAddr};
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use tracing::error;
 
-use crate::{error::CommonError, util::generate_uuid};
 use crate::NetAddress::IpV4;
+use crate::{error::CommonError, util::generate_uuid};
 
 const ENCRYPTION_TYPE_PLAIN: u8 = 0;
 const ENCRYPTION_TYPE_BLOWFISH: u8 = 1;

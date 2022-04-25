@@ -1,3 +1,4 @@
+use std::fmt::{Debug, Formatter};
 use std::net::SocketAddr;
 use std::task::{Context, Poll};
 
@@ -32,6 +33,17 @@ pub(crate) struct TcpConnectServiceRequest {
     pub message_framed_write: MessageFramedWrite,
     pub agent_address: SocketAddr,
 }
+
+impl Debug for TcpConnectServiceRequest {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        writeln!(
+            f,
+            "TcpConnectServiceRequest: agent_address={}",
+            self.agent_address
+        )
+    }
+}
+
 pub(crate) struct TcpConnectServiceResult {
     pub target_stream: TcpStream,
     pub message_framed_read: MessageFramedRead,

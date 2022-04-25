@@ -22,7 +22,7 @@ pub(crate) mod service;
 pub(crate) mod config;
 
 fn main() -> Result<()> {
-    init_log(
+    let _tracing_guard = init_log(
         SERVER_CONFIG
             .log_dir()
             .as_ref()

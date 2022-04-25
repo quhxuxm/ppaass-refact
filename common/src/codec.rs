@@ -1,3 +1,5 @@
+use std::fmt::{Debug, Formatter};
+
 use bytes::{Buf, Bytes, BytesMut};
 use lz4::block::{compress, decompress};
 use rand::rngs::OsRng;
@@ -11,10 +13,17 @@ use crate::{CommonError, Message, PayloadEncryptionType};
 
 const LENGTH_DELIMITED_CODEC_LENGTH_FIELD_LENGTH: usize = 8;
 const RNG: OsRng = OsRng;
+
 pub struct MessageCodec {
     rsa_crypto: RsaCrypto<OsRng>,
     length_delimited_codec: LengthDelimitedCodec,
     compress: bool,
+}
+
+impl Debug for MessageCodec {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "MessageCodec: compress={}", self.compress)
+    }
 }
 
 impl MessageCodec {
