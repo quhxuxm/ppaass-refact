@@ -5,7 +5,7 @@ use chrono::Local;
 use futures_util::TryFutureExt;
 use tower::{Service, ServiceExt};
 use tracing::level_filters::LevelFilter;
-use tracing::{error, Instrument};
+use tracing::{debug, Instrument};
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::fmt::format::Writer;
 use tracing_subscriber::fmt::time::FormatTime;
@@ -58,7 +58,7 @@ where
 {
     let service_type_name = type_name::<S>();
     let service_call_span = tracing::info_span!(
-        "CALL_SERVICE",
+        "CALL_SERVICE=>",
         service_name = service_type_name,
         request = format!("{:#?}", request).as_str()
     );
@@ -70,7 +70,7 @@ where
     {
         Ok(v) => Ok(v),
         Err(e) => {
-            error!(
+            debug!(
                 "Fail to invoke service [{}] because of errors: {:#?}",
                 service_type_name, e
             );
