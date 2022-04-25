@@ -2,16 +2,16 @@ use std::task::{Context, Poll};
 use std::time::Duration;
 
 use bytes::Bytes;
-use futures_util::{SinkExt, StreamExt};
 use futures_util::future::BoxFuture;
 use futures_util::stream::{SplitSink, SplitStream};
+use futures_util::{SinkExt, StreamExt};
 use tokio::net::TcpStream;
 use tokio_util::codec::Framed;
 use tower::Service;
 use tracing::{debug, error};
 
 use crate::{
-    CommonError, generate_uuid, Message, MessageCodec, MessagePayload, PayloadEncryptionType,
+    generate_uuid, CommonError, Message, MessageCodec, MessagePayload, PayloadEncryptionType,
 };
 
 pub type MessageFramedRead = SplitStream<Framed<TcpStream, MessageCodec>>;
@@ -23,18 +23,18 @@ pub struct PrepareMessageFramedResult {
 }
 
 #[derive(Clone)]
-pub struct PrepareMessageFramedService {
-    public_key: &'static str,
-    private_key: &'static str,
+pub struct PrepareMessageFramedService<'a> {
+    public_key: &'a str,
+    private_key: &'a str,
     max_frame_size: usize,
     buffer_size: usize,
     compress: bool,
 }
 
-impl PrepareMessageFramedService {
+impl<'a> PrepareMessageFramedService<'a> {
     pub fn new(
-        public_key: &'static str,
-        private_key: &'static str,
+        public_key: &'a str,
+        private_key: &'a str,
         max_frame_size: usize,
         buffer_size: usize,
         compress: bool,
@@ -49,7 +49,7 @@ impl PrepareMessageFramedService {
     }
 }
 
-impl Service<TcpStream> for PrepareMessageFramedService {
+impl<'a> Service<TcpStream> for PrepareMessageFramedService<'a> {
     type Response = PrepareMessageFramedResult;
     type Error = CommonError;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
@@ -179,7 +179,7 @@ impl Service<ReadMessageServiceRequest> for ReadMessageService {
                 Duration::from_secs(read_timeout_seconds),
                 req.message_framed_read.next(),
             )
-                .await
+            .await
             {
                 Err(e) => {
                     error!("The read timeout in {} seconds.", e);

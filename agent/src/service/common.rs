@@ -8,18 +8,18 @@ use futures_util::future;
 use futures_util::future::BoxFuture;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
-use tower::{Service, service_fn, ServiceBuilder};
 use tower::retry::{Policy, Retry};
 use tower::util::BoxCloneService;
+use tower::{service_fn, Service, ServiceBuilder};
 use tracing::{debug, error};
 
 use common::{
-    AgentMessagePayloadTypeValue, CommonError, generate_uuid, MessageFramedRead,
-    MessageFramedWrite, MessagePayload, NetAddress, PayloadEncryptionTypeSelectService,
-    PayloadEncryptionTypeSelectServiceRequest, PayloadEncryptionTypeSelectServiceResult,
-    PayloadType, PrepareMessageFramedService, ProxyMessagePayloadTypeValue,
-    ReadMessageService, ReadMessageServiceRequest, ReadMessageServiceResult,
-    ready_and_call_service, WriteMessageService, WriteMessageServiceRequest,
+    generate_uuid, ready_and_call_service, AgentMessagePayloadTypeValue, CommonError,
+    MessageFramedRead, MessageFramedWrite, MessagePayload, NetAddress,
+    PayloadEncryptionTypeSelectService, PayloadEncryptionTypeSelectServiceRequest,
+    PayloadEncryptionTypeSelectServiceResult, PayloadType, PrepareMessageFramedService,
+    ProxyMessagePayloadTypeValue, ReadMessageService, ReadMessageServiceRequest,
+    ReadMessageServiceResult, WriteMessageService, WriteMessageServiceRequest,
 };
 
 use crate::config::{AGENT_PRIVATE_KEY, PROXY_PUBLIC_KEY, SERVER_CONFIG};
@@ -100,7 +100,7 @@ impl Service<ClientConnectionInfo> for HandleClientConnectionService {
                         client_address: req.client_address,
                     },
                 )
-                    .await?;
+                .await?;
                 debug!(
                     "Client {} complete socks5 relay",
                     flow_result.client_address
@@ -116,7 +116,7 @@ impl Service<ClientConnectionInfo> for HandleClientConnectionService {
                     client_address: req.client_address,
                 },
             )
-                .await?;
+            .await?;
             Ok(())
         })
     }
@@ -146,7 +146,7 @@ struct ConnectToProxyAttempts {
 #[derive(Clone)]
 pub(crate) struct ConnectToProxyService {
     concrete_service:
-    BoxCloneService<ConcreteConnectToProxyRequest, ConnectToProxyServiceResult, CommonError>,
+        BoxCloneService<ConcreteConnectToProxyRequest, ConnectToProxyServiceResult, CommonError>,
 }
 
 impl ConnectToProxyService {
@@ -159,7 +159,7 @@ impl ConnectToProxyService {
                     Duration::from_secs(connect_timeout_seconds),
                     TcpStream::connect(request.proxy_addresses.as_slice()),
                 )
-                    .await
+                .await
                 {
                     Err(e) => {
                         error!("The connect to proxy timeout: {:#?}.", e);
@@ -191,7 +191,7 @@ impl ConnectToProxyService {
 }
 
 impl Policy<ConcreteConnectToProxyRequest, ConnectToProxyServiceResult, CommonError>
-for ConnectToProxyAttempts
+    for ConnectToProxyAttempts
 {
     type Future = futures_util::future::Ready<Self>;
 
@@ -248,7 +248,7 @@ impl Service<ConnectToProxyServiceRequest> for ConnectToProxyService {
                     client_address: request.client_address,
                 },
             )
-                .await;
+            .await;
             return match concrete_connect_result {
                 Ok(r) => Ok(r),
                 Err(e) => {
@@ -264,7 +264,7 @@ impl Service<ConnectToProxyServiceRequest> for ConnectToProxyService {
     }
 }
 
-pub fn generate_prepare_message_framed_service() -> PrepareMessageFramedService {
+pub fn generate_prepare_message_framed_service<'a>() -> PrepareMessageFramedService<'a> {
     ServiceBuilder::new().service(PrepareMessageFramedService::new(
         &(*PROXY_PUBLIC_KEY),
         &(*AGENT_PRIVATE_KEY),
@@ -331,7 +331,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                             user_token: SERVER_CONFIG.user_token().clone().unwrap(),
                         },
                     )
-                        .await
+                    .await
                     {
                         Err(e) => {
                             error!(
@@ -357,7 +357,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                             )),
                         },
                     )
-                        .await;
+                    .await;
                     let _write_agent_message_result = match write_agent_message_result {
                         Err(e) => {
                             error!(
@@ -380,7 +380,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                         Duration::from_secs(read_client_timeout_seconds),
                         client_stream_read_half.read_buf(&mut buf),
                     )
-                        .await
+                    .await
                     {
                         Err(e) => {
                             error!("The read client data timeout: {:#?}.", e);
@@ -411,7 +411,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                             user_token: SERVER_CONFIG.user_token().clone().unwrap(),
                         },
                     )
-                        .await
+                    .await
                     {
                         Err(e) => {
                             error!(
@@ -437,7 +437,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                             )),
                         },
                     )
-                        .await;
+                    .await;
                     let write_agent_message_result = match write_agent_message_result {
                         Err(e) => {
                             error!(
@@ -465,14 +465,14 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                             message_framed_read,
                         },
                     )
-                        .await;
+                    .await;
                     let ReadMessageServiceResult {
                         message_framed_read: message_framed_read_in_result,
                         message_payload:
-                        MessagePayload {
-                            data: proxy_raw_data,
-                            ..
-                        },
+                            MessagePayload {
+                                data: proxy_raw_data,
+                                ..
+                            },
                         ..
                     } = match read_proxy_message_result {
                         Err(e) => {
@@ -482,13 +482,13 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                         Ok(Some(
                             value @ ReadMessageServiceResult {
                                 message_payload:
-                                MessagePayload {
-                                    payload_type:
-                                    PayloadType::ProxyPayload(
-                                        ProxyMessagePayloadTypeValue::TcpData,
-                                    ),
-                                    ..
-                                },
+                                    MessagePayload {
+                                        payload_type:
+                                            PayloadType::ProxyPayload(
+                                                ProxyMessagePayloadTypeValue::TcpData,
+                                            ),
+                                        ..
+                                    },
                                 ..
                             },
                         )) => value,

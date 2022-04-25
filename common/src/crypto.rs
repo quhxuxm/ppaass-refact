@@ -1,9 +1,9 @@
 use bytes::{BufMut, Bytes, BytesMut};
-use crypto::{aessafe, blowfish};
 use crypto::symmetriccipher::{BlockDecryptor, BlockEncryptor};
+use crypto::{aessafe, blowfish};
 use rand::Rng;
-use rsa::{PaddingScheme, PublicKey, RsaPrivateKey, RsaPublicKey};
 use rsa::pkcs8::{FromPrivateKey, FromPublicKey};
+use rsa::{PaddingScheme, PublicKey, RsaPrivateKey, RsaPublicKey};
 use tracing::error;
 
 use crate::CommonError;
@@ -25,11 +25,7 @@ impl<T> RsaCrypto<T>
 where
     T: Rng + Send + Sync,
 {
-    pub fn new(
-        public_key: &'static str,
-        private_key: &'static str,
-        rng: T,
-    ) -> Result<Self, CommonError> {
+    pub fn new(public_key: &str, private_key: &str, rng: T) -> Result<Self, CommonError> {
         let public_key = match RsaPublicKey::from_public_key_pem(public_key) {
             Ok(v) => v,
             Err(e) => {

@@ -4,10 +4,10 @@ use rand::rngs::OsRng;
 use tokio_util::codec::{Decoder, Encoder, LengthDelimitedCodec};
 use tracing::{debug, error};
 
-use crate::{CommonError, Message, PayloadEncryptionType};
 use crate::crypto::{
     decrypt_with_aes, decrypt_with_blowfish, encrypt_with_aes, encrypt_with_blowfish, RsaCrypto,
 };
+use crate::{CommonError, Message, PayloadEncryptionType};
 
 const LENGTH_DELIMITED_CODEC_LENGTH_FIELD_LENGTH: usize = 8;
 const RNG: OsRng = OsRng;
@@ -18,12 +18,7 @@ pub struct MessageCodec {
 }
 
 impl MessageCodec {
-    pub fn new(
-        public_key: &'static str,
-        private_key: &'static str,
-        max_frame_size: usize,
-        compress: bool,
-    ) -> Self {
+    pub fn new(public_key: &str, private_key: &str, max_frame_size: usize, compress: bool) -> Self {
         let mut length_delimited_codec_builder = LengthDelimitedCodec::builder();
         length_delimited_codec_builder.max_frame_length(max_frame_size);
         length_delimited_codec_builder
