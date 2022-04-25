@@ -200,8 +200,8 @@ impl Service<ReadMessageServiceRequest> for ReadMessageService {
             )
             .await
             {
-                Err(e) => {
-                    error!("The read timeout in {} seconds.", e);
+                Err(_e) => {
+                    error!("The read timeout in {} seconds.", read_timeout_seconds);
                     return Err(CommonError::TimeoutError);
                 },
                 Ok(None) => {
