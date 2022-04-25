@@ -178,7 +178,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
                             return;
                         },
                         Ok(Err(e)) => {
-                            error!("Fail to read target data because of error: {:#?}", e);
+                            debug!("Fail to read target data because of error: {:#?}", e);
                             return;
                         },
                         Ok(Ok((_, _, 0))) => {
