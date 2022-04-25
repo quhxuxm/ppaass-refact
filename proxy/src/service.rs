@@ -112,10 +112,20 @@ impl Service<AgentConnectionInfo> for HandleAgentConnectionService {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub(crate) struct ConnectToTargetServiceRequest {
     pub target_address: String,
     pub agent_address: SocketAddr,
+}
+
+impl Debug for ConnectToTargetServiceRequest {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "ConnectToTargetServiceRequest: agent_address={}, target_address={}",
+            self.agent_address, self.target_address
+        )
+    }
 }
 
 pub(crate) struct ConnectToTargetServiceResult {
