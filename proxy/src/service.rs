@@ -156,8 +156,11 @@ impl ConnectToTargetService {
                 )
                 .await
                 {
-                    Err(e) => {
-                        error!("The connect to target timeout: {:#?}.", e);
+                    Err(_e) => {
+                        error!(
+                            "The connect to target timeout, duration: {}.",
+                            connect_timeout_seconds
+                        );
                         return Err(CommonError::TimeoutError);
                     },
                     Ok(Ok(v)) => v,
