@@ -1,6 +1,8 @@
 #![allow(unused)]
 use std::fmt::{Display, Formatter};
 use std::net::{IpAddr, SocketAddr};
+use std::ops::Deref;
+use std::sync::Arc;
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use tracing::error;
@@ -467,33 +469,58 @@ pub struct Message {
 }
 
 impl Message {
-    pub fn new_random_id(
-        ref_id: Option<String>,
-        user_token: String,
-        payload_encryption_type: PayloadEncryptionType,
-        payload: Option<Bytes>,
-    ) -> Self {
+    pub fn new_random_id<R, U, PE, P>(
+        ref_id: Option<R>,
+        user_token: U,
+        payload_encryption_type: PE,
+        payload: Option<P>,
+    ) -> Self
+    where
+        R: Into<String>,
+        U: Into<String>,
+        P: Into<Bytes>,
+        PE: Into<PayloadEncryptionType>,
+    {
         Self {
             id: generate_uuid(),
-            ref_id,
-            user_token,
-            payload_encryption_type,
-            payload,
+            ref_id: match ref_id {
+                None => None,
+                Some(v) => Some(v.into()),
+            },
+            user_token: user_token.into(),
+            payload_encryption_type: payload_encryption_type.into(),
+            payload: match payload {
+                None => None,
+                Some(v) => Some(v.into()),
+            },
         }
     }
-    pub fn new(
-        id: String,
-        ref_id: Option<String>,
-        user_token: String,
-        payload_encryption_type: PayloadEncryptionType,
-        payload: Option<Bytes>,
-    ) -> Self {
+    pub fn new<I, R, U, PE, P>(
+        id: I,
+        ref_id: Option<R>,
+        user_token: U,
+        payload_encryption_type: PE,
+        payload: Option<P>,
+    ) -> Self
+    where
+        I: Into<String>,
+        R: Into<String>,
+        U: Into<String>,
+        P: Into<Bytes>,
+        PE: Into<PayloadEncryptionType>,
+    {
         Self {
-            id,
-            ref_id,
-            user_token,
-            payload_encryption_type,
-            payload,
+            id: id.into(),
+            ref_id: match ref_id {
+                None => None,
+                Some(v) => Some(v.into()),
+            },
+            user_token: user_token.into(),
+            payload_encryption_type: payload_encryption_type.into(),
+            payload: match payload {
+                None => None,
+                Some(v) => Some(v.into()),
+            },
         }
     }
 }

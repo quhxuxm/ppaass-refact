@@ -27,7 +27,16 @@ impl Debug for MessageCodec {
 }
 
 impl MessageCodec {
-    pub fn new(public_key: &str, private_key: &str, max_frame_size: usize, compress: bool) -> Self {
+    pub fn new<PU, PR>(
+        public_key: PU,
+        private_key: PR,
+        max_frame_size: usize,
+        compress: bool,
+    ) -> Self
+    where
+        PU: AsRef<str>,
+        PR: AsRef<str>,
+    {
         let mut length_delimited_codec_builder = LengthDelimitedCodec::builder();
         length_delimited_codec_builder.max_frame_length(max_frame_size);
         length_delimited_codec_builder

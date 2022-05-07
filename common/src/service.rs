@@ -13,6 +13,7 @@ use tracing::{debug, error};
 
 use crate::{
     generate_uuid, CommonError, Message, MessageCodec, MessagePayload, PayloadEncryptionType,
+    PayloadType,
 };
 
 pub type MessageFramedRead = SplitStream<Framed<TcpStream, MessageCodec>>;
@@ -63,8 +64,8 @@ impl<'a> Service<TcpStream> for PrepareMessageFramedService<'a> {
         let framed = Framed::with_capacity(
             input_stream,
             MessageCodec::new(
-                &(*self.public_key),
-                &(*self.private_key),
+                self.public_key,
+                self.private_key,
                 self.max_frame_size,
                 self.compress,
             ),
@@ -124,14 +125,14 @@ impl Service<WriteMessageServiceRequest> for WriteMessageService {
                     req.ref_id,
                     req.user_token,
                     req.payload_encryption_type,
-                    None,
+                    None::<Bytes>,
                 ),
                 Some(payload) => Message::new(
                     generate_uuid(),
                     req.ref_id,
                     req.user_token,
                     req.payload_encryption_type,
-                    Some(payload.into()),
+                    Some(payload),
                 ),
             };
             let mut message_frame_write = req.message_framed_write;

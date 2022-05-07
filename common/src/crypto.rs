@@ -25,15 +25,19 @@ impl<T> RsaCrypto<T>
 where
     T: Rng + Send + Sync,
 {
-    pub fn new(public_key: &str, private_key: &str, rng: T) -> Result<Self, CommonError> {
-        let public_key = match RsaPublicKey::from_public_key_pem(public_key) {
+    pub fn new<PU, PR>(public_key: PU, private_key: PR, rng: T) -> Result<Self, CommonError>
+    where
+        PU: AsRef<str>,
+        PR: AsRef<str>,
+    {
+        let public_key = match RsaPublicKey::from_public_key_pem(public_key.as_ref()) {
             Ok(v) => v,
             Err(e) => {
                 error!("Fail to parse rsa key because of error: {:#?}", e);
                 return Err(CommonError::CodecError);
             },
         };
-        let private_key = match RsaPrivateKey::from_pkcs8_pem(private_key) {
+        let private_key = match RsaPrivateKey::from_pkcs8_pem(private_key.as_ref()) {
             Ok(v) => v,
             Err(e) => {
                 error!("Fail to parse rsa key because of error: {:#?}", e);
