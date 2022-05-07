@@ -13,7 +13,6 @@ use tracing::{debug, error};
 
 use crate::{
     generate_uuid, CommonError, Message, MessageCodec, MessagePayload, PayloadEncryptionType,
-    PayloadType,
 };
 
 pub type MessageFramedRead = SplitStream<Framed<TcpStream, MessageCodec>>;
