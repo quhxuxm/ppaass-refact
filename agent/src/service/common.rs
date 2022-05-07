@@ -304,10 +304,11 @@ impl Service<ConnectToProxyServiceRequest> for ConnectToProxyService {
     }
 }
 
-pub fn generate_prepare_message_framed_service<'a>() -> PrepareMessageFramedService<'a> {
+pub fn generate_prepare_message_framed_service<'a>() -> PrepareMessageFramedService<&'a str, &'a str>
+{
     ServiceBuilder::new().service(PrepareMessageFramedService::new(
-        &(*PROXY_PUBLIC_KEY),
-        &(*AGENT_PRIVATE_KEY),
+        PROXY_PUBLIC_KEY.as_str(),
+        AGENT_PRIVATE_KEY.as_str(),
         SERVER_CONFIG
             .max_frame_size()
             .unwrap_or(DEFAULT_MAX_FRAME_SIZE),

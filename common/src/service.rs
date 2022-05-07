@@ -24,18 +24,26 @@ pub struct PrepareMessageFramedResult {
 }
 
 #[derive(Clone)]
-pub struct PrepareMessageFramedService<'a> {
-    public_key: &'a str,
-    private_key: &'a str,
+pub struct PrepareMessageFramedService<PU, PR>
+where
+    PU: AsRef<str>,
+    PR: AsRef<str>,
+{
+    public_key: PU,
+    private_key: PR,
     max_frame_size: usize,
     buffer_size: usize,
     compress: bool,
 }
 
-impl<'a> PrepareMessageFramedService<'a> {
+impl<PU, PR> PrepareMessageFramedService<PU, PR>
+where
+    PU: AsRef<str>,
+    PR: AsRef<str>,
+{
     pub fn new(
-        public_key: &'a str,
-        private_key: &'a str,
+        public_key: PU,
+        private_key: PR,
         max_frame_size: usize,
         buffer_size: usize,
         compress: bool,
@@ -50,7 +58,11 @@ impl<'a> PrepareMessageFramedService<'a> {
     }
 }
 
-impl<'a> Service<TcpStream> for PrepareMessageFramedService<'a> {
+impl<PU, PR> Service<TcpStream> for PrepareMessageFramedService<PU, PR>
+where
+    PU: AsRef<str>,
+    PR: AsRef<str>,
+{
     type Response = PrepareMessageFramedResult;
     type Error = CommonError;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
@@ -63,8 +75,8 @@ impl<'a> Service<TcpStream> for PrepareMessageFramedService<'a> {
         let framed = Framed::with_capacity(
             input_stream,
             MessageCodec::new(
-                self.public_key,
-                self.private_key,
+                self.public_key.as_ref(),
+                self.private_key.as_ref(),
                 self.max_frame_size,
                 self.compress,
             ),
