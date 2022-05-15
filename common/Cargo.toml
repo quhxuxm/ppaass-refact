@@ -5,19 +5,18 @@ version = "0.1.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dependencies]
-async-trait = "0.1.52"
 bytes = "1.1.0"
 futures-util = { version = "0.3.21", features = ["sink"] }
-lz4 = "1.23.2"
+lz4 = "1.23.3"
 rand = "0.8.5"
-rsa = "0.5.0"
+rsa = "0.6.1"
 chrono = "0.4.19"
 rust-crypto = "0.2.36"
-thiserror = "1.0.30"
-tokio = { version = "1.17.0", features = ["full"] }
-tokio-util = { version = "0.7.1", features = ["codec"] }
+thiserror = "1.0.31"
+tokio = { version = "1.18.2", features = ["full"] }
+tokio-util = { version = "0.7.2", features = ["codec"] }
 tower = { version = "0.4.12", features = ["full"] }
-tracing = "0.1.31"
-tracing-subscriber = "0.3.9"
-tracing-appender = "0.2.1"
-uuid = { version = "0.8.2", features = ["v4"] }
+tracing = "0.1.34"
+tracing-subscriber = "0.3.11"
+tracing-appender = "0.2.2"
+uuid = { version = "1.0.0", features = ["v4"] }
