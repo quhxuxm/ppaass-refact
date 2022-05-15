@@ -1,8 +1,8 @@
 use bytes::{BufMut, Bytes, BytesMut};
 use crypto::symmetriccipher::{BlockDecryptor, BlockEncryptor};
 use crypto::{aessafe, blowfish};
-use rand::Rng;
-use rsa::pkcs8::{FromPrivateKey, FromPublicKey};
+use rand::{CryptoRng, Rng};
+use rsa::pkcs8::{DecodePrivateKey, DecodePublicKey};
 use rsa::{PaddingScheme, PublicKey, RsaPrivateKey, RsaPublicKey};
 use tracing::error;
 
@@ -23,7 +23,7 @@ pub(crate) struct RsaCrypto<T> {
 
 impl<T> RsaCrypto<T>
 where
-    T: Rng + Send + Sync,
+    T: Rng + CryptoRng + Send + Sync,
 {
     pub fn new<PU, PR>(public_key: PU, private_key: PR, rng: T) -> Result<Self, CommonError>
     where
