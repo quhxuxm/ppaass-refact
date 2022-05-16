@@ -22,7 +22,7 @@ pub(crate) struct Socks5FlowRequest {
     pub proxy_addresses: Arc<Vec<SocketAddr>>,
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,
-    pub initial_buf: BytesMut,
+    pub buffer: BytesMut,
 }
 
 impl Debug for Socks5FlowRequest {
@@ -62,7 +62,7 @@ impl Service<Socks5FlowRequest> for Socks5FlowService {
                 Socks5AuthenticateFlowRequest {
                     client_stream: req.client_stream,
                     client_address: req.client_address,
-                    initial_buf: req.initial_buf,
+                    buffer: req.buffer,
                 },
             )
             .await?;
@@ -72,6 +72,7 @@ impl Service<Socks5FlowRequest> for Socks5FlowService {
                     proxy_addresses: req.proxy_addresses,
                     client_stream: authenticate_result.client_stream,
                     client_address: authenticate_result.client_address,
+                    buffer: authenticate_result.buffer,
                 },
             )
             .await?;

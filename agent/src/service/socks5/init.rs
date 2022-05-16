@@ -3,10 +3,11 @@ use std::sync::Arc;
 use std::task::Poll;
 use std::{fmt::Debug, net::SocketAddr};
 
+use bytes::BytesMut;
 use futures_util::future::BoxFuture;
 use futures_util::{SinkExt, StreamExt};
 use tokio::net::TcpStream;
-use tokio_util::codec::Framed;
+use tokio_util::codec::{Framed, FramedParts};
 use tower::Service;
 use tower::ServiceBuilder;
 use tracing::log::{debug, error};
@@ -19,12 +20,12 @@ use tcp_connect::Socks5TcpConnectService;
 use crate::message::socks5::{
     Socks5InitCommandResultContent, Socks5InitCommandResultStatus, Socks5InitCommandType,
 };
-use crate::service::common::DEFAULT_BUFFER_SIZE;
+
 use crate::service::socks5::init::tcp_connect::Socks5TcpConnectServiceResponse;
 use crate::service::socks5::init::udp_associate::{
     Socks5UdpAssociateService, Socks5UdpAssociateServiceRequest, Socks5UdpAssociateServiceResponse,
 };
-use crate::SERVER_CONFIG;
+
 use crate::{
     codec::socks5::Socks5InitCommandContentCodec,
     service::socks5::init::tcp_connect::Socks5TcpConnectServiceRequest,
@@ -38,6 +39,7 @@ pub(crate) struct Socks5InitCommandServiceRequest {
     pub proxy_addresses: Arc<Vec<SocketAddr>>,
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,
+    pub buffer: BytesMut,
 }
 
 impl Debug for Socks5InitCommandServiceRequest {
@@ -76,11 +78,10 @@ impl Service<Socks5InitCommandServiceRequest> for Socks5InitCommandService {
         Box::pin(async move {
             let mut client_stream = request.client_stream;
             let client_address = request.client_address;
-            let mut socks5_init_framed = Framed::with_capacity(
-                &mut client_stream,
-                Socks5InitCommandContentCodec,
-                SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
-            );
+            let mut framed_parts =
+                FramedParts::new(&mut client_stream, Socks5InitCommandContentCodec);
+            framed_parts.read_buf = request.buffer;
+            let mut socks5_init_framed = Framed::from_parts(framed_parts);
             let init_command = match socks5_init_framed.next().await {
                 Some(Ok(v)) => v,
                 _ => {

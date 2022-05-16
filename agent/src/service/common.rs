@@ -107,28 +107,32 @@ impl Service<ClientConnectionInfo> for HandleClientConnectionService {
                     return Err(CommonError::CodecError);
                 },
                 Some(Ok(Protocol::Http)) => {
-                    let FramedParts { read_buf, .. } = framed.into_parts();
+                    let FramedParts {
+                        read_buf: buffer, ..
+                    } = framed.into_parts();
                     ready_and_call_service(
                         &mut http_flow_service,
                         HttpFlowRequest {
                             proxy_addresses,
                             client_stream: req.client_stream,
                             client_address: req.client_address,
-                            initial_buf: read_buf,
+                            buffer,
                         },
                     )
                     .await?;
                     return Ok(());
                 },
                 Some(Ok(Protocol::Socks5)) => {
-                    let FramedParts { read_buf, .. } = framed.into_parts();
+                    let FramedParts {
+                        read_buf: buffer, ..
+                    } = framed.into_parts();
                     let flow_result = ready_and_call_service(
                         &mut socks5_flow_service,
                         Socks5FlowRequest {
                             proxy_addresses,
                             client_stream: req.client_stream,
                             client_address: req.client_address,
-                            initial_buf: read_buf,
+                            buffer,
                         },
                     )
                     .await?;

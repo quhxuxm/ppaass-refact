@@ -20,7 +20,7 @@ use crate::message::socks5::{Socks5AuthCommandResultContent, Socks5AuthMethod};
 pub(crate) struct Socks5AuthenticateFlowRequest {
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,
-    pub initial_buf: BytesMut,
+    pub buffer: BytesMut,
 }
 
 impl Debug for Socks5AuthenticateFlowRequest {
@@ -38,6 +38,7 @@ pub(crate) struct Socks5AuthenticateFlowResult {
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,
     pub auth_method: Socks5AuthMethod,
+    pub buffer: BytesMut,
 }
 
 #[derive(Clone, Default)]
@@ -62,7 +63,7 @@ impl Service<Socks5AuthenticateFlowRequest> for Socks5AuthCommandService {
         Box::pin(async move {
             let mut framed_parts =
                 FramedParts::new(&mut request.client_stream, Socks5AuthCommandContentCodec);
-            framed_parts.read_buf = request.initial_buf;
+            framed_parts.read_buf = request.buffer;
             let mut framed = Framed::from_parts(framed_parts);
             let authenticate_command = match framed.next().await {
                 None => {
@@ -97,10 +98,12 @@ impl Service<Socks5AuthenticateFlowRequest> for Socks5AuthCommandService {
                 Socks5AuthCommandResultContent::new(Socks5AuthMethod::NoAuthenticationRequired);
             framed.send(authentication_result).await?;
             framed.flush().await?;
+            let FramedParts { read_buf, .. } = framed.into_parts();
             Ok(Socks5AuthenticateFlowResult {
                 client_stream: request.client_stream,
                 client_address: request.client_address,
                 auth_method: Socks5AuthMethod::NoAuthenticationRequired,
+                buffer: read_buf,
             })
         })
     }
