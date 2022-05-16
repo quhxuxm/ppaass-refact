@@ -19,7 +19,7 @@ pub(crate) struct HttpFlowRequest {
     pub proxy_addresses: Arc<Vec<SocketAddr>>,
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,
-    pub initial_buf: BytesMut
+    pub initial_buf: BytesMut,
 }
 #[derive(Debug)]
 #[allow(unused)]
@@ -49,7 +49,7 @@ impl Service<HttpFlowRequest> for HttpFlowService {
                     proxy_addresses: req.proxy_addresses,
                     client_address: req.client_address,
                     client_stream: req.client_stream,
-                    initial_buf: req.initial_buf
+                    initial_buf: req.initial_buf,
                 },
             )
             .await?;

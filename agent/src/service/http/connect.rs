@@ -50,7 +50,7 @@ pub(crate) struct HttpConnectServiceRequest {
     pub proxy_addresses: Arc<Vec<SocketAddr>>,
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,
-    pub initial_buf: BytesMut
+    pub initial_buf: BytesMut,
 }
 
 impl Debug for HttpConnectServiceRequest {
@@ -126,7 +126,8 @@ impl Service<HttpConnectServiceRequest> for HttpConnectService {
                 ));
             let mut payload_encryption_type_select_service =
                 ServiceBuilder::new().service(PayloadEncryptionTypeSelectService);
-            let mut framed_parts = FramedParts::new(&mut request.client_stream, HttpCodec::default());
+            let mut framed_parts =
+                FramedParts::new(&mut request.client_stream, HttpCodec::default());
             framed_parts.read_buf = request.initial_buf;
             let mut http_client_framed = Framed::from_parts(framed_parts);
             let http_message = match http_client_framed.next().await {
