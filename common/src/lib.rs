@@ -23,8 +23,8 @@ pub use service::WriteMessageServiceRequest;
 pub use service::WriteMessageServiceResult;
 pub use util::generate_uuid;
 pub use util::init_log;
-pub use util::LogTimer;
 pub use util::ready_and_call_service;
+pub use util::LogTimer;
 
 mod codec;
 mod crypto;

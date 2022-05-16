@@ -17,8 +17,8 @@ use common::{
 };
 
 use crate::{
-    command::socks5::Socks5Addr,
     config::SERVER_CONFIG,
+    message::socks5::Socks5Addr,
     service::common::{
         generate_prepare_message_framed_service, ConnectToProxyService,
         ConnectToProxyServiceRequest, DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS,

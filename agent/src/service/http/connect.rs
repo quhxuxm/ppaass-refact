@@ -5,12 +5,12 @@ use std::task::{Context, Poll};
 
 use bytecodec::bytes::BytesEncoder;
 use bytecodec::EncodeExt;
-use bytes::Bytes;
+use bytes::{Bytes, BytesMut};
 use futures_util::future::BoxFuture;
 use futures_util::{SinkExt, StreamExt};
 use httpcodec::{BodyEncoder, HttpVersion, ReasonPhrase, RequestEncoder, Response, StatusCode};
 use tokio::net::TcpStream;
-use tokio_util::codec::Framed;
+use tokio_util::codec::{Framed, FramedParts};
 use tower::Service;
 use tower::ServiceBuilder;
 use tracing::error;
@@ -28,7 +28,7 @@ use common::{
 use crate::codec::http::HttpCodec;
 use crate::service::common::{
     generate_prepare_message_framed_service, ConnectToProxyService, ConnectToProxyServiceRequest,
-    ConnectToProxyServiceResult, DEFAULT_BUFFER_SIZE, DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS,
+    ConnectToProxyServiceResult, DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS,
     DEFAULT_READ_PROXY_TIMEOUT_SECONDS, DEFAULT_RETRY_TIMES,
 };
 use crate::SERVER_CONFIG;
@@ -50,6 +50,7 @@ pub(crate) struct HttpConnectServiceRequest {
     pub proxy_addresses: Arc<Vec<SocketAddr>>,
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,
+    pub initial_buf: BytesMut
 }
 
 impl Debug for HttpConnectServiceRequest {
@@ -125,11 +126,9 @@ impl Service<HttpConnectServiceRequest> for HttpConnectService {
                 ));
             let mut payload_encryption_type_select_service =
                 ServiceBuilder::new().service(PayloadEncryptionTypeSelectService);
-            let mut http_client_framed = Framed::with_capacity(
-                &mut request.client_stream,
-                HttpCodec::default(),
-                SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
-            );
+            let mut framed_parts = FramedParts::new(&mut request.client_stream, HttpCodec::default());
+            framed_parts.read_buf = request.initial_buf;
+            let mut http_client_framed = Framed::from_parts(framed_parts);
             let http_message = match http_client_framed.next().await {
                 Some(Ok(v)) => v,
                 _ => {

@@ -4,16 +4,16 @@ use tracing::error;
 
 use common::CommonError;
 
-use crate::command::socks5::{
-    Socks5Addr, Socks5AuthCommand, Socks5AuthCommandResult, Socks5AuthMethod, Socks5InitCommand,
-    Socks5InitCommandResult, Socks5InitCommandType, Socks5UdpDataCommand,
-    Socks5UdpDataCommandResult,
+use crate::message::socks5::{
+    Socks5Addr, Socks5AuthCommandContent, Socks5AuthCommandResultContent, Socks5AuthMethod,
+    Socks5InitCommandContent, Socks5InitCommandResultContent, Socks5InitCommandType,
+    Socks5UdpDataCommandContent, Socks5UdpDataCommandResultContent,
 };
 
-pub(crate) struct Socks5AuthCodec;
+pub(crate) struct Socks5AuthCommandContentCodec;
 
-impl Decoder for Socks5AuthCodec {
-    type Item = Socks5AuthCommand;
+impl Decoder for Socks5AuthCommandContentCodec {
+    type Item = Socks5AuthCommandContent;
     type Error = CommonError;
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
@@ -29,16 +29,16 @@ impl Decoder for Socks5AuthCodec {
         (0..methods_number).for_each(|_| {
             methods.push(Socks5AuthMethod::from(src.get_u8()));
         });
-        Ok(Some(Socks5AuthCommand::new(methods_number, methods)))
+        Ok(Some(Socks5AuthCommandContent::new(methods_number, methods)))
     }
 }
 
-impl Encoder<Socks5AuthCommandResult> for Socks5AuthCodec {
+impl Encoder<Socks5AuthCommandResultContent> for Socks5AuthCommandContentCodec {
     type Error = CommonError;
 
     fn encode(
         &mut self,
-        item: Socks5AuthCommandResult,
+        item: Socks5AuthCommandResultContent,
         dst: &mut BytesMut,
     ) -> Result<(), Self::Error> {
         dst.put_u8(item.version);
@@ -46,11 +46,10 @@ impl Encoder<Socks5AuthCommandResult> for Socks5AuthCodec {
         Ok(())
     }
 }
+pub(crate) struct Socks5InitCommandContentCodec;
 
-pub(crate) struct Socks5InitCodec;
-
-impl Decoder for Socks5InitCodec {
-    type Item = Socks5InitCommand;
+impl Decoder for Socks5InitCommandContentCodec {
+    type Item = Socks5InitCommandContent;
     type Error = CommonError;
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
@@ -82,16 +81,19 @@ impl Decoder for Socks5InitCodec {
             },
             Ok(v) => v,
         };
-        Ok(Some(Socks5InitCommand::new(request_type, dest_address)))
+        Ok(Some(Socks5InitCommandContent::new(
+            request_type,
+            dest_address,
+        )))
     }
 }
 
-impl Encoder<Socks5InitCommandResult> for Socks5InitCodec {
+impl Encoder<Socks5InitCommandResultContent> for Socks5InitCommandContentCodec {
     type Error = CommonError;
 
     fn encode(
         &mut self,
-        item: Socks5InitCommandResult,
+        item: Socks5InitCommandResultContent,
         dst: &mut BytesMut,
     ) -> Result<(), Self::Error> {
         dst.put_u8(item.version);
@@ -104,10 +106,10 @@ impl Encoder<Socks5InitCommandResult> for Socks5InitCodec {
     }
 }
 
-pub(crate) struct Socks5UdpDataCodec;
+pub(crate) struct Socks5UdpDataCommandContentCodec;
 
-impl Decoder for Socks5UdpDataCodec {
-    type Item = Socks5UdpDataCommand;
+impl Decoder for Socks5UdpDataCommandContentCodec {
+    type Item = Socks5UdpDataCommandContent;
     type Error = CommonError;
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
@@ -135,7 +137,7 @@ impl Decoder for Socks5UdpDataCodec {
             Ok(v) => v,
         };
         let data = src.copy_to_bytes(src.remaining());
-        Ok(Some(Socks5UdpDataCommand {
+        Ok(Some(Socks5UdpDataCommandContent {
             frag,
             address,
             data,
@@ -143,12 +145,12 @@ impl Decoder for Socks5UdpDataCodec {
     }
 }
 
-impl Encoder<Socks5UdpDataCommandResult> for Socks5UdpDataCodec {
+impl Encoder<Socks5UdpDataCommandResultContent> for Socks5UdpDataCommandContentCodec {
     type Error = CommonError;
 
     fn encode(
         &mut self,
-        item: Socks5UdpDataCommandResult,
+        item: Socks5UdpDataCommandResultContent,
         dst: &mut BytesMut,
     ) -> Result<(), Self::Error> {
         dst.put_u16(0);

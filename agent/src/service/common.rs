@@ -5,10 +5,11 @@ use std::task::{Context, Poll};
 use std::time::Duration;
 
 use bytes::{BufMut, BytesMut};
-use futures_util::future;
 use futures_util::future::BoxFuture;
+use futures_util::{future, StreamExt};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
+use tokio_util::codec::{Framed, FramedParts};
 use tower::retry::{Policy, Retry};
 use tower::util::BoxCloneService;
 use tower::{service_fn, Service, ServiceBuilder};
@@ -23,12 +24,11 @@ use common::{
     ReadMessageServiceResult, WriteMessageService, WriteMessageServiceRequest,
 };
 
+use crate::codec::common::{InitializeProtocolDecoder, Protocol};
 use crate::config::{AGENT_PRIVATE_KEY, PROXY_PUBLIC_KEY, SERVER_CONFIG};
 use crate::service::http::{HttpFlowRequest, HttpFlowService};
 use crate::service::socks5::{Socks5FlowRequest, Socks5FlowService};
 
-const SOCKS5_PROTOCOL_FLAG: u8 = 5;
-const SOCKS4_PROTOCOL_FLAG: u8 = 4;
 pub const DEFAULT_BUFFER_SIZE: usize = 1024 * 64;
 pub const DEFAULT_MAX_FRAME_SIZE: usize = DEFAULT_BUFFER_SIZE * 2;
 pub const DEFAULT_RETRY_TIMES: u16 = 3;
@@ -82,63 +82,69 @@ impl Service<ClientConnectionInfo> for HandleClientConnectionService {
         Poll::Ready(Ok(()))
     }
 
-    fn call(&mut self, req: ClientConnectionInfo) -> Self::Future {
+    fn call(&mut self, mut req: ClientConnectionInfo) -> Self::Future {
         let proxy_addresses = self.proxy_addresses.clone();
         Box::pin(async move {
             let mut socks5_flow_service =
                 ServiceBuilder::new().service(Socks5FlowService::default());
             let mut http_flow_service = ServiceBuilder::new().service(HttpFlowService::default());
-            let mut protocol_buf: [u8; 1] = [0];
-            let peek_result = req.client_stream.peek(&mut protocol_buf).await;
-            let protocol = match peek_result {
-                Err(e) => {
-                    error!(
-                        "Fail to peek protocol from client stream because of error: {:#?}",
-                        e
-                    );
-                    return Err(CommonError::IoError { source: e });
+
+            let mut framed = Framed::with_capacity(
+                &mut req.client_stream,
+                InitializeProtocolDecoder,
+                SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
+            );
+
+            match framed.next().await {
+                None => {
+                    return Ok(());
                 },
-                Ok(1) => protocol_buf[0],
-                Ok(protocol_flag) => {
+                Some(Err(e)) => {
                     error!(
-                        "Fail to peek protocol from client stream because of unknown protocol flag: {}",
-                        protocol_flag
+                        "Can not parse protocol from client input stream because of error: {:#?}.",
+                        e
                     );
                     return Err(CommonError::CodecError);
                 },
-            };
-            if protocol == SOCKS4_PROTOCOL_FLAG {
-                error!("Can not support socks4 protocol.");
-                return Err(CommonError::CodecError);
-            }
-            if protocol == SOCKS5_PROTOCOL_FLAG {
-                debug!("Incoming request is for socks5 protocol.");
-                let flow_result = ready_and_call_service(
-                    &mut socks5_flow_service,
-                    Socks5FlowRequest {
-                        proxy_addresses,
-                        client_stream: req.client_stream,
-                        client_address: req.client_address,
-                    },
-                )
-                .await?;
-                debug!(
-                    "Client {} complete socks5 relay",
-                    flow_result.client_address
-                );
-                return Ok(());
-            }
-            debug!("Incoming request is for http protocol.");
-            let _flow_result = ready_and_call_service(
-                &mut http_flow_service,
-                HttpFlowRequest {
-                    proxy_addresses,
-                    client_stream: req.client_stream,
-                    client_address: req.client_address,
+                Some(Ok(Protocol::Http)) => {
+                    let FramedParts{
+                        read_buf,
+                        ..
+                    } = framed.into_parts();
+                    ready_and_call_service(
+                        &mut http_flow_service,
+                        HttpFlowRequest {
+                            proxy_addresses,
+                            client_stream: req.client_stream,
+                            client_address: req.client_address,
+                            initial_buf: read_buf
+                        },
+                    )
+                    .await?;
+                    return Ok(());
                 },
-            )
-            .await?;
-            Ok(())
+                Some(Ok(Protocol::Socks5)) => {
+                    let FramedParts{
+                        read_buf,
+                        ..
+                    } = framed.into_parts();
+                    let flow_result = ready_and_call_service(
+                        &mut socks5_flow_service,
+                        Socks5FlowRequest {
+                            proxy_addresses,
+                            client_stream: req.client_stream,
+                            client_address: req.client_address,
+                            initial_buf: read_buf
+                        },
+                    )
+                    .await?;
+                    debug!(
+                        "Client {} complete socks5 relay",
+                        flow_result.client_address
+                    );
+                    return Ok(());
+                },
+            }
         })
     }
 }

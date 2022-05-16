@@ -3,6 +3,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
+use bytes::BytesMut;
 use futures_util::future::BoxFuture;
 use tokio::net::TcpStream;
 use tower::Service;
@@ -21,6 +22,7 @@ pub(crate) struct Socks5FlowRequest {
     pub proxy_addresses: Arc<Vec<SocketAddr>>,
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,
+    pub initial_buf: BytesMut,
 }
 
 impl Debug for Socks5FlowRequest {
@@ -60,6 +62,7 @@ impl Service<Socks5FlowRequest> for Socks5FlowService {
                 Socks5AuthenticateFlowRequest {
                     client_stream: req.client_stream,
                     client_address: req.client_address,
+                    initial_buf: req.initial_buf,
                 },
             )
             .await?;

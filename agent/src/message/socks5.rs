@@ -278,15 +278,15 @@ impl From<Socks5Addr> for NetAddress {
     }
 }
 #[derive(Debug)]
-pub(crate) struct Socks5AuthCommand {
+pub(crate) struct Socks5AuthCommandContent {
     pub version: u8,
     pub method_number: u8,
     pub methods: Vec<Socks5AuthMethod>,
 }
 
-impl Socks5AuthCommand {
+impl Socks5AuthCommandContent {
     pub fn new(method_number: u8, methods: Vec<Socks5AuthMethod>) -> Self {
-        Socks5AuthCommand {
+        Socks5AuthCommandContent {
             version: 5,
             method_number,
             methods,
@@ -295,14 +295,14 @@ impl Socks5AuthCommand {
 }
 
 #[derive(Debug)]
-pub(crate) struct Socks5AuthCommandResult {
+pub(crate) struct Socks5AuthCommandResultContent {
     pub version: u8,
     pub method: Socks5AuthMethod,
 }
 
-impl Socks5AuthCommandResult {
+impl Socks5AuthCommandResultContent {
     pub fn new(method: Socks5AuthMethod) -> Self {
-        Socks5AuthCommandResult {
+        Socks5AuthCommandResultContent {
             version: 5u8,
             method,
         }
@@ -310,15 +310,15 @@ impl Socks5AuthCommandResult {
 }
 
 #[derive(Debug)]
-pub(crate) struct Socks5InitCommand {
+pub(crate) struct Socks5InitCommandContent {
     pub version: u8,
     pub request_type: Socks5InitCommandType,
     pub dest_address: Socks5Addr,
 }
 
-impl Socks5InitCommand {
+impl Socks5InitCommandContent {
     pub fn new(request_type: Socks5InitCommandType, dest_address: Socks5Addr) -> Self {
-        Socks5InitCommand {
+        Socks5InitCommandContent {
             version: 5,
             request_type,
             dest_address,
@@ -327,15 +327,15 @@ impl Socks5InitCommand {
 }
 
 #[derive(Debug)]
-pub(crate) struct Socks5InitCommandResult {
+pub(crate) struct Socks5InitCommandResultContent {
     pub version: u8,
     pub status: Socks5InitCommandResultStatus,
     pub bind_address: Option<Socks5Addr>,
 }
 
-impl Socks5InitCommandResult {
+impl Socks5InitCommandResultContent {
     pub fn new(status: Socks5InitCommandResultStatus, bind_address: Option<Socks5Addr>) -> Self {
-        Socks5InitCommandResult {
+        Socks5InitCommandResultContent {
             version: 5,
             status,
             bind_address,
@@ -345,20 +345,20 @@ impl Socks5InitCommandResult {
 
 /// Socks5 udp data request
 #[derive(Debug)]
-pub(crate) struct Socks5UdpDataCommand {
+pub(crate) struct Socks5UdpDataCommandContent {
     pub frag: u8,
     pub address: Socks5Addr,
     pub data: Bytes,
 }
 
 #[derive(Debug)]
-pub(crate) struct Socks5UdpDataCommandResult {
+pub(crate) struct Socks5UdpDataCommandResultContent {
     pub frag: u8,
     pub dest_address: Socks5Addr,
     pub data: Bytes,
 }
 
-impl Socks5UdpDataCommandResult {
+impl Socks5UdpDataCommandResultContent {
     pub fn new(frag: u8, dest_address: Socks5Addr, data: Bytes) -> Self {
         Self {
             frag,
