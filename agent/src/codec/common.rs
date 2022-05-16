@@ -1,7 +1,10 @@
 use common::CommonError;
 use tokio_util::codec::Decoder;
+
 use tracing::{debug, error};
 
+const SOCKS5_FLAG: u8 = 5;
+const SOCKS4_FLAG: u8 = 4;
 pub(crate) enum Protocol {
     Http,
     Socks5,
@@ -20,11 +23,11 @@ impl Decoder for InitializeProtocolDecoder {
         }
         let protocol_flag = src[0];
         match protocol_flag {
-            5 => {
+            SOCKS5_FLAG => {
                 debug!("Incoming agent client protocol is socks5.");
                 return Ok(Some(Protocol::Socks5));
             },
-            4 => {
+            SOCKS4_FLAG => {
                 error!("Incoming agent client protocol is socks4, which is unspported!");
                 return Err(CommonError::CodecError);
             },
