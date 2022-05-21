@@ -7,7 +7,7 @@ version = "0.1.0"
 [dependencies]
 bytes = "1.1.0"
 chrono = "0.4.19"
-futures-util = {version = "0.3.21", features = ["sink"]}
+futures = "0.3.21"
 lz4 = "1.23.3"
 rand = "0.8.5"
 rsa = "0.6.1"

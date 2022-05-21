@@ -3,8 +3,8 @@ use std::net::SocketAddr;
 use std::task::{Context, Poll};
 use std::time::Duration;
 
-use futures_util::future;
-use futures_util::future::BoxFuture;
+use futures::future;
+use futures::future::BoxFuture;
 use tokio::net::TcpStream;
 use tower::util::BoxCloneService;
 use tower::{
@@ -191,7 +191,7 @@ impl ConnectToTargetService {
 impl Policy<ConnectToTargetServiceRequest, ConnectToTargetServiceResult, CommonError>
     for ConnectToTargetAttempts
 {
-    type Future = futures_util::future::Ready<Self>;
+    type Future = futures::future::Ready<Self>;
 
     fn retry(
         &self,

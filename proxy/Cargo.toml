@@ -24,7 +24,7 @@ anyhow = "1.0.57"
 bytes = "1.1.0"
 chrono = "0.4.19"
 common = {path = "../common"}
-futures-util = {version = "0.3.21", features = ["sink"]}
+futures = "0.3.21"
 lazy_static = "1.4.0"
 rand = "0.8.5"
 serde = "1.0.137"

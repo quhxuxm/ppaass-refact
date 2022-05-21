@@ -2,7 +2,7 @@
 
 use std::task::{Context, Poll};
 
-use futures_util::future::BoxFuture;
+use futures::future::BoxFuture;
 use tower::Service;
 
 use common::CommonError;

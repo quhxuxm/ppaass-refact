@@ -2,7 +2,7 @@ use std::str::FromStr;
 use std::{any::type_name, fmt::Debug};
 
 use chrono::Local;
-use futures_util::TryFutureExt;
+use futures::TryFutureExt;
 use tower::{Service, ServiceExt};
 use tracing::level_filters::LevelFilter;
 use tracing::{debug, Instrument};
