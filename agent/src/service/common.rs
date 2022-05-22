@@ -5,8 +5,8 @@ use std::task::{Context, Poll};
 use std::time::Duration;
 
 use bytes::{BufMut, BytesMut};
-use futures_util::future::BoxFuture;
-use futures_util::{future, StreamExt};
+use futures::future::BoxFuture;
+use futures::{future, StreamExt};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio_util::codec::{Framed, FramedParts};
@@ -237,7 +237,7 @@ impl ConnectToProxyService {
 impl Policy<ConcreteConnectToProxyRequest, ConnectToProxyServiceResult, CommonError>
     for ConnectToProxyAttempts
 {
-    type Future = futures_util::future::Ready<Self>;
+    type Future = futures::future::Ready<Self>;
 
     fn retry(
         &self,

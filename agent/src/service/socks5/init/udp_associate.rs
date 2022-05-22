@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 
 use bytes::Bytes;
-use futures_util::future::BoxFuture;
+use futures::future::BoxFuture;
 use tower::{Service, ServiceBuilder};
 use tracing::error;
 

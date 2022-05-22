@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 
 use bytes::BytesMut;
-use futures_util::future::BoxFuture;
+use futures::future::BoxFuture;
 use tokio::net::TcpStream;
 use tower::{Service, ServiceBuilder};
 

@@ -4,7 +4,6 @@ use std::{net::SocketAddr, time::Duration};
 
 use bytes::BytesMut;
 use futures::future::BoxFuture;
-use futures::stream::StreamExt;
 
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
@@ -78,9 +77,6 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
             let agent_connect_message_target_address = req.target_address;
             let target_address_for_return = agent_connect_message_target_address.clone();
             let (mut target_stream_read, mut target_stream_write) = target_stream.into_split();
-
-            // let payload_stream = message_framed_read
-            //     .filter_map(|message| async { message.map_or(None, |message| message.payload) });
             tokio::spawn(async move {
                 let mut read_agent_message_service =
                     ServiceBuilder::new().service(ReadMessageService::new(
