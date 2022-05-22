@@ -4,8 +4,8 @@ use std::{net::SocketAddr, time::Duration};
 
 use bytes::BytesMut;
 use futures::future::BoxFuture;
-
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::net::TcpStream;
 use tower::Service;
 use tower::ServiceBuilder;
@@ -68,180 +68,202 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
 
     fn call(&mut self, req: TcpRelayServiceRequest) -> Self::Future {
         Box::pin(async move {
-            let mut message_framed_read = req.message_framed_read;
-            let mut message_framed_write = req.message_framed_write;
+            let message_framed_read = req.message_framed_read;
+            let message_framed_write = req.message_framed_write;
             let target_stream = req.target_stream;
-            let agent_tcp_connect_message_id = req.agent_tcp_connect_message_id;
-            let user_token = req.user_token;
-            let agent_connect_message_source_address = req.source_address;
-            let agent_connect_message_target_address = req.target_address;
+            let agent_tcp_connect_message_id = req.agent_tcp_connect_message_id.clone();
+            let user_token = req.user_token.clone();
+            let agent_connect_message_source_address = req.source_address.clone();
+            let agent_connect_message_target_address = req.target_address.clone();
             let target_address_for_return = agent_connect_message_target_address.clone();
-            let (mut target_stream_read, mut target_stream_write) = target_stream.into_split();
-            tokio::spawn(async move {
-                let mut read_agent_message_service =
-                    ServiceBuilder::new().service(ReadMessageService::new(
-                        SERVER_CONFIG
-                            .read_agent_timeout_seconds()
-                            .unwrap_or(DEFAULT_READ_AGENT_TIMEOUT_SECONDS),
-                    ));
-                loop {
-                    let read_agent_message_result = ready_and_call_service(
-                        &mut read_agent_message_service,
-                        ReadMessageServiceRequest {
-                            message_framed_read,
-                        },
-                    )
-                    .await;
-                    let ReadMessageServiceResult {
-                        message_payload: MessagePayload { data, .. },
-                        message_framed_read: message_framed_read_from_read_agent_result,
-                        ..
-                    } = match read_agent_message_result {
-                        Ok(None) => {
-                            debug!("Read all data from agent: {:#?}", req.agent_address);
-                            return;
-                        },
-                        Ok(Some(
-                            v @ ReadMessageServiceResult {
-                                message_payload:
-                                    MessagePayload {
-                                        payload_type:
-                                            PayloadType::AgentPayload(
-                                                AgentMessagePayloadTypeValue::TcpData,
-                                            ),
-                                        ..
-                                    },
-                                ..
-                            },
-                        )) => v,
-                        Ok(_) => {
-                            error!("Invalid payload type from agent: {:#?}", req.agent_address);
-                            return;
-                        },
-                        Err(e) => {
-                            debug!("Fail to read from agent because of error: {:#?}", e);
-                            return;
-                        },
-                    };
-                    if let Err(e) = target_stream_write.write(data.as_ref()).await {
-                        error!(
-                            "Fail to write from agent to target because of error: {:#?}",
-                            e
-                        );
-                        let _ = target_stream_write.shutdown().await;
-                        return;
-                    };
-                    if let Err(e) = target_stream_write.flush().await {
-                        error!(
-                            "Fail to flush from agent to target because of error: {:#?}",
-                            e
-                        );
-                        let _ = target_stream_write.shutdown().await;
-                        return;
-                    };
-                    message_framed_read = message_framed_read_from_read_agent_result;
-                }
-            });
-            tokio::spawn(async move {
-                let mut write_proxy_message_service =
-                    ServiceBuilder::new().service(WriteMessageService::default());
-                let mut payload_encryption_type_select_service =
-                    ServiceBuilder::new().service(PayloadEncryptionTypeSelectService);
-                loop {
-                    let read_target_data_future = async move {
-                        let mut buf = BytesMut::with_capacity(
-                            SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
-                        );
-                        let read_size = match target_stream_read.read_buf(&mut buf).await {
-                            Err(e) => {
-                                error!("Fail to read data from target because of error: {:#?}", e);
-                                return Err(CommonError::IoError { source: e });
-                            },
-                            Ok(size) => {
-                                debug!("Read {} bytes from target.", size);
-                                size
-                            },
-                        };
-                        Ok((buf.freeze(), target_stream_read, read_size))
-                    };
-                    let (buf, inner_target_stream_read, _read_size) = match tokio::time::timeout(
-                        Duration::from_secs(
-                            SERVER_CONFIG
-                                .read_target_timeout_seconds()
-                                .unwrap_or(DEFAULT_READ_TARGET_TIMEOUT_SECONDS),
-                        ),
-                        read_target_data_future,
-                    )
-                    .await
-                    {
-                        Err(e) => {
-                            error!("The read target data timeout: {:#?}.", e);
-                            return;
-                        },
-                        Ok(Err(e)) => {
-                            debug!("Fail to read target data because of error: {:#?}", e);
-                            return;
-                        },
-                        Ok(Ok((_, _, 0))) => {
-                            debug!("Nothing to read from target, return from read target future.");
-                            return;
-                        },
-                        Ok(Ok(v)) => v,
-                    };
-                    let proxy_message_payload = MessagePayload::new(
-                        agent_connect_message_source_address.clone(),
-                        agent_connect_message_target_address.clone(),
-                        PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::TcpData),
-                        buf,
-                    );
-                    let PayloadEncryptionTypeSelectServiceResult {
-                        payload_encryption_type,
-                        ..
-                    } = match ready_and_call_service(
-                        &mut payload_encryption_type_select_service,
-                        PayloadEncryptionTypeSelectServiceRequest {
-                            encryption_token: generate_uuid().into(),
-                            user_token: user_token.clone(),
-                        },
-                    )
-                    .await
-                    {
-                        Err(e) => {
-                            error!(
-                                "Fail to select payload encryption type because of error: {:#?}",
-                                e
-                            );
-                            return;
-                        },
-                        Ok(v) => v,
-                    };
-                    let write_proxy_message_result = ready_and_call_service(
-                        &mut write_proxy_message_service,
-                        WriteMessageServiceRequest {
-                            message_framed_write,
-                            ref_id: Some(agent_tcp_connect_message_id.clone()),
-                            user_token: user_token.clone(),
-                            payload_encryption_type,
-                            message_payload: Some(proxy_message_payload),
-                        },
-                    )
-                    .await;
-                    match write_proxy_message_result {
-                        Err(e) => {
-                            error!("Fail to read from target because of error(ready): {:#?}", e);
-                            return;
-                        },
-                        Ok(proxy_message_write_result) => {
-                            message_framed_write = proxy_message_write_result.message_framed_write;
-                            target_stream_read = inner_target_stream_read;
-                        },
-                    }
-                }
-            });
+            let (target_stream_read, target_stream_write) = target_stream.into_split();
+            tokio::spawn(Self::generate_proxy_to_target_relay(
+                req.agent_address,
+                message_framed_read,
+                target_stream_write,
+            ));
+            tokio::spawn(Self::generate_target_to_proxy_relay(
+                message_framed_write,
+                agent_tcp_connect_message_id,
+                user_token,
+                agent_connect_message_source_address,
+                agent_connect_message_target_address,
+                target_stream_read,
+            ));
             Ok(TcpRelayServiceResult {
                 target_address: target_address_for_return,
                 agent_address: req.agent_address,
             })
         })
+    }
+}
+
+impl TcpRelayService {
+    async fn generate_proxy_to_target_relay(
+        agent_address: SocketAddr, mut message_framed_read: MessageFramedRead,
+        mut target_stream_write: OwnedWriteHalf,
+    ) {
+        let mut read_agent_message_service =
+            ServiceBuilder::new().service(ReadMessageService::new(
+                SERVER_CONFIG
+                    .read_agent_timeout_seconds()
+                    .unwrap_or(DEFAULT_READ_AGENT_TIMEOUT_SECONDS),
+            ));
+        loop {
+            let read_agent_message_result = ready_and_call_service(
+                &mut read_agent_message_service,
+                ReadMessageServiceRequest {
+                    message_framed_read,
+                },
+            )
+            .await;
+            let ReadMessageServiceResult {
+                message_payload: MessagePayload { data, .. },
+                message_framed_read: message_framed_read_from_read_agent_result,
+                ..
+            } = match read_agent_message_result {
+                Ok(None) => {
+                    debug!("Read all data from agent: {:#?}", agent_address);
+                    return;
+                },
+                Ok(Some(
+                    v @ ReadMessageServiceResult {
+                        message_payload:
+                            MessagePayload {
+                                payload_type:
+                                    PayloadType::AgentPayload(AgentMessagePayloadTypeValue::TcpData),
+                                ..
+                            },
+                        ..
+                    },
+                )) => v,
+                Ok(_) => {
+                    error!("Invalid payload type from agent: {:#?}", agent_address);
+                    return;
+                },
+                Err(e) => {
+                    debug!("Fail to read from agent because of error: {:#?}", e);
+                    return;
+                },
+            };
+            if let Err(e) = target_stream_write.write(data.as_ref()).await {
+                error!(
+                    "Fail to write from agent to target because of error: {:#?}",
+                    e
+                );
+                let _ = target_stream_write.shutdown().await;
+                return;
+            };
+            if let Err(e) = target_stream_write.flush().await {
+                error!(
+                    "Fail to flush from agent to target because of error: {:#?}",
+                    e
+                );
+                let _ = target_stream_write.shutdown().await;
+                return;
+            };
+            message_framed_read = message_framed_read_from_read_agent_result;
+        }
+    }
+
+    async fn generate_target_to_proxy_relay(
+        mut message_framed_write: MessageFramedWrite, agent_tcp_connect_message_id: String,
+        user_token: String, agent_connect_message_source_address: NetAddress,
+        agent_connect_message_target_address: NetAddress, mut target_stream_read: OwnedReadHalf,
+    ) {
+        let mut write_proxy_message_service =
+            ServiceBuilder::new().service(WriteMessageService::default());
+        let mut payload_encryption_type_select_service =
+            ServiceBuilder::new().service(PayloadEncryptionTypeSelectService);
+        loop {
+            let read_target_data_future = async move {
+                let mut buf = BytesMut::with_capacity(
+                    SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
+                );
+                let read_size = match target_stream_read.read_buf(&mut buf).await {
+                    Err(e) => {
+                        error!("Fail to read data from target because of error: {:#?}", e);
+                        return Err(CommonError::IoError { source: e });
+                    },
+                    Ok(size) => {
+                        debug!("Read {} bytes from target.", size);
+                        size
+                    },
+                };
+                Ok((buf.freeze(), target_stream_read, read_size))
+            };
+            let (buf, inner_target_stream_read, _read_size) = match tokio::time::timeout(
+                Duration::from_secs(
+                    SERVER_CONFIG
+                        .read_target_timeout_seconds()
+                        .unwrap_or(DEFAULT_READ_TARGET_TIMEOUT_SECONDS),
+                ),
+                read_target_data_future,
+            )
+            .await
+            {
+                Err(e) => {
+                    error!("The read target data timeout: {:#?}.", e);
+                    return;
+                },
+                Ok(Err(e)) => {
+                    debug!("Fail to read target data because of error: {:#?}", e);
+                    return;
+                },
+                Ok(Ok((_, _, 0))) => {
+                    debug!("Nothing to read from target, return from read target future.");
+                    return;
+                },
+                Ok(Ok(v)) => v,
+            };
+            let proxy_message_payload = MessagePayload::new(
+                agent_connect_message_source_address.clone(),
+                agent_connect_message_target_address.clone(),
+                PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::TcpData),
+                buf,
+            );
+            let PayloadEncryptionTypeSelectServiceResult {
+                payload_encryption_type,
+                ..
+            } = match ready_and_call_service(
+                &mut payload_encryption_type_select_service,
+                PayloadEncryptionTypeSelectServiceRequest {
+                    encryption_token: generate_uuid().into(),
+                    user_token: user_token.clone(),
+                },
+            )
+            .await
+            {
+                Err(e) => {
+                    error!(
+                        "Fail to select payload encryption type because of error: {:#?}",
+                        e
+                    );
+                    return;
+                },
+                Ok(v) => v,
+            };
+            let write_proxy_message_result = ready_and_call_service(
+                &mut write_proxy_message_service,
+                WriteMessageServiceRequest {
+                    message_framed_write,
+                    ref_id: Some(agent_tcp_connect_message_id.clone()),
+                    user_token: user_token.clone(),
+                    payload_encryption_type,
+                    message_payload: Some(proxy_message_payload),
+                },
+            )
+            .await;
+            match write_proxy_message_result {
+                Err(e) => {
+                    error!("Fail to read from target because of error(ready): {:#?}", e);
+                    return;
+                },
+                Ok(proxy_message_write_result) => {
+                    message_framed_write = proxy_message_write_result.message_framed_write;
+                    target_stream_read = inner_target_stream_read;
+                },
+            }
+        }
     }
 }
