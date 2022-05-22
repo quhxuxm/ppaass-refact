@@ -194,8 +194,7 @@ impl Policy<ConnectToTargetServiceRequest, ConnectToTargetServiceResult, CommonE
     type Future = futures::future::Ready<Self>;
 
     fn retry(
-        &self,
-        _req: &ConnectToTargetServiceRequest,
+        &self, _req: &ConnectToTargetServiceRequest,
         result: Result<&ConnectToTargetServiceResult, &CommonError>,
     ) -> Option<Self::Future> {
         match result {
@@ -220,8 +219,7 @@ impl Policy<ConnectToTargetServiceRequest, ConnectToTargetServiceResult, CommonE
     }
 
     fn clone_request(
-        &self,
-        req: &ConnectToTargetServiceRequest,
+        &self, req: &ConnectToTargetServiceRequest,
     ) -> Option<ConnectToTargetServiceRequest> {
         Some(req.clone())
     }

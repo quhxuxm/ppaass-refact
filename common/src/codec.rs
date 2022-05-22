@@ -28,10 +28,7 @@ impl Debug for MessageCodec {
 
 impl MessageCodec {
     pub fn new<PU, PR>(
-        public_key: PU,
-        private_key: PR,
-        max_frame_size: usize,
-        compress: bool,
+        public_key: PU, private_key: PR, max_frame_size: usize, compress: bool,
     ) -> Self
     where
         PU: AsRef<str>,

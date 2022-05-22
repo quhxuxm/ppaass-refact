@@ -240,8 +240,7 @@ impl Policy<ConcreteConnectToProxyRequest, ConnectToProxyServiceResult, CommonEr
     type Future = futures::future::Ready<Self>;
 
     fn retry(
-        &self,
-        _req: &ConcreteConnectToProxyRequest,
+        &self, _req: &ConcreteConnectToProxyRequest,
         result: Result<&ConnectToProxyServiceResult, &CommonError>,
     ) -> Option<Self::Future> {
         match result {
@@ -266,8 +265,7 @@ impl Policy<ConcreteConnectToProxyRequest, ConnectToProxyServiceResult, CommonEr
     }
 
     fn clone_request(
-        &self,
-        req: &ConcreteConnectToProxyRequest,
+        &self, req: &ConcreteConnectToProxyRequest,
     ) -> Option<ConcreteConnectToProxyRequest> {
         Some(req.clone())
     }

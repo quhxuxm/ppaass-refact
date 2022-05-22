@@ -379,9 +379,7 @@ pub struct MessagePayload {
 
 impl MessagePayload {
     pub fn new(
-        source_address: NetAddress,
-        target_address: NetAddress,
-        payload_type: PayloadType,
+        source_address: NetAddress, target_address: NetAddress, payload_type: PayloadType,
         data: Bytes,
     ) -> Self {
         Self {
@@ -470,10 +468,7 @@ pub struct Message {
 
 impl Message {
     pub fn new_random_id<R, U, PE, P>(
-        ref_id: Option<R>,
-        user_token: U,
-        payload_encryption_type: PE,
-        payload: Option<P>,
+        ref_id: Option<R>, user_token: U, payload_encryption_type: PE, payload: Option<P>,
     ) -> Self
     where
         R: Into<String>,
@@ -496,11 +491,7 @@ impl Message {
         }
     }
     pub fn new<I, R, U, PE, P>(
-        id: I,
-        ref_id: Option<R>,
-        user_token: U,
-        payload_encryption_type: PE,
-        payload: Option<P>,
+        id: I, ref_id: Option<R>, user_token: U, payload_encryption_type: PE, payload: Option<P>,
     ) -> Self
     where
         I: Into<String>,

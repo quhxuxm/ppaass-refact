@@ -42,11 +42,7 @@ where
     PR: AsRef<str>,
 {
     pub fn new(
-        public_key: PU,
-        private_key: PR,
-        max_frame_size: usize,
-        buffer_size: usize,
-        compress: bool,
+        public_key: PU, private_key: PR, max_frame_size: usize, buffer_size: usize, compress: bool,
     ) -> Self {
         Self {
             public_key,

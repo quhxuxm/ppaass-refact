@@ -37,9 +37,7 @@ impl Encoder<Socks5AuthCommandResultContent> for Socks5AuthCommandContentCodec {
     type Error = CommonError;
 
     fn encode(
-        &mut self,
-        item: Socks5AuthCommandResultContent,
-        dst: &mut BytesMut,
+        &mut self, item: Socks5AuthCommandResultContent, dst: &mut BytesMut,
     ) -> Result<(), Self::Error> {
         dst.put_u8(item.version);
         dst.put_u8(item.method.into());
@@ -92,9 +90,7 @@ impl Encoder<Socks5InitCommandResultContent> for Socks5InitCommandContentCodec {
     type Error = CommonError;
 
     fn encode(
-        &mut self,
-        item: Socks5InitCommandResultContent,
-        dst: &mut BytesMut,
+        &mut self, item: Socks5InitCommandResultContent, dst: &mut BytesMut,
     ) -> Result<(), Self::Error> {
         dst.put_u8(item.version);
         dst.put_u8(item.status.into());
@@ -149,9 +145,7 @@ impl Encoder<Socks5UdpDataCommandResultContent> for Socks5UdpDataCommandContentC
     type Error = CommonError;
 
     fn encode(
-        &mut self,
-        item: Socks5UdpDataCommandResultContent,
-        dst: &mut BytesMut,
+        &mut self, item: Socks5UdpDataCommandResultContent, dst: &mut BytesMut,
     ) -> Result<(), Self::Error> {
         dst.put_u16(0);
         dst.put_u8(item.frag);

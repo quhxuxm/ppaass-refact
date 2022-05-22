@@ -48,8 +48,7 @@ pub fn generate_uuid() -> String {
 }
 
 pub async fn ready_and_call_service<T, S>(
-    service: &mut S,
-    request: T,
+    service: &mut S, request: T,
 ) -> Result<S::Response, S::Error>
 where
     S: Service<T>,
