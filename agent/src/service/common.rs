@@ -8,6 +8,7 @@ use bytes::{BufMut, BytesMut};
 use futures::future::BoxFuture;
 use futures::{future, StreamExt};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::net::TcpStream;
 use tokio_util::codec::{Framed, FramedParts};
 use tower::retry::{Policy, Retry};
@@ -94,17 +95,14 @@ impl Service<ClientConnectionInfo> for HandleClientConnectionService {
                 InitializeProtocolDecoder,
                 SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
             );
-
-            match framed.next().await {
-                None => {
-                    return Ok(());
-                },
+            return match framed.next().await {
+                None => Ok(()),
                 Some(Err(e)) => {
                     error!(
                         "Can not parse protocol from client input stream because of error: {:#?}.",
                         e
                     );
-                    return Err(CommonError::CodecError);
+                    Err(CommonError::CodecError)
                 },
                 Some(Ok(Protocol::Http)) => {
                     let FramedParts {
@@ -120,7 +118,7 @@ impl Service<ClientConnectionInfo> for HandleClientConnectionService {
                         },
                     )
                     .await?;
-                    return Ok(());
+                    Ok(())
                 },
                 Some(Ok(Protocol::Socks5)) => {
                     let FramedParts {
@@ -140,9 +138,9 @@ impl Service<ClientConnectionInfo> for HandleClientConnectionService {
                         "Client {} complete socks5 relay",
                         flow_result.client_address
                     );
-                    return Ok(());
+                    Ok(())
                 },
-            }
+            };
         })
     }
 }
@@ -237,7 +235,7 @@ impl ConnectToProxyService {
 impl Policy<ConcreteConnectToProxyRequest, ConnectToProxyServiceResult, CommonError>
     for ConnectToProxyAttempts
 {
-    type Future = futures::future::Ready<Self>;
+    type Future = future::Ready<Self>;
 
     fn retry(
         &self, _req: &ConcreteConnectToProxyRequest,
@@ -363,215 +361,234 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
     fn call(&mut self, request: TcpRelayServiceRequest) -> Self::Future {
         Box::pin(async move {
             let client_stream = request.client_stream;
-            let mut message_framed_read = request.message_framed_read;
-            let mut message_framed_write = request.message_framed_write;
+            let message_framed_read = request.message_framed_read;
+            let message_framed_write = request.message_framed_write;
             let source_address_a2t = request.source_address.clone();
             let target_address_a2t = request.target_address.clone();
             let target_address_t2a = request.target_address.clone();
-            let (mut client_stream_read_half, mut client_stream_write_half) =
-                client_stream.into_split();
-            tokio::spawn(async move {
-                let mut payload_encryption_type_select_service =
-                    ServiceBuilder::new().service(PayloadEncryptionTypeSelectService);
-                let mut write_agent_message_service =
-                    ServiceBuilder::new().service(WriteMessageService::default());
-                if let Some(init_data) = request.init_data {
-                    let PayloadEncryptionTypeSelectServiceResult {
-                        payload_encryption_type,
-                        ..
-                    } = match ready_and_call_service(
-                        &mut payload_encryption_type_select_service,
-                        PayloadEncryptionTypeSelectServiceRequest {
-                            encryption_token: generate_uuid().into(),
-                            user_token: SERVER_CONFIG.user_token().clone().unwrap(),
-                        },
-                    )
-                    .await
-                    {
-                        Err(e) => {
-                            error!(
-                                "Fail to select payload encryption type because of error: {:#?}",
-                                e
-                            );
-                            return;
-                        },
-                        Ok(v) => v,
-                    };
-                    let write_agent_message_result = ready_and_call_service(
-                        &mut write_agent_message_service,
-                        WriteMessageServiceRequest {
-                            message_framed_write,
-                            ref_id: Some(request.connect_response_message_id.clone()),
-                            user_token: SERVER_CONFIG.user_token().clone().unwrap(),
-                            payload_encryption_type,
-                            message_payload: Some(MessagePayload::new(
-                                source_address_a2t.clone(),
-                                target_address_a2t.clone(),
-                                PayloadType::AgentPayload(AgentMessagePayloadTypeValue::TcpData),
-                                init_data.into(),
-                            )),
-                        },
-                    )
-                    .await;
-                    let _write_agent_message_result = match write_agent_message_result {
-                        Err(e) => {
-                            error!(
-                                "Fail to write agent message to proxy because of error: {:#?}",
-                                e
-                            );
-                            return;
-                        },
-                        Ok(v) => message_framed_write = v.message_framed_write,
-                    };
-                }
-                loop {
-                    let mut buf = BytesMut::with_capacity(
-                        SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
+            let client_address = request.client_address;
+            let (client_stream_read_half, client_stream_write_half) = client_stream.into_split();
+            tokio::spawn(Self::generate_from_client_to_proxy_relay(
+                request.init_data,
+                request.connect_response_message_id,
+                message_framed_write,
+                source_address_a2t,
+                target_address_a2t,
+                client_stream_read_half,
+            ));
+            tokio::spawn(Self::generate_proxy_to_client_relay(
+                target_address_t2a,
+                message_framed_read,
+                client_stream_write_half,
+            ));
+            Ok(TcpRelayServiceResult { client_address })
+        })
+    }
+}
+
+impl TcpRelayService {
+    async fn generate_from_client_to_proxy_relay(
+        init_data: Option<Vec<u8>>, connect_response_message_id: String,
+        mut message_framed_write: MessageFramedWrite, source_address_a2t: NetAddress,
+        target_address_a2t: NetAddress, mut client_stream_read_half: OwnedReadHalf,
+    ) {
+        let mut payload_encryption_type_select_service =
+            ServiceBuilder::new().service(PayloadEncryptionTypeSelectService);
+        let mut write_agent_message_service =
+            ServiceBuilder::new().service(WriteMessageService::default());
+        if let Some(init_data) = init_data {
+            let PayloadEncryptionTypeSelectServiceResult {
+                payload_encryption_type,
+                ..
+            } = match ready_and_call_service(
+                &mut payload_encryption_type_select_service,
+                PayloadEncryptionTypeSelectServiceRequest {
+                    encryption_token: generate_uuid().into(),
+                    user_token: SERVER_CONFIG.user_token().clone().unwrap(),
+                },
+            )
+            .await
+            {
+                Err(e) => {
+                    error!(
+                        "Fail to select payload encryption type because of error: {:#?}",
+                        e
                     );
-                    let read_client_timeout_seconds = SERVER_CONFIG
-                        .read_client_timeout_seconds()
-                        .unwrap_or(DEFAULT_READ_CLIENT_TIMEOUT_SECONDS);
-                    match tokio::time::timeout(
-                        Duration::from_secs(read_client_timeout_seconds),
-                        client_stream_read_half.read_buf(&mut buf),
-                    )
-                    .await
-                    {
-                        Err(e) => {
-                            error!("The read client data timeout: {:#?}.", e);
-                            return;
-                        },
-                        Ok(Err(e)) => {
-                            error!(
-                                "Fail to read client data from {:#?} because of error: {:#?}",
-                                target_address_a2t, e
-                            );
-                            return;
-                        },
-                        Ok(Ok(0)) if buf.remaining_mut() > 0 => {
-                            debug!("Read all data from agent");
-                            return;
-                        },
-                        Ok(Ok(size)) => {
-                            debug!("Read {} bytes from client", size);
-                        },
-                    }
-                    let PayloadEncryptionTypeSelectServiceResult {
-                        payload_encryption_type,
+                    return;
+                },
+                Ok(v) => v,
+            };
+            let write_agent_message_result = ready_and_call_service(
+                &mut write_agent_message_service,
+                WriteMessageServiceRequest {
+                    message_framed_write,
+                    ref_id: Some(connect_response_message_id.clone()),
+                    user_token: SERVER_CONFIG.user_token().clone().unwrap(),
+                    payload_encryption_type,
+                    message_payload: Some(MessagePayload::new(
+                        source_address_a2t.clone(),
+                        target_address_a2t.clone(),
+                        PayloadType::AgentPayload(AgentMessagePayloadTypeValue::TcpData),
+                        init_data.into(),
+                    )),
+                },
+            )
+            .await;
+            let _write_agent_message_result = match write_agent_message_result {
+                Err(e) => {
+                    error!(
+                        "Fail to write agent message to proxy because of error: {:#?}",
+                        e
+                    );
+                    return;
+                },
+                Ok(v) => message_framed_write = v.message_framed_write,
+            };
+        }
+        loop {
+            let mut buf =
+                BytesMut::with_capacity(SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE));
+            let read_client_timeout_seconds = SERVER_CONFIG
+                .read_client_timeout_seconds()
+                .unwrap_or(DEFAULT_READ_CLIENT_TIMEOUT_SECONDS);
+            match tokio::time::timeout(
+                Duration::from_secs(read_client_timeout_seconds),
+                client_stream_read_half.read_buf(&mut buf),
+            )
+            .await
+            {
+                Err(e) => {
+                    error!("The read client data timeout: {:#?}.", e);
+                    return;
+                },
+                Ok(Err(e)) => {
+                    error!(
+                        "Fail to read client data from {:#?} because of error: {:#?}",
+                        target_address_a2t, e
+                    );
+                    return;
+                },
+                Ok(Ok(0)) if buf.remaining_mut() > 0 => {
+                    debug!("Read all data from agent");
+                    return;
+                },
+                Ok(Ok(size)) => {
+                    debug!("Read {} bytes from client", size);
+                },
+            }
+            let PayloadEncryptionTypeSelectServiceResult {
+                payload_encryption_type,
+                ..
+            } = match ready_and_call_service(
+                &mut payload_encryption_type_select_service,
+                PayloadEncryptionTypeSelectServiceRequest {
+                    encryption_token: generate_uuid().into(),
+                    user_token: SERVER_CONFIG.user_token().clone().unwrap(),
+                },
+            )
+            .await
+            {
+                Err(e) => {
+                    error!(
+                        "Fail to select payload encryption type because of error: {:#?}",
+                        e
+                    );
+                    return;
+                },
+                Ok(v) => v,
+            };
+            let write_agent_message_result = ready_and_call_service(
+                &mut write_agent_message_service,
+                WriteMessageServiceRequest {
+                    message_framed_write,
+                    ref_id: Some(connect_response_message_id.clone()),
+                    user_token: SERVER_CONFIG.user_token().clone().unwrap(),
+                    payload_encryption_type,
+                    message_payload: Some(MessagePayload::new(
+                        source_address_a2t.clone(),
+                        target_address_a2t.clone(),
+                        PayloadType::AgentPayload(AgentMessagePayloadTypeValue::TcpData),
+                        buf.freeze(),
+                    )),
+                },
+            )
+            .await;
+            let write_agent_message_result = match write_agent_message_result {
+                Err(e) => {
+                    error!(
+                        "Fail to write agent message to proxy because of error: {:#?}",
+                        e
+                    );
+                    return;
+                },
+                Ok(v) => v,
+            };
+            message_framed_write = write_agent_message_result.message_framed_write;
+        }
+    }
+
+    async fn generate_proxy_to_client_relay(
+        target_address_t2a: NetAddress, mut message_framed_read: MessageFramedRead,
+        mut client_stream_write_half: OwnedWriteHalf,
+    ) {
+        let mut read_proxy_message_service =
+            ServiceBuilder::new().service(ReadMessageService::new(
+                SERVER_CONFIG
+                    .read_proxy_timeout_seconds()
+                    .unwrap_or(DEFAULT_READ_PROXY_TIMEOUT_SECONDS),
+            ));
+        loop {
+            let read_proxy_message_result = ready_and_call_service(
+                &mut read_proxy_message_service,
+                ReadMessageServiceRequest {
+                    message_framed_read,
+                },
+            )
+            .await;
+            let ReadMessageServiceResult {
+                message_framed_read: message_framed_read_in_result,
+                message_payload:
+                    MessagePayload {
+                        data: proxy_raw_data,
                         ..
-                    } = match ready_and_call_service(
-                        &mut payload_encryption_type_select_service,
-                        PayloadEncryptionTypeSelectServiceRequest {
-                            encryption_token: generate_uuid().into(),
-                            user_token: SERVER_CONFIG.user_token().clone().unwrap(),
-                        },
-                    )
-                    .await
-                    {
-                        Err(e) => {
-                            error!(
-                                "Fail to select payload encryption type because of error: {:#?}",
-                                e
-                            );
-                            return;
-                        },
-                        Ok(v) => v,
-                    };
-                    let write_agent_message_result = ready_and_call_service(
-                        &mut write_agent_message_service,
-                        WriteMessageServiceRequest {
-                            message_framed_write,
-                            ref_id: Some(request.connect_response_message_id.clone()),
-                            user_token: SERVER_CONFIG.user_token().clone().unwrap(),
-                            payload_encryption_type,
-                            message_payload: Some(MessagePayload::new(
-                                source_address_a2t.clone(),
-                                target_address_a2t.clone(),
-                                PayloadType::AgentPayload(AgentMessagePayloadTypeValue::TcpData),
-                                buf.freeze(),
-                            )),
-                        },
-                    )
-                    .await;
-                    let write_agent_message_result = match write_agent_message_result {
-                        Err(e) => {
-                            error!(
-                                "Fail to write agent message to proxy because of error: {:#?}",
-                                e
-                            );
-                            return;
-                        },
-                        Ok(v) => v,
-                    };
-                    message_framed_write = write_agent_message_result.message_framed_write;
-                }
-            });
-            tokio::spawn(async move {
-                let mut read_proxy_message_service =
-                    ServiceBuilder::new().service(ReadMessageService::new(
-                        SERVER_CONFIG
-                            .read_proxy_timeout_seconds()
-                            .unwrap_or(DEFAULT_READ_PROXY_TIMEOUT_SECONDS),
-                    ));
-                loop {
-                    let read_proxy_message_result = ready_and_call_service(
-                        &mut read_proxy_message_service,
-                        ReadMessageServiceRequest {
-                            message_framed_read,
-                        },
-                    )
-                    .await;
-                    let ReadMessageServiceResult {
-                        message_framed_read: message_framed_read_in_result,
+                    },
+                ..
+            } = match read_proxy_message_result {
+                Err(e) => {
+                    error!("Fail to read proxy data because of error: {:#?}", e);
+                    return;
+                },
+                Ok(Some(
+                    value @ ReadMessageServiceResult {
                         message_payload:
                             MessagePayload {
-                                data: proxy_raw_data,
+                                payload_type:
+                                    PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::TcpData),
                                 ..
                             },
                         ..
-                    } = match read_proxy_message_result {
-                        Err(e) => {
-                            error!("Fail to read proxy data because of error: {:#?}", e);
-                            return;
-                        },
-                        Ok(Some(
-                            value @ ReadMessageServiceResult {
-                                message_payload:
-                                    MessagePayload {
-                                        payload_type:
-                                            PayloadType::ProxyPayload(
-                                                ProxyMessagePayloadTypeValue::TcpData,
-                                            ),
-                                        ..
-                                    },
-                                ..
-                            },
-                        )) => value,
-                        Ok(_) => return,
-                    };
-                    message_framed_read = message_framed_read_in_result;
-                    if let Err(e) = client_stream_write_half
-                        .write(proxy_raw_data.as_ref())
-                        .await
-                    {
-                        error!(
-                            "Fail to write proxy data from {:#?} to client because of error: {:#?}",
-                            target_address_t2a, e
-                        );
-                        return;
-                    };
-                    if let Err(e) = client_stream_write_half.flush().await {
-                        error!(
-                            "Fail to flush proxy data from {:#?} to client because of error: {:#?}",
-                            target_address_t2a, e
-                        );
-                        return;
-                    };
-                }
-            });
-            Ok(TcpRelayServiceResult {
-                client_address: request.client_address,
-            })
-        })
+                    },
+                )) => value,
+                Ok(_) => return,
+            };
+            message_framed_read = message_framed_read_in_result;
+            if let Err(e) = client_stream_write_half
+                .write(proxy_raw_data.as_ref())
+                .await
+            {
+                error!(
+                    "Fail to write proxy data from {:#?} to client because of error: {:#?}",
+                    target_address_t2a, e
+                );
+                return;
+            };
+            if let Err(e) = client_stream_write_half.flush().await {
+                error!(
+                    "Fail to flush proxy data from {:#?} to client because of error: {:#?}",
+                    target_address_t2a, e
+                );
+                return;
+            };
+        }
     }
 }
