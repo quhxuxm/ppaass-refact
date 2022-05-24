@@ -22,19 +22,19 @@ impl Decoder for InitializeProtocolDecoder {
             return Ok(None);
         }
         let protocol_flag = src[0];
-        match protocol_flag {
+        return match protocol_flag {
             SOCKS5_FLAG => {
                 debug!("Incoming agent client protocol is socks5.");
-                return Ok(Some(Protocol::Socks5));
+                Ok(Some(Protocol::Socks5))
             },
             SOCKS4_FLAG => {
-                error!("Incoming agent client protocol is socks4, which is unspported!");
-                return Err(CommonError::CodecError);
+                error!("Incoming agent client protocol is socks4, which is unsupported!");
+                Err(CommonError::CodecError)
             },
             _ => {
                 debug!("Incoming agent client protocol is http.");
-                return Ok(Some(Protocol::Http));
+                Ok(Some(Protocol::Http))
             },
-        }
+        };
     }
 }
