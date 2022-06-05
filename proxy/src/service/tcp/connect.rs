@@ -15,8 +15,8 @@ use common::{
     MessageFramedRead, MessageFramedWrite, MessagePayload, NetAddress,
     PayloadEncryptionTypeSelectService, PayloadEncryptionTypeSelectServiceRequest,
     PayloadEncryptionTypeSelectServiceResult, PayloadType, ProxyMessagePayloadTypeValue,
-    ReadMessageService, ReadMessageServiceRequest, ReadMessageServiceResult, WriteMessageService,
-    WriteMessageServiceRequest,
+    ReadMessageService, ReadMessageServiceRequest, ReadMessageServiceResult, RsaCryptoFetcher,
+    WriteMessageService, WriteMessageServiceRequest,
 };
 
 use crate::config::{
@@ -28,13 +28,19 @@ use crate::service::{
 };
 use crate::SERVER_CONFIG;
 
-pub(crate) struct TcpConnectServiceRequest {
-    pub message_framed_read: MessageFramedRead,
-    pub message_framed_write: MessageFramedWrite,
+pub(crate) struct TcpConnectServiceRequest<T>
+where
+    T: RsaCryptoFetcher,
+{
+    pub message_framed_read: MessageFramedRead<T>,
+    pub message_framed_write: MessageFramedWrite<T>,
     pub agent_address: SocketAddr,
 }
 
-impl Debug for TcpConnectServiceRequest {
+impl<T> Debug for TcpConnectServiceRequest<T>
+where
+    T: RsaCryptoFetcher,
+{
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         writeln!(
             f,
@@ -44,10 +50,13 @@ impl Debug for TcpConnectServiceRequest {
     }
 }
 
-pub(crate) struct TcpConnectServiceResult {
+pub(crate) struct TcpConnectServiceResult<T>
+where
+    T: RsaCryptoFetcher,
+{
     pub target_stream: TcpStream,
-    pub message_framed_read: MessageFramedRead,
-    pub message_framed_write: MessageFramedWrite,
+    pub message_framed_read: MessageFramedRead<T>,
+    pub message_framed_write: MessageFramedWrite<T>,
     pub agent_tcp_connect_message_id: String,
     pub source_address: NetAddress,
     pub target_address: NetAddress,
@@ -57,8 +66,11 @@ pub(crate) struct TcpConnectServiceResult {
 #[derive(Clone, Default)]
 pub(crate) struct TcpConnectService;
 
-impl Service<TcpConnectServiceRequest> for TcpConnectService {
-    type Response = TcpConnectServiceResult;
+impl<T> Service<TcpConnectServiceRequest<T>> for TcpConnectService
+where
+    T: RsaCryptoFetcher + Send + Sync + 'static,
+{
+    type Response = TcpConnectServiceResult<T>;
     type Error = CommonError;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
@@ -66,7 +78,7 @@ impl Service<TcpConnectServiceRequest> for TcpConnectService {
         Poll::Ready(Ok(()))
     }
 
-    fn call(&mut self, req: TcpConnectServiceRequest) -> Self::Future {
+    fn call(&mut self, req: TcpConnectServiceRequest<T>) -> Self::Future {
         Box::pin(async move {
             let mut read_agent_message_service =
                 ServiceBuilder::new().service(ReadMessageService::new(

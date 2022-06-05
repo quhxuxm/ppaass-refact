@@ -1,3 +1,5 @@
+pub use crate::crypto::RsaCrypto;
+pub use crate::crypto::RsaCryptoFetcher;
 /// Public use by outside
 pub use codec::MessageCodec;
 pub use error::CommonError;

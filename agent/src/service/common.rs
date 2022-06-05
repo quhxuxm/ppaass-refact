@@ -22,7 +22,7 @@ use common::{
     PayloadEncryptionTypeSelectService, PayloadEncryptionTypeSelectServiceRequest,
     PayloadEncryptionTypeSelectServiceResult, PayloadType, PrepareMessageFramedService,
     ProxyMessagePayloadTypeValue, ReadMessageService, ReadMessageServiceRequest,
-    ReadMessageServiceResult, WriteMessageService, WriteMessageServiceRequest,
+    ReadMessageServiceResult, RsaCryptoFetcher, WriteMessageService, WriteMessageServiceRequest,
 };
 
 use crate::codec::common::{InitializeProtocolDecoder, Protocol};
@@ -55,11 +55,18 @@ impl Debug for ClientConnectionInfo {
     }
 }
 
-pub(crate) struct HandleClientConnectionService {
+pub(crate) struct HandleClientConnectionService<T>
+where
+    T: RsaCryptoFetcher,
+{
     pub proxy_addresses: Arc<Vec<SocketAddr>>,
+    pub rsa_crypto_fetcher: Arc<T>,
 }
 
-impl Debug for HandleClientConnectionService {
+impl<T> Debug for HandleClientConnectionService<T>
+where
+    T: RsaCryptoFetcher,
+{
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -69,12 +76,21 @@ impl Debug for HandleClientConnectionService {
     }
 }
 
-impl HandleClientConnectionService {
-    pub(crate) fn new(proxy_addresses: Arc<Vec<SocketAddr>>) -> Self {
-        Self { proxy_addresses }
+impl<T> HandleClientConnectionService<T>
+where
+    T: RsaCryptoFetcher,
+{
+    pub(crate) fn new(proxy_addresses: Arc<Vec<SocketAddr>>, rsa_crypto_fetcher: Arc<T>) -> Self {
+        Self {
+            proxy_addresses,
+            rsa_crypto_fetcher,
+        }
     }
 }
-impl Service<ClientConnectionInfo> for HandleClientConnectionService {
+impl<T> Service<ClientConnectionInfo> for HandleClientConnectionService<T>
+where
+    T: RsaCryptoFetcher + Send + Sync + 'static,
+{
     type Response = ();
     type Error = CommonError;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
@@ -84,11 +100,13 @@ impl Service<ClientConnectionInfo> for HandleClientConnectionService {
     }
 
     fn call(&mut self, mut req: ClientConnectionInfo) -> Self::Future {
+        let rsa_crypto_fetcher = self.rsa_crypto_fetcher.clone();
         let proxy_addresses = self.proxy_addresses.clone();
         Box::pin(async move {
             let mut socks5_flow_service =
-                ServiceBuilder::new().service(Socks5FlowService::default());
-            let mut http_flow_service = ServiceBuilder::new().service(HttpFlowService::default());
+                ServiceBuilder::new().service(Socks5FlowService::new(rsa_crypto_fetcher.clone()));
+            let mut http_flow_service =
+                ServiceBuilder::new().service(HttpFlowService::new(rsa_crypto_fetcher));
 
             let mut framed = Framed::with_capacity(
                 &mut req.client_stream,
@@ -304,32 +322,41 @@ impl Service<ConnectToProxyServiceRequest> for ConnectToProxyService {
     }
 }
 
-pub fn generate_prepare_message_framed_service<'a>() -> PrepareMessageFramedService<&'a str, &'a str>
+pub fn generate_prepare_message_framed_service<T>(
+    rsa_crypto_fetcher: Arc<T>,
+) -> PrepareMessageFramedService<T>
+where
+    T: RsaCryptoFetcher,
 {
     ServiceBuilder::new().service(PrepareMessageFramedService::new(
-        PROXY_PUBLIC_KEY.as_str(),
-        AGENT_PRIVATE_KEY.as_str(),
         SERVER_CONFIG
             .max_frame_size()
             .unwrap_or(DEFAULT_MAX_FRAME_SIZE),
         SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
         SERVER_CONFIG.compress().unwrap_or(true),
+        rsa_crypto_fetcher,
     ))
 }
 
 #[allow(unused)]
-pub(crate) struct TcpRelayServiceRequest {
+pub(crate) struct TcpRelayServiceRequest<T>
+where
+    T: RsaCryptoFetcher,
+{
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,
-    pub message_framed_write: MessageFramedWrite,
-    pub message_framed_read: MessageFramedRead,
+    pub message_framed_write: MessageFramedWrite<T>,
+    pub message_framed_read: MessageFramedRead<T>,
     pub connect_response_message_id: String,
     pub source_address: NetAddress,
     pub target_address: NetAddress,
     pub init_data: Option<Vec<u8>>,
 }
 
-impl Debug for TcpRelayServiceRequest {
+impl<T> Debug for TcpRelayServiceRequest<T>
+where
+    T: RsaCryptoFetcher,
+{
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -347,9 +374,17 @@ pub(crate) struct TcpRelayServiceResult {
 }
 
 #[derive(Clone, Default)]
-pub(crate) struct TcpRelayService;
+pub(crate) struct TcpRelayService<T>
+where
+    T: RsaCryptoFetcher,
+{
+    rsa_crypto_fetcher: Arc<T>,
+}
 
-impl Service<TcpRelayServiceRequest> for TcpRelayService {
+impl<T> Service<TcpRelayServiceRequest<T>> for TcpRelayService<T>
+where
+    T: RsaCryptoFetcher + Send + Sync + 'static,
+{
     type Response = TcpRelayServiceResult;
     type Error = CommonError;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
@@ -358,7 +393,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
         Poll::Ready(Ok(()))
     }
 
-    fn call(&mut self, request: TcpRelayServiceRequest) -> Self::Future {
+    fn call(&mut self, request: TcpRelayServiceRequest<T>) -> Self::Future {
         Box::pin(async move {
             let client_stream = request.client_stream;
             let message_framed_read = request.message_framed_read;
@@ -386,10 +421,16 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
     }
 }
 
-impl TcpRelayService {
+impl<T> TcpRelayService<T>
+where
+    T: RsaCryptoFetcher + Send + Sync + 'static,
+{
+    pub fn new(rsa_crypto_fetcher: Arc<T>) -> Self {
+        Self { rsa_crypto_fetcher }
+    }
     async fn generate_from_client_to_proxy_relay(
         init_data: Option<Vec<u8>>, connect_response_message_id: String,
-        mut message_framed_write: MessageFramedWrite, source_address_a2t: NetAddress,
+        mut message_framed_write: MessageFramedWrite<T>, source_address_a2t: NetAddress,
         target_address_a2t: NetAddress, mut client_stream_read_half: OwnedReadHalf,
     ) {
         let mut payload_encryption_type_select_service =
@@ -528,7 +569,7 @@ impl TcpRelayService {
     }
 
     async fn generate_proxy_to_client_relay(
-        target_address_t2a: NetAddress, mut message_framed_read: MessageFramedRead,
+        target_address_t2a: NetAddress, mut message_framed_read: MessageFramedRead<T>,
         mut client_stream_write_half: OwnedWriteHalf,
     ) {
         let mut read_proxy_message_service =

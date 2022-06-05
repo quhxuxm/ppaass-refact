@@ -9,7 +9,7 @@ use tokio::net::TcpStream;
 use tower::Service;
 use tower::ServiceBuilder;
 
-use common::{ready_and_call_service, CommonError};
+use common::{ready_and_call_service, CommonError, RsaCryptoFetcher};
 
 use crate::service::common::{TcpRelayService, TcpRelayServiceRequest};
 use crate::service::socks5::auth::{Socks5AuthCommandService, Socks5AuthenticateFlowRequest};
@@ -38,10 +38,27 @@ impl Debug for Socks5FlowRequest {
 pub(crate) struct Socks5FlowResult {
     pub client_address: SocketAddr,
 }
-#[derive(Clone, Debug, Default)]
-pub(crate) struct Socks5FlowService;
+#[derive(Clone, Debug)]
+pub(crate) struct Socks5FlowService<T>
+where
+    T: RsaCryptoFetcher,
+{
+    rsa_crypto_fetcher: Arc<T>,
+}
 
-impl Service<Socks5FlowRequest> for Socks5FlowService {
+impl<T> Socks5FlowService<T>
+where
+    T: RsaCryptoFetcher,
+{
+    pub fn new(rsa_crypto_fetcher: Arc<T>) -> Self {
+        Self { rsa_crypto_fetcher }
+    }
+}
+
+impl<T> Service<Socks5FlowRequest> for Socks5FlowService<T>
+where
+    T: RsaCryptoFetcher + Send + Sync + 'static,
+{
     type Response = Socks5FlowResult;
     type Error = CommonError;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
@@ -51,12 +68,14 @@ impl Service<Socks5FlowRequest> for Socks5FlowService {
     }
 
     fn call(&mut self, req: Socks5FlowRequest) -> Self::Future {
+        let rsa_crypto_fetcher = self.rsa_crypto_fetcher.clone();
         Box::pin(async move {
             let mut authenticate_service =
                 ServiceBuilder::new().service(Socks5AuthCommandService::default());
-            let mut connect_service =
-                ServiceBuilder::new().service(Socks5InitCommandService::default());
-            let mut relay_service = ServiceBuilder::new().service(TcpRelayService::default());
+            let mut connect_service = ServiceBuilder::new()
+                .service(Socks5InitCommandService::new(rsa_crypto_fetcher.clone()));
+            let mut relay_service =
+                ServiceBuilder::new().service(TcpRelayService::new(rsa_crypto_fetcher));
             let authenticate_result = ready_and_call_service(
                 &mut authenticate_service,
                 Socks5AuthenticateFlowRequest {

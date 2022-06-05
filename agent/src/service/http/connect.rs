@@ -21,8 +21,8 @@ use common::{
     MessageFramedRead, MessageFramedWrite, MessagePayload, NetAddress,
     PayloadEncryptionTypeSelectService, PayloadEncryptionTypeSelectServiceRequest,
     PayloadEncryptionTypeSelectServiceResult, PayloadType, ProxyMessagePayloadTypeValue,
-    ReadMessageService, ReadMessageServiceRequest, ReadMessageServiceResult, WriteMessageService,
-    WriteMessageServiceRequest, WriteMessageServiceResult,
+    ReadMessageService, ReadMessageServiceRequest, ReadMessageServiceResult, RsaCryptoFetcher,
+    WriteMessageService, WriteMessageServiceRequest, WriteMessageServiceResult,
 };
 
 use crate::codec::http::HttpCodec;
@@ -64,20 +64,35 @@ impl Debug for HttpConnectServiceRequest {
 }
 
 #[allow(unused)]
-pub(crate) struct HttpConnectServiceResult {
+pub(crate) struct HttpConnectServiceResult<T>
+where
+    T: RsaCryptoFetcher,
+{
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,
     pub init_data: Option<Vec<u8>>,
-    pub message_framed_read: MessageFramedRead,
-    pub message_framed_write: MessageFramedWrite,
+    pub message_framed_read: MessageFramedRead<T>,
+    pub message_framed_write: MessageFramedWrite<T>,
     pub message_id: String,
     pub source_address: NetAddress,
     pub target_address: NetAddress,
 }
 #[derive(Clone, Debug, Default)]
-pub(crate) struct HttpConnectService;
+pub(crate) struct HttpConnectService<T>
+where
+    T: RsaCryptoFetcher,
+{
+    rsa_crypto_fetcher: Arc<T>,
+}
 
-impl HttpConnectService {
+impl<T> HttpConnectService<T>
+where
+    T: RsaCryptoFetcher,
+{
+    pub fn new(rsa_crypto_fetcher: Arc<T>) -> Self {
+        Self { rsa_crypto_fetcher }
+    }
+
     async fn send_error_to_client(
         mut client_http_framed: HttpFramed<'_>,
     ) -> Result<(), CommonError> {
@@ -95,8 +110,11 @@ impl HttpConnectService {
     }
 }
 
-impl Service<HttpConnectServiceRequest> for HttpConnectService {
-    type Response = HttpConnectServiceResult;
+impl<T> Service<HttpConnectServiceRequest> for HttpConnectService<T>
+where
+    T: RsaCryptoFetcher + Send + Sync + 'static,
+{
+    type Response = HttpConnectServiceResult<T>;
     type Error = CommonError;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
@@ -105,8 +123,10 @@ impl Service<HttpConnectServiceRequest> for HttpConnectService {
     }
 
     fn call(&mut self, mut request: HttpConnectServiceRequest) -> Self::Future {
+        let rsa_crypto_fetcher = self.rsa_crypto_fetcher.clone();
         Box::pin(async move {
-            let mut prepare_message_framed_service = generate_prepare_message_framed_service();
+            let mut prepare_message_framed_service =
+                generate_prepare_message_framed_service(rsa_crypto_fetcher);
             let mut write_agent_message_service =
                 ServiceBuilder::new().service(WriteMessageService::default());
             let mut read_proxy_message_service =

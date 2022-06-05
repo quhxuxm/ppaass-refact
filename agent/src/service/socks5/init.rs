@@ -14,6 +14,7 @@ use tracing::log::{debug, error};
 
 use common::{
     ready_and_call_service, CommonError, MessageFramedRead, MessageFramedWrite, NetAddress,
+    RsaCryptoFetcher,
 };
 use tcp_connect::Socks5TcpConnectService;
 
@@ -52,21 +53,39 @@ impl Debug for Socks5InitCommandServiceRequest {
     }
 }
 
-pub(crate) struct Socks5InitCommandServiceResult {
+pub(crate) struct Socks5InitCommandServiceResult<T>
+where
+    T: RsaCryptoFetcher,
+{
     pub client_stream: TcpStream,
-    pub message_framed_read: MessageFramedRead,
-    pub message_framed_write: MessageFramedWrite,
+    pub message_framed_read: MessageFramedRead<T>,
+    pub message_framed_write: MessageFramedWrite<T>,
     pub client_address: SocketAddr,
     pub source_address: NetAddress,
     pub target_address: NetAddress,
     pub connect_response_message_id: String,
 }
 
-#[derive(Clone, Debug, Default)]
-pub(crate) struct Socks5InitCommandService;
-
-impl Service<Socks5InitCommandServiceRequest> for Socks5InitCommandService {
-    type Response = Socks5InitCommandServiceResult;
+#[derive(Clone, Debug)]
+pub(crate) struct Socks5InitCommandService<T>
+where
+    T: RsaCryptoFetcher,
+{
+    rsa_crypto_fetcher: Arc<T>,
+}
+impl<T> Socks5InitCommandService<T>
+where
+    T: RsaCryptoFetcher,
+{
+    pub fn new(rsa_crypto_fetcher: Arc<T>) -> Self {
+        Self { rsa_crypto_fetcher }
+    }
+}
+impl<T> Service<Socks5InitCommandServiceRequest> for Socks5InitCommandService<T>
+where
+    T: RsaCryptoFetcher + Send + Sync + 'static,
+{
+    type Response = Socks5InitCommandServiceResult<T>;
     type Error = CommonError;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
@@ -75,6 +94,7 @@ impl Service<Socks5InitCommandServiceRequest> for Socks5InitCommandService {
     }
 
     fn call(&mut self, request: Socks5InitCommandServiceRequest) -> Self::Future {
+        let rsa_crypto_fetcher = self.rsa_crypto_fetcher.clone();
         Box::pin(async move {
             let mut client_stream = request.client_stream;
             let client_address = request.client_address;
@@ -96,8 +116,8 @@ impl Service<Socks5InitCommandServiceRequest> for Socks5InitCommandService {
             let dest_address = init_command.dest_address;
             match init_command.request_type {
                 Socks5InitCommandType::Connect => {
-                    let mut socks5_tcp_connect_service =
-                        ServiceBuilder::new().service(Socks5TcpConnectService::default());
+                    let mut socks5_tcp_connect_service = ServiceBuilder::new()
+                        .service(Socks5TcpConnectService::new(rsa_crypto_fetcher));
                     match ready_and_call_service(
                         &mut socks5_tcp_connect_service,
                         Socks5TcpConnectServiceRequest {
@@ -147,8 +167,8 @@ impl Service<Socks5InitCommandServiceRequest> for Socks5InitCommandService {
                     todo!()
                 },
                 Socks5InitCommandType::UdpAssociate => {
-                    let mut socks5_udp_associate_service =
-                        ServiceBuilder::new().service(Socks5UdpAssociateService::default());
+                    let mut socks5_udp_associate_service = ServiceBuilder::new()
+                        .service(Socks5UdpAssociateService::new(rsa_crypto_fetcher));
                     match ready_and_call_service(
                         &mut socks5_udp_associate_service,
                         Socks5UdpAssociateServiceRequest {

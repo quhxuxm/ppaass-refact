@@ -7,7 +7,7 @@ use futures::future::BoxFuture;
 use tokio::net::TcpStream;
 use tower::{Service, ServiceBuilder};
 
-use common::{ready_and_call_service, CommonError};
+use common::{ready_and_call_service, CommonError, RsaCryptoFetcher};
 
 use crate::service::common::{TcpRelayService, TcpRelayServiceRequest};
 use crate::service::http::connect::{HttpConnectService, HttpConnectServiceRequest};
@@ -27,10 +27,27 @@ pub(crate) struct HttpFlowResult {
     pub client_address: SocketAddr,
 }
 
-#[derive(Clone, Debug, Default)]
-pub(crate) struct HttpFlowService;
+#[derive(Clone, Debug)]
+pub(crate) struct HttpFlowService<T>
+where
+    T: RsaCryptoFetcher,
+{
+    rsa_crypto_fetcher: Arc<T>,
+}
 
-impl Service<HttpFlowRequest> for HttpFlowService {
+impl<T> HttpFlowService<T>
+where
+    T: RsaCryptoFetcher,
+{
+    pub fn new(rsa_crypto_fetcher: Arc<T>) -> Self {
+        Self { rsa_crypto_fetcher }
+    }
+}
+
+impl<T> Service<HttpFlowRequest> for HttpFlowService<T>
+where
+    T: RsaCryptoFetcher + Send + Sync + 'static,
+{
     type Response = HttpFlowResult;
     type Error = CommonError;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
@@ -40,9 +57,12 @@ impl Service<HttpFlowRequest> for HttpFlowService {
     }
 
     fn call(&mut self, req: HttpFlowRequest) -> Self::Future {
+        let rsa_crypto_fetcher = self.rsa_crypto_fetcher.clone();
         Box::pin(async move {
-            let mut connect_service = ServiceBuilder::new().service(HttpConnectService::default());
-            let mut relay_service = ServiceBuilder::new().service(TcpRelayService::default());
+            let mut connect_service =
+                ServiceBuilder::new().service(HttpConnectService::new(rsa_crypto_fetcher.clone()));
+            let mut relay_service =
+                ServiceBuilder::new().service(TcpRelayService::new(rsa_crypto_fetcher));
             let connect_result = ready_and_call_service(
                 &mut connect_service,
                 HttpConnectServiceRequest {

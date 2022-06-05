@@ -1,61 +1,59 @@
-use std::fmt::{Debug, Formatter};
+use std::{
+    fmt::{Debug, Formatter},
+    sync::Arc,
+};
 
 use bytes::{Buf, Bytes, BytesMut};
 use lz4::block::{compress, decompress};
-use rand::rngs::OsRng;
+
 use tokio_util::codec::{Decoder, Encoder, LengthDelimitedCodec};
 use tracing::{debug, error};
 
 use crate::crypto::{
     decrypt_with_aes, decrypt_with_blowfish, encrypt_with_aes, encrypt_with_blowfish, RsaCrypto,
+    RsaCryptoFetcher,
 };
 use crate::{CommonError, Message, PayloadEncryptionType};
 
 const LENGTH_DELIMITED_CODEC_LENGTH_FIELD_LENGTH: usize = 8;
-const RNG: OsRng = OsRng;
 
-pub struct MessageCodec {
-    rsa_crypto: RsaCrypto<OsRng>,
+pub struct MessageCodec<T: RsaCryptoFetcher> {
+    rsa_crypto_fetcher: Arc<T>,
     length_delimited_codec: LengthDelimitedCodec,
     compress: bool,
 }
 
-impl Debug for MessageCodec {
+impl<T> Debug for MessageCodec<T>
+where
+    T: RsaCryptoFetcher,
+{
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "MessageCodec: compress={}", self.compress)
     }
 }
 
-impl MessageCodec {
-    pub fn new<PU, PR>(
-        public_key: PU, private_key: PR, max_frame_size: usize, compress: bool,
-    ) -> Self
-    where
-        PU: AsRef<str>,
-        PR: AsRef<str>,
-    {
+impl<T> MessageCodec<T>
+where
+    T: RsaCryptoFetcher,
+{
+    pub fn new(max_frame_size: usize, compress: bool, rsa_crypto_fetcher: Arc<T>) -> Self {
         let mut length_delimited_codec_builder = LengthDelimitedCodec::builder();
         length_delimited_codec_builder.max_frame_length(max_frame_size);
         length_delimited_codec_builder
             .length_field_length(LENGTH_DELIMITED_CODEC_LENGTH_FIELD_LENGTH);
         let length_delimited_codec = length_delimited_codec_builder.new_codec();
-        let rsa_crypto = RsaCrypto::new(public_key, private_key, RNG);
-        let rsa_crypto = match rsa_crypto {
-            Ok(r) => r,
-            Err(e) => {
-                error!("Fail to create RSA Crypto because of error: {:#?}", e);
-                panic!("Fail to create RSA Crypto.")
-            },
-        };
         Self {
-            rsa_crypto,
+            rsa_crypto_fetcher,
             length_delimited_codec,
             compress,
         }
     }
 }
 
-impl Decoder for MessageCodec {
+impl<T> Decoder for MessageCodec<T>
+where
+    T: RsaCryptoFetcher,
+{
     type Item = Message;
     type Error = CommonError;
 
@@ -94,6 +92,23 @@ impl Decoder for MessageCodec {
                 Ok(r) => r,
             }
         };
+        let rsa_crypto = match self.rsa_crypto_fetcher.fetch(message.user_token.as_str()) {
+            Err(e) => {
+                error!(
+                    "Fail to decrypt message because of error when fetch rsa crypto: {:#?}",
+                    e
+                );
+                return Err(e);
+            },
+            Ok(None) => {
+                error!(
+                    "Fail to decrypt message because of rsa crypto not exist for user: {}",
+                    message.user_token
+                );
+                return Err(CommonError::UnknownError);
+            },
+            Ok(Some(v)) => v,
+        };
         debug!("Decode message from input(encrypted): {:?}", message);
         match message.payload_encryption_type {
             PayloadEncryptionType::Blowfish(ref encryption_token) => match message.payload {
@@ -101,8 +116,7 @@ impl Decoder for MessageCodec {
                     debug!("Nothing to decrypt for blowfish.")
                 },
                 Some(ref content) => {
-                    let original_encryption_token = match self.rsa_crypto.decrypt(encryption_token)
-                    {
+                    let original_encryption_token = match rsa_crypto.decrypt(encryption_token) {
                         Err(e) => {
                             error!(
                                 "Fail to decrypt message with blowfish because of error: {:#?}",
@@ -122,8 +136,7 @@ impl Decoder for MessageCodec {
                     debug!("Nothing to decrypt for aes.")
                 },
                 Some(ref content) => {
-                    let original_encryption_token = match self.rsa_crypto.decrypt(encryption_token)
-                    {
+                    let original_encryption_token = match rsa_crypto.decrypt(encryption_token) {
                         Err(e) => {
                             error!(
                                 "Fail to decrypt message with aes because of error: {:#?}",
@@ -144,7 +157,10 @@ impl Decoder for MessageCodec {
     }
 }
 
-impl Encoder<Message> for MessageCodec {
+impl<T> Encoder<Message> for MessageCodec<T>
+where
+    T: RsaCryptoFetcher,
+{
     type Error = CommonError;
 
     fn encode(&mut self, original_message: Message, dst: &mut BytesMut) -> Result<(), Self::Error> {
@@ -167,6 +183,7 @@ impl Encoder<Message> for MessageCodec {
             }
             return Ok(());
         }
+
         let Message {
             id,
             ref_id,
@@ -174,13 +191,29 @@ impl Encoder<Message> for MessageCodec {
             payload_encryption_type,
             payload,
         } = original_message;
+
+        let rsa_crypto = match self.rsa_crypto_fetcher.fetch(user_token.as_str()) {
+            Err(e) => {
+                error!(
+                    "Fail to encrypt message because of error when fetch rsa crypto: {:#?}",
+                    e
+                );
+                return Err(e);
+            },
+            Ok(None) => {
+                error!(
+                    "Fail to encrypt message because of rsa crypto not exist for user: {}",
+                    user_token
+                );
+                return Err(CommonError::UnknownError);
+            },
+            Ok(Some(v)) => v,
+        };
+
         let (encrypted_payload, encrypted_payload_encryption_type) = match payload_encryption_type {
             PayloadEncryptionType::Plain => (payload, PayloadEncryptionType::Plain),
             PayloadEncryptionType::Blowfish(ref original_token) => {
-                let encrypted_payload_encryption_token = match self
-                    .rsa_crypto
-                    .encrypt(original_token)
-                {
+                let encrypted_payload_encryption_token = match rsa_crypto.encrypt(original_token) {
                     Ok(r) => r,
                     Err(e) => {
                         error!("Fail the encrypt original message encryption token with rsa crypto for blowfish");
@@ -193,10 +226,7 @@ impl Encoder<Message> for MessageCodec {
                 )
             },
             PayloadEncryptionType::Aes(ref original_token) => {
-                let encrypted_payload_encryption_token = match self
-                    .rsa_crypto
-                    .encrypt(original_token)
-                {
+                let encrypted_payload_encryption_token = match rsa_crypto.encrypt(original_token) {
                     Ok(r) => r,
                     Err(e) => {
                         error!("Fail the encrypt original message encryption token with rsa crypto for aes");

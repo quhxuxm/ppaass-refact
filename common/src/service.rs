@@ -1,6 +1,9 @@
 use std::fmt::{Debug, Formatter};
-use std::task::{Context, Poll};
 use std::time::Duration;
+use std::{
+    sync::Arc,
+    task::{Context, Poll},
+};
 
 use bytes::Bytes;
 use futures::future::BoxFuture;
@@ -12,54 +15,53 @@ use tower::Service;
 use tracing::{debug, error};
 
 use crate::{
-    generate_uuid, CommonError, Message, MessageCodec, MessagePayload, PayloadEncryptionType,
+    crypto::RsaCryptoFetcher, generate_uuid, CommonError, Message, MessageCodec, MessagePayload,
+    PayloadEncryptionType,
 };
 
-pub type MessageFramedRead = SplitStream<Framed<TcpStream, MessageCodec>>;
-pub type MessageFramedWrite = SplitSink<Framed<TcpStream, MessageCodec>, Message>;
+pub type MessageFramedRead<T> = SplitStream<Framed<TcpStream, MessageCodec<T>>>;
+pub type MessageFramedWrite<T> = SplitSink<Framed<TcpStream, MessageCodec<T>>, Message>;
 
-pub struct PrepareMessageFramedResult {
-    pub message_framed_write: MessageFramedWrite,
-    pub message_framed_read: MessageFramedRead,
+pub struct PrepareMessageFramedResult<T>
+where
+    T: RsaCryptoFetcher,
+{
+    pub message_framed_write: MessageFramedWrite<T>,
+    pub message_framed_read: MessageFramedRead<T>,
 }
 
 #[derive(Clone)]
-pub struct PrepareMessageFramedService<PU, PR>
+pub struct PrepareMessageFramedService<T>
 where
-    PU: AsRef<str>,
-    PR: AsRef<str>,
+    T: RsaCryptoFetcher,
 {
-    public_key: PU,
-    private_key: PR,
     max_frame_size: usize,
     buffer_size: usize,
     compress: bool,
+    rsa_crypto_fetcher: Arc<T>,
 }
 
-impl<PU, PR> PrepareMessageFramedService<PU, PR>
+impl<T> PrepareMessageFramedService<T>
 where
-    PU: AsRef<str>,
-    PR: AsRef<str>,
+    T: RsaCryptoFetcher,
 {
     pub fn new(
-        public_key: PU, private_key: PR, max_frame_size: usize, buffer_size: usize, compress: bool,
+        max_frame_size: usize, buffer_size: usize, compress: bool, rsa_crypto_fetcher: Arc<T>,
     ) -> Self {
         Self {
-            public_key,
-            private_key,
             max_frame_size,
             buffer_size,
             compress,
+            rsa_crypto_fetcher,
         }
     }
 }
 
-impl<PU, PR> Service<TcpStream> for PrepareMessageFramedService<PU, PR>
+impl<T> Service<TcpStream> for PrepareMessageFramedService<T>
 where
-    PU: AsRef<str>,
-    PR: AsRef<str>,
+    T: RsaCryptoFetcher + Send + Sync + 'static,
 {
-    type Response = PrepareMessageFramedResult;
+    type Response = PrepareMessageFramedResult<T>;
     type Error = CommonError;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
@@ -70,11 +72,10 @@ where
     fn call(&mut self, input_stream: TcpStream) -> Self::Future {
         let framed = Framed::with_capacity(
             input_stream,
-            MessageCodec::new(
-                self.public_key.as_ref(),
-                self.private_key.as_ref(),
+            MessageCodec::<T>::new(
                 self.max_frame_size,
                 self.compress,
+                self.rsa_crypto_fetcher.clone(),
             ),
             self.buffer_size,
         );
@@ -88,15 +89,21 @@ where
     }
 }
 
-pub struct WriteMessageServiceRequest {
-    pub message_framed_write: MessageFramedWrite,
+pub struct WriteMessageServiceRequest<T>
+where
+    T: RsaCryptoFetcher,
+{
+    pub message_framed_write: MessageFramedWrite<T>,
     pub message_payload: Option<MessagePayload>,
     pub ref_id: Option<String>,
     pub user_token: String,
     pub payload_encryption_type: PayloadEncryptionType,
 }
 
-impl Debug for WriteMessageServiceRequest {
+impl<T> Debug for WriteMessageServiceRequest<T>
+where
+    T: RsaCryptoFetcher,
+{
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -108,15 +115,21 @@ impl Debug for WriteMessageServiceRequest {
     }
 }
 
-pub struct WriteMessageServiceResult {
-    pub message_framed_write: MessageFramedWrite,
+pub struct WriteMessageServiceResult<T>
+where
+    T: RsaCryptoFetcher,
+{
+    pub message_framed_write: MessageFramedWrite<T>,
 }
 
 #[derive(Clone, Default)]
 pub struct WriteMessageService;
 
-impl Service<WriteMessageServiceRequest> for WriteMessageService {
-    type Response = WriteMessageServiceResult;
+impl<T> Service<WriteMessageServiceRequest<T>> for WriteMessageService
+where
+    T: RsaCryptoFetcher + Send + Sync + 'static,
+{
+    type Response = WriteMessageServiceResult<T>;
     type Error = CommonError;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
@@ -124,7 +137,7 @@ impl Service<WriteMessageServiceRequest> for WriteMessageService {
         Poll::Ready(Ok(()))
     }
 
-    fn call(&mut self, req: WriteMessageServiceRequest) -> Self::Future {
+    fn call(&mut self, req: WriteMessageServiceRequest<T>) -> Self::Future {
         Box::pin(async move {
             let message = match req.message_payload {
                 None => Message::new(
@@ -160,19 +173,28 @@ impl Service<WriteMessageServiceRequest> for WriteMessageService {
     }
 }
 
-pub struct ReadMessageServiceRequest {
-    pub message_framed_read: MessageFramedRead,
+pub struct ReadMessageServiceRequest<T>
+where
+    T: RsaCryptoFetcher,
+{
+    pub message_framed_read: MessageFramedRead<T>,
 }
 
-impl Debug for ReadMessageServiceRequest {
+impl<T> Debug for ReadMessageServiceRequest<T>
+where
+    T: RsaCryptoFetcher,
+{
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "ReadMessageServiceRequest")
     }
 }
 
-pub struct ReadMessageServiceResult {
+pub struct ReadMessageServiceResult<T>
+where
+    T: RsaCryptoFetcher,
+{
     pub message_payload: MessagePayload,
-    pub message_framed_read: MessageFramedRead,
+    pub message_framed_read: MessageFramedRead<T>,
     pub user_token: String,
     pub message_id: String,
 }
@@ -190,8 +212,11 @@ impl ReadMessageService {
     }
 }
 
-impl Service<ReadMessageServiceRequest> for ReadMessageService {
-    type Response = Option<ReadMessageServiceResult>;
+impl<T> Service<ReadMessageServiceRequest<T>> for ReadMessageService
+where
+    T: RsaCryptoFetcher + Send + Sync + 'static,
+{
+    type Response = Option<ReadMessageServiceResult<T>>;
     type Error = CommonError;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
@@ -199,7 +224,7 @@ impl Service<ReadMessageServiceRequest> for ReadMessageService {
         Poll::Ready(Ok(()))
     }
 
-    fn call(&mut self, mut req: ReadMessageServiceRequest) -> Self::Future {
+    fn call(&mut self, mut req: ReadMessageServiceRequest<T>) -> Self::Future {
         let read_timeout_seconds = self.read_timeout_seconds;
         Box::pin(async move {
             let message = match tokio::time::timeout(

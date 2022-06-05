@@ -12,8 +12,8 @@ use common::{
     MessageFramedRead, MessageFramedWrite, MessagePayload, NetAddress,
     PayloadEncryptionTypeSelectService, PayloadEncryptionTypeSelectServiceRequest,
     PayloadEncryptionTypeSelectServiceResult, PayloadType, ProxyMessagePayloadTypeValue,
-    ReadMessageService, ReadMessageServiceRequest, ReadMessageServiceResult, WriteMessageService,
-    WriteMessageServiceRequest,
+    ReadMessageService, ReadMessageServiceRequest, ReadMessageServiceResult, RsaCryptoFetcher,
+    WriteMessageService, WriteMessageServiceRequest,
 };
 
 use crate::service::common::{
@@ -29,23 +29,37 @@ pub(crate) struct Socks5UdpAssociateServiceRequest {
 }
 
 #[allow(unused)]
-pub(crate) struct Socks5UdpAssociateServiceResponse {
-    pub message_framed_read: MessageFramedRead,
-    pub message_framed_write: MessageFramedWrite,
+pub(crate) struct Socks5UdpAssociateServiceResponse<T>
+where
+    T: RsaCryptoFetcher,
+{
+    pub message_framed_read: MessageFramedRead<T>,
+    pub message_framed_write: MessageFramedWrite<T>,
     pub source_address: NetAddress,
     pub target_address: NetAddress,
     pub connect_response_message_id: String,
 }
-pub(crate) struct Socks5UdpAssociateService;
+pub(crate) struct Socks5UdpAssociateService<T>
+where
+    T: RsaCryptoFetcher,
+{
+    rsa_crypto_fetcher: Arc<T>,
+}
 
-impl Default for Socks5UdpAssociateService {
-    fn default() -> Self {
-        Self {}
+impl<T> Socks5UdpAssociateService<T>
+where
+    T: RsaCryptoFetcher,
+{
+    pub fn new(rsa_crypto_fetcher: Arc<T>) -> Self {
+        Self { rsa_crypto_fetcher }
     }
 }
 
-impl Service<Socks5UdpAssociateServiceRequest> for Socks5UdpAssociateService {
-    type Response = Socks5UdpAssociateServiceResponse;
+impl<T> Service<Socks5UdpAssociateServiceRequest> for Socks5UdpAssociateService<T>
+where
+    T: RsaCryptoFetcher + Send + Sync + 'static,
+{
+    type Response = Socks5UdpAssociateServiceResponse<T>;
     type Error = CommonError;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
@@ -54,6 +68,7 @@ impl Service<Socks5UdpAssociateServiceRequest> for Socks5UdpAssociateService {
     }
 
     fn call(&mut self, request: Socks5UdpAssociateServiceRequest) -> Self::Future {
+        let rsa_crypto_fetcher = self.rsa_crypto_fetcher.clone();
         Box::pin(async move {
             let mut connect_to_proxy_service =
                 ServiceBuilder::new().service(ConnectToProxyService::new(
@@ -72,7 +87,8 @@ impl Service<Socks5UdpAssociateServiceRequest> for Socks5UdpAssociateService {
                 },
             )
             .await?;
-            let mut prepare_message_framed_service = generate_prepare_message_framed_service();
+            let mut prepare_message_framed_service =
+                generate_prepare_message_framed_service(rsa_crypto_fetcher);
             let framed_result = ready_and_call_service(
                 &mut prepare_message_framed_service,
                 connect_to_proxy_service_result.proxy_stream,

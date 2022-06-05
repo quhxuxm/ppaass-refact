@@ -12,8 +12,8 @@ use common::{
     MessageFramedRead, MessageFramedWrite, MessagePayload, NetAddress,
     PayloadEncryptionTypeSelectService, PayloadEncryptionTypeSelectServiceRequest,
     PayloadEncryptionTypeSelectServiceResult, PayloadType, ProxyMessagePayloadTypeValue,
-    ReadMessageService, ReadMessageServiceRequest, ReadMessageServiceResult, WriteMessageService,
-    WriteMessageServiceRequest,
+    ReadMessageService, ReadMessageServiceRequest, ReadMessageServiceResult, RsaCryptoFetcher,
+    WriteMessageService, WriteMessageServiceRequest,
 };
 
 use crate::{
@@ -26,7 +26,12 @@ use crate::{
     },
 };
 
-pub(crate) struct Socks5TcpConnectService;
+pub(crate) struct Socks5TcpConnectService<T>
+where
+    T: RsaCryptoFetcher,
+{
+    rsa_crypto_fetcher: Arc<T>,
+}
 
 pub(crate) struct Socks5TcpConnectServiceRequest {
     pub proxy_addresses: Arc<Vec<SocketAddr>>,
@@ -41,23 +46,32 @@ impl Debug for Socks5TcpConnectServiceRequest {
     }
 }
 
-pub(crate) struct Socks5TcpConnectServiceResponse {
-    pub message_framed_read: MessageFramedRead,
-    pub message_framed_write: MessageFramedWrite,
+pub(crate) struct Socks5TcpConnectServiceResponse<T>
+where
+    T: RsaCryptoFetcher,
+{
+    pub message_framed_read: MessageFramedRead<T>,
+    pub message_framed_write: MessageFramedWrite<T>,
     pub client_address: SocketAddr,
     pub source_address: NetAddress,
     pub target_address: NetAddress,
     pub connect_response_message_id: String,
 }
 
-impl Default for Socks5TcpConnectService {
-    fn default() -> Self {
-        Self {}
+impl<T> Socks5TcpConnectService<T>
+where
+    T: RsaCryptoFetcher,
+{
+    pub fn new(rsa_crypto_fetcher: Arc<T>) -> Self {
+        Self { rsa_crypto_fetcher }
     }
 }
 
-impl Service<Socks5TcpConnectServiceRequest> for Socks5TcpConnectService {
-    type Response = Socks5TcpConnectServiceResponse;
+impl<T> Service<Socks5TcpConnectServiceRequest> for Socks5TcpConnectService<T>
+where
+    T: RsaCryptoFetcher + Send + Sync + 'static,
+{
+    type Response = Socks5TcpConnectServiceResponse<T>;
 
     type Error = CommonError;
 
@@ -68,6 +82,7 @@ impl Service<Socks5TcpConnectServiceRequest> for Socks5TcpConnectService {
     }
 
     fn call(&mut self, request: Socks5TcpConnectServiceRequest) -> Self::Future {
+        let rsa_crypto_fetcher = self.rsa_crypto_fetcher.clone();
         Box::pin(async move {
             let client_address = request.client_address;
             let mut write_agent_message_service =
@@ -89,7 +104,8 @@ impl Service<Socks5TcpConnectServiceRequest> for Socks5TcpConnectService {
                 ));
             let mut payload_encryption_type_select_service =
                 ServiceBuilder::new().service(PayloadEncryptionTypeSelectService);
-            let mut prepare_message_framed_service = generate_prepare_message_framed_service();
+            let mut prepare_message_framed_service =
+                generate_prepare_message_framed_service(rsa_crypto_fetcher);
             let connect_to_proxy_service_result = ready_and_call_service(
                 &mut connect_to_proxy_service,
                 ConnectToProxyServiceRequest {

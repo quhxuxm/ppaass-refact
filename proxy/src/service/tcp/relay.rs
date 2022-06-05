@@ -1,5 +1,8 @@
-use std::fmt::{Debug, Formatter};
 use std::task::{Context, Poll};
+use std::{
+    fmt::{Debug, Formatter},
+    marker::PhantomData,
+};
 use std::{net::SocketAddr, time::Duration};
 
 use bytes::BytesMut;
@@ -16,8 +19,8 @@ use common::{
     MessageFramedRead, MessageFramedWrite, MessagePayload, NetAddress,
     PayloadEncryptionTypeSelectService, PayloadEncryptionTypeSelectServiceRequest,
     PayloadEncryptionTypeSelectServiceResult, PayloadType, ProxyMessagePayloadTypeValue,
-    ReadMessageService, ReadMessageServiceRequest, ReadMessageServiceResult, WriteMessageService,
-    WriteMessageServiceRequest,
+    ReadMessageService, ReadMessageServiceRequest, ReadMessageServiceResult, RsaCryptoFetcher,
+    WriteMessageService, WriteMessageServiceRequest,
 };
 
 use crate::config::DEFAULT_READ_AGENT_TIMEOUT_SECONDS;
@@ -27,9 +30,12 @@ const DEFAULT_BUFFER_SIZE: usize = 64 * 1024;
 const DEFAULT_READ_TARGET_TIMEOUT_SECONDS: u64 = 20;
 
 #[allow(unused)]
-pub(crate) struct TcpRelayServiceRequest {
-    pub message_framed_read: MessageFramedRead,
-    pub message_framed_write: MessageFramedWrite,
+pub(crate) struct TcpRelayServiceRequest<T>
+where
+    T: RsaCryptoFetcher,
+{
+    pub message_framed_read: MessageFramedRead<T>,
+    pub message_framed_write: MessageFramedWrite<T>,
     pub agent_address: SocketAddr,
     pub target_stream: TcpStream,
     pub agent_tcp_connect_message_id: String,
@@ -38,7 +44,10 @@ pub(crate) struct TcpRelayServiceRequest {
     pub target_address: NetAddress,
 }
 
-impl Debug for TcpRelayServiceRequest {
+impl<T> Debug for TcpRelayServiceRequest<T>
+where
+    T: RsaCryptoFetcher,
+{
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         writeln!(
             f,
@@ -54,10 +63,29 @@ pub(crate) struct TcpRelayServiceResult {
     pub target_address: NetAddress,
 }
 
-#[derive(Clone, Default)]
-pub(crate) struct TcpRelayService;
+#[derive(Clone)]
+pub(crate) struct TcpRelayService<T>
+where
+    T: RsaCryptoFetcher,
+{
+    _mark: PhantomData<T>,
+}
 
-impl Service<TcpRelayServiceRequest> for TcpRelayService {
+impl<T> Default for TcpRelayService<T>
+where
+    T: RsaCryptoFetcher,
+{
+    fn default() -> Self {
+        Self {
+            _mark: Default::default(),
+        }
+    }
+}
+
+impl<T> Service<TcpRelayServiceRequest<T>> for TcpRelayService<T>
+where
+    T: RsaCryptoFetcher + Send + Sync + 'static,
+{
     type Response = TcpRelayServiceResult;
     type Error = CommonError;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
@@ -66,7 +94,7 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
         Poll::Ready(Ok(()))
     }
 
-    fn call(&mut self, req: TcpRelayServiceRequest) -> Self::Future {
+    fn call(&mut self, req: TcpRelayServiceRequest<T>) -> Self::Future {
         Box::pin(async move {
             let message_framed_read = req.message_framed_read;
             let message_framed_write = req.message_framed_write;
@@ -98,9 +126,12 @@ impl Service<TcpRelayServiceRequest> for TcpRelayService {
     }
 }
 
-impl TcpRelayService {
+impl<T> TcpRelayService<T>
+where
+    T: RsaCryptoFetcher + Send + Sync + 'static,
+{
     async fn generate_proxy_to_target_relay(
-        agent_address: SocketAddr, mut message_framed_read: MessageFramedRead,
+        agent_address: SocketAddr, mut message_framed_read: MessageFramedRead<T>,
         mut target_stream_write: OwnedWriteHalf,
     ) {
         let mut read_agent_message_service =
@@ -167,7 +198,7 @@ impl TcpRelayService {
     }
 
     async fn generate_target_to_proxy_relay(
-        mut message_framed_write: MessageFramedWrite, agent_tcp_connect_message_id: String,
+        mut message_framed_write: MessageFramedWrite<T>, agent_tcp_connect_message_id: String,
         user_token: String, agent_connect_message_source_address: NetAddress,
         agent_connect_message_target_address: NetAddress, mut target_stream_read: OwnedReadHalf,
     ) {

@@ -1,7 +1,14 @@
-use std::fmt::{Debug, Formatter};
-use std::net::SocketAddr;
-use std::task::{Context, Poll};
 use std::time::Duration;
+use std::{collections::HashMap, net::SocketAddr};
+use std::{
+    fmt::{Debug, Formatter},
+    sync::Arc,
+};
+use std::{
+    fs,
+    path::Path,
+    task::{Context, Poll},
+};
 
 use futures::future;
 use futures::future::BoxFuture;
@@ -14,7 +21,9 @@ use tower::{
 use tower::{service_fn, Service};
 use tracing::{debug, error};
 
-use common::{ready_and_call_service, CommonError, PrepareMessageFramedService};
+use common::{
+    ready_and_call_service, CommonError, PrepareMessageFramedService, RsaCrypto, RsaCryptoFetcher,
+};
 
 use crate::config::{AGENT_PUBLIC_KEY, PROXY_PRIVATE_KEY};
 use crate::service::tcp::connect::{TcpConnectService, TcpConnectServiceRequest};
@@ -28,6 +37,89 @@ const DEFAULT_MAX_FRAME_SIZE: usize = DEFAULT_BUFFER_SIZE * 2;
 pub const DEFAULT_BUFFERED_CONNECTION_NUMBER: usize = 1024;
 pub const DEFAULT_RATE_LIMIT: u64 = 1024;
 pub const DEFAULT_CONCURRENCY_LIMIT: usize = 1024;
+pub(crate) struct ProxyRsaCryptoFetcher {
+    cache: HashMap<String, RsaCrypto>,
+}
+
+impl ProxyRsaCryptoFetcher {
+    pub fn new() -> Result<Self, CommonError> {
+        let mut result = Self {
+            cache: HashMap::new(),
+        };
+        let rsa_dir = fs::read_dir("proxy_resources/rsa")?;
+        rsa_dir.for_each(|entry| {
+            let entry = match entry {
+                Err(e) => {
+                    error!(
+                        "Fail to read proxy_resources/rsa directory because of error: {:#?}",
+                        e
+                    );
+                    return;
+                },
+                Ok(v) => v,
+            };
+            let user_token = entry.file_name();
+            let user_token = user_token.to_str();
+            let user_token = match user_token {
+                None => {
+                    error!(
+                        "Fail to read proxy_resources/rsa/{:?} directory because of user token not exist",
+                        entry.file_name()
+                    );
+                    return;
+                },
+                Some(v) => v,
+            };
+
+            let public_key = match fs::read_to_string(Path::new(
+                format!("proxy_resources/rsa/{}/AgentPublicKey.pem", user_token).as_str(),
+            )) {
+                Err(e) => {
+                    error!(
+                        "Fail to read proxy_resources/rsa/{}/AgentPublicKey.pem because of error: {:#?}",
+                        user_token, e
+                    );
+                    return;
+                },
+                Ok(v) => v,
+            };
+            let private_key = match fs::read_to_string(Path::new(
+                format!("proxy_resources/rsa/{}/ProxyPrivateKey.pem", user_token).as_str(),
+            )) {
+                Err(e) => {
+                    error!(
+                        "Fail to read proxy_resources/rsa/{}/ProxyPrivateKey.pem because of error: {:#?}",
+                        user_token, e
+                    );
+                    return;
+                },
+                Ok(v) => v,
+            };
+            let rsa_crypto = match RsaCrypto::new(public_key, private_key) {
+                Err(e) => {
+                    error!(
+                        "Fail to create rsa crypto for user: {} because of error: {:#?}",
+                        user_token, e
+                    );
+                    return;
+                },
+                Ok(v) => v,
+            };
+            result.cache.insert(user_token.to_string(), rsa_crypto);
+        });
+        Ok(result)
+    }
+}
+
+impl RsaCryptoFetcher for ProxyRsaCryptoFetcher {
+    fn fetch(&self, user_token: &str) -> Result<Option<&RsaCrypto>, CommonError> {
+        let val = self.cache.get(user_token);
+        match val {
+            None => Ok(None),
+            Some(v) => Ok(Some(v)),
+        }
+    }
+}
 
 pub(crate) struct AgentConnectionInfo {
     pub agent_stream: TcpStream,
@@ -45,9 +137,17 @@ impl Debug for AgentConnectionInfo {
 }
 
 #[derive(Debug, Default)]
-pub(crate) struct HandleAgentConnectionService;
+pub(crate) struct HandleAgentConnectionService<T>
+where
+    T: RsaCryptoFetcher,
+{
+    rsa_crypto_fetch: Arc<T>,
+}
 
-impl Service<AgentConnectionInfo> for HandleAgentConnectionService {
+impl<T> Service<AgentConnectionInfo> for HandleAgentConnectionService<T>
+where
+    T: RsaCryptoFetcher,
+{
     type Response = ();
     type Error = CommonError;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
@@ -58,21 +158,19 @@ impl Service<AgentConnectionInfo> for HandleAgentConnectionService {
 
     fn call(&mut self, req: AgentConnectionInfo) -> Self::Future {
         Box::pin(async move {
-            let agent_public_key = &(*AGENT_PUBLIC_KEY);
-            let proxy_private_key = &(*PROXY_PRIVATE_KEY);
             let mut prepare_message_frame_service =
                 ServiceBuilder::new().service(PrepareMessageFramedService::new(
-                    agent_public_key,
-                    proxy_private_key,
                     SERVER_CONFIG
                         .max_frame_size()
                         .unwrap_or(DEFAULT_MAX_FRAME_SIZE),
                     SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
                     SERVER_CONFIG.compress().unwrap_or(true),
+                    self.rsa_crypto_fetch.clone(),
                 ));
             let mut tcp_connect_service =
                 ServiceBuilder::new().service(TcpConnectService::default());
-            let mut tcp_relay_service = ServiceBuilder::new().service(TcpRelayService::default());
+            let mut tcp_relay_service =
+                ServiceBuilder::new().service(TcpRelayService::<T>::default());
             let framed_result =
                 ready_and_call_service(&mut prepare_message_frame_service, req.agent_stream)
                     .await?;

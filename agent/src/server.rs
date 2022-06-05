@@ -10,9 +10,9 @@ use tracing::{error, info};
 
 use common::ready_and_call_service;
 
-use crate::service::common::{
+use crate::service::{common::{
     ClientConnectionInfo, HandleClientConnectionService, DEFAULT_BUFFERED_CONNECTION_NUMBER,
-};
+}, AgentRsaCryptoFetcher};
 use crate::{
     config::SERVER_CONFIG,
     service::common::{DEFAULT_CONCURRENCY_LIMIT, DEFAULT_RATE_LIMIT},
@@ -70,6 +70,7 @@ impl AgentServer {
             }
         }
         let proxy_addresses = Arc::new(proxy_addresses);
+
         self.runtime.block_on(async {
             let std_listener = match std::net::TcpListener::bind(SocketAddrV4::new(
                 Ipv4Addr::new(0, 0, 0, 0),
@@ -104,7 +105,9 @@ impl AgentServer {
                     listener
                 }
             };
+            let agent_rsa_crypto_fetcher =Arc::new( AgentRsaCryptoFetcher{});
             loop {
+                let agent_rsa_crypto_fetcher=agent_rsa_crypto_fetcher.clone();
                 let (client_stream, client_address) = match listener.accept().await {
                     Err(e) => {
                         error!(
@@ -146,7 +149,7 @@ impl AgentServer {
                             SERVER_CONFIG.rate_limit().unwrap_or(DEFAULT_RATE_LIMIT),
                             Duration::from_secs(60),
                         )
-                        .service(HandleClientConnectionService::new(proxy_addresses));
+                        .service(HandleClientConnectionService::new(proxy_addresses, agent_rsa_crypto_fetcher.clone())); 
                     if let Err(e) = ready_and_call_service(
                         &mut handle_client_connection_service,
                         ClientConnectionInfo {

@@ -1,7 +1,7 @@
 use bytes::{BufMut, Bytes, BytesMut};
 use crypto::symmetriccipher::{BlockDecryptor, BlockEncryptor};
 use crypto::{aessafe, blowfish};
-use rand::{CryptoRng, Rng};
+use rand::rngs::OsRng;
 use rsa::pkcs8::{DecodePrivateKey, DecodePublicKey};
 use rsa::{PaddingScheme, PublicKey, RsaPrivateKey, RsaPublicKey};
 use tracing::error;
@@ -11,21 +11,21 @@ use crate::CommonError;
 const BLOWFISH_CHUNK_LENGTH: usize = 8;
 const AES_CHUNK_LENGTH: usize = 16;
 
+pub trait RsaCryptoFetcher {
+    fn fetch(&self, user_token: &str) -> Result<Option<&RsaCrypto>, CommonError>;
+}
+
 /// The util to do RSA encryption and decryption.
 #[derive(Debug)]
-pub(crate) struct RsaCrypto<T> {
+pub struct RsaCrypto {
     /// The private used to do decryption
     private_key: RsaPrivateKey,
     /// The public used to do encryption
     public_key: RsaPublicKey,
-    rng: T,
 }
 
-impl<T> RsaCrypto<T>
-where
-    T: Rng + CryptoRng + Send + Sync,
-{
-    pub fn new<PU, PR>(public_key: PU, private_key: PR, rng: T) -> Result<Self, CommonError>
+impl RsaCrypto {
+    pub fn new<PU, PR>(public_key: PU, private_key: PR) -> Result<Self, CommonError>
     where
         PU: AsRef<str>,
         PR: AsRef<str>,
@@ -47,13 +47,12 @@ where
         Ok(Self {
             public_key,
             private_key,
-            rng,
         })
     }
 
-    pub(crate) fn encrypt(&mut self, target: &Bytes) -> Result<Bytes, CommonError> {
+    pub(crate) fn encrypt(&self, target: &Bytes) -> Result<Bytes, CommonError> {
         self.public_key
-            .encrypt(&mut self.rng, PaddingScheme::PKCS1v15Encrypt, target)
+            .encrypt(&mut OsRng, PaddingScheme::PKCS1v15Encrypt, target)
             .map_err(|e| {
                 error!("Fail to encrypt data with rsa because of error: {:#?}", e);
                 CommonError::CodecError
