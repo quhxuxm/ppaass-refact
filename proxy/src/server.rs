@@ -1,5 +1,8 @@
-use std::net::{Ipv4Addr, SocketAddrV4};
 use std::time::Duration;
+use std::{
+    net::{Ipv4Addr, SocketAddrV4},
+    sync::Arc,
+};
 
 use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
@@ -8,7 +11,9 @@ use tracing::{error, info};
 
 use common::ready_and_call_service;
 
-use crate::service::{AgentConnectionInfo, HandleAgentConnectionService, DEFAULT_RATE_LIMIT};
+use crate::service::{
+    AgentConnectionInfo, HandleAgentConnectionService, ProxyRsaCryptoFetcher, DEFAULT_RATE_LIMIT,
+};
 use crate::{
     config::SERVER_CONFIG,
     service::{DEFAULT_BUFFERED_CONNECTION_NUMBER, DEFAULT_CONCURRENCY_LIMIT},
@@ -81,6 +86,16 @@ impl ProxyServer {
                     listener
                 }
             };
+            let proxy_rsa_crypto_fetcher=match ProxyRsaCryptoFetcher::new(){
+                Err(e)=>{
+                    panic!(
+                        "Fail to generate proxy server because of error when generate rsa crypto fetcher: {:#?}",
+                        e
+                    );
+                }
+                Ok(v)=>v
+            };
+            let proxy_rsa_crypto_fetcher =Arc::new( proxy_rsa_crypto_fetcher);
             loop {
                 let (agent_stream, agent_address) = match listener.accept().await {
                     Err(e) => {
@@ -106,6 +121,7 @@ impl ProxyServer {
                     );
                     continue;
                 }
+                let proxy_rsa_crypto_fetcher=proxy_rsa_crypto_fetcher.clone();
                 tokio::spawn(async move {
                     let mut handle_agent_connection_service = ServiceBuilder::new()
                         .buffer(
@@ -122,7 +138,7 @@ impl ProxyServer {
                             SERVER_CONFIG.rate_limit().unwrap_or(DEFAULT_RATE_LIMIT),
                             Duration::from_secs(60),
                         )
-                        .service::<HandleAgentConnectionService>(Default::default());
+                        .service(HandleAgentConnectionService::new(proxy_rsa_crypto_fetcher.clone()));
                     if let Err(e) = ready_and_call_service(
                         &mut handle_agent_connection_service,
                         AgentConnectionInfo {

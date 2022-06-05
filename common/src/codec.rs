@@ -10,7 +10,7 @@ use tokio_util::codec::{Decoder, Encoder, LengthDelimitedCodec};
 use tracing::{debug, error};
 
 use crate::crypto::{
-    decrypt_with_aes, decrypt_with_blowfish, encrypt_with_aes, encrypt_with_blowfish, RsaCrypto,
+    decrypt_with_aes, decrypt_with_blowfish, encrypt_with_aes, encrypt_with_blowfish,
     RsaCryptoFetcher,
 };
 use crate::{CommonError, Message, PayloadEncryptionType};

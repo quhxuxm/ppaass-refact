@@ -74,8 +74,7 @@ where
                 ServiceBuilder::new().service(Socks5AuthCommandService::default());
             let mut connect_service = ServiceBuilder::new()
                 .service(Socks5InitCommandService::new(rsa_crypto_fetcher.clone()));
-            let mut relay_service =
-                ServiceBuilder::new().service(TcpRelayService::new(rsa_crypto_fetcher));
+            let mut relay_service = ServiceBuilder::new().service(TcpRelayService::new());
             let authenticate_result = ready_and_call_service(
                 &mut authenticate_service,
                 Socks5AuthenticateFlowRequest {

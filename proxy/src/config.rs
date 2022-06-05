@@ -28,6 +28,7 @@ pub const DEFAULT_CONNECT_TARGET_TIMEOUT_SECONDS: u64 = 20;
 #[derive(Serialize, Deserialize)]
 pub(crate) struct Config {
     port: Option<u16>,
+    rsa_root_dir: Option<String>,
     buffer_size: Option<usize>,
     max_frame_size: Option<usize>,
     thread_number: Option<usize>,
@@ -88,6 +89,10 @@ impl Config {
     }
     pub fn target_connection_retry(&self) -> Option<u16> {
         self.target_connection_retry
+    }
+
+    pub fn rsa_root_dir(&self) -> &Option<String> {
+        &self.rsa_root_dir
     }
 
     pub fn buffered_connection_number(&self) -> Option<usize> {

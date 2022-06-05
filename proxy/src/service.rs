@@ -25,7 +25,6 @@ use common::{
     ready_and_call_service, CommonError, PrepareMessageFramedService, RsaCrypto, RsaCryptoFetcher,
 };
 
-use crate::config::{AGENT_PUBLIC_KEY, PROXY_PRIVATE_KEY};
 use crate::service::tcp::connect::{TcpConnectService, TcpConnectServiceRequest};
 use crate::service::tcp::relay::{TcpRelayService, TcpRelayServiceRequest};
 use crate::SERVER_CONFIG;
@@ -136,17 +135,25 @@ impl Debug for AgentConnectionInfo {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub(crate) struct HandleAgentConnectionService<T>
 where
     T: RsaCryptoFetcher,
 {
     rsa_crypto_fetch: Arc<T>,
 }
+impl<T> HandleAgentConnectionService<T>
+where
+    T: RsaCryptoFetcher,
+{
+    pub fn new(rsa_crypto_fetch: Arc<T>) -> Self {
+        Self { rsa_crypto_fetch }
+    }
+}
 
 impl<T> Service<AgentConnectionInfo> for HandleAgentConnectionService<T>
 where
-    T: RsaCryptoFetcher,
+    T: RsaCryptoFetcher + Send + Sync + 'static,
 {
     type Response = ();
     type Error = CommonError;
@@ -157,6 +164,7 @@ where
     }
 
     fn call(&mut self, req: AgentConnectionInfo) -> Self::Future {
+        let rsa_crypto_fetch = self.rsa_crypto_fetch.clone();
         Box::pin(async move {
             let mut prepare_message_frame_service =
                 ServiceBuilder::new().service(PrepareMessageFramedService::new(
@@ -165,7 +173,7 @@ where
                         .unwrap_or(DEFAULT_MAX_FRAME_SIZE),
                     SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
                     SERVER_CONFIG.compress().unwrap_or(true),
-                    self.rsa_crypto_fetch.clone(),
+                    rsa_crypto_fetch.clone(),
                 ));
             let mut tcp_connect_service =
                 ServiceBuilder::new().service(TcpConnectService::default());

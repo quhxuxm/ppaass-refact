@@ -1,8 +1,11 @@
-use std::fmt::{Debug, Formatter};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::Duration;
+use std::{
+    fmt::{Debug, Formatter},
+    marker::PhantomData,
+};
 
 use bytes::{BufMut, BytesMut};
 use futures::future::BoxFuture;
@@ -26,7 +29,7 @@ use common::{
 };
 
 use crate::codec::common::{InitializeProtocolDecoder, Protocol};
-use crate::config::{AGENT_PRIVATE_KEY, PROXY_PUBLIC_KEY, SERVER_CONFIG};
+use crate::config::SERVER_CONFIG;
 use crate::service::http::{HttpFlowRequest, HttpFlowService};
 use crate::service::socks5::{Socks5FlowRequest, Socks5FlowService};
 
@@ -373,12 +376,23 @@ pub(crate) struct TcpRelayServiceResult {
     pub client_address: SocketAddr,
 }
 
-#[derive(Clone, Default)]
+#[derive(Default)]
 pub(crate) struct TcpRelayService<T>
 where
     T: RsaCryptoFetcher,
 {
-    rsa_crypto_fetcher: Arc<T>,
+    _marker: PhantomData<T>,
+}
+
+impl<T> TcpRelayService<T>
+where
+    T: RsaCryptoFetcher,
+{
+    pub fn new() -> Self {
+        Self {
+            _marker: PhantomData,
+        }
+    }
 }
 
 impl<T> Service<TcpRelayServiceRequest<T>> for TcpRelayService<T>
@@ -425,9 +439,6 @@ impl<T> TcpRelayService<T>
 where
     T: RsaCryptoFetcher + Send + Sync + 'static,
 {
-    pub fn new(rsa_crypto_fetcher: Arc<T>) -> Self {
-        Self { rsa_crypto_fetcher }
-    }
     async fn generate_from_client_to_proxy_relay(
         init_data: Option<Vec<u8>>, connect_response_message_id: String,
         mut message_framed_write: MessageFramedWrite<T>, source_address_a2t: NetAddress,
