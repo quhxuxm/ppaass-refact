@@ -10,9 +10,12 @@ use tracing::{error, info};
 
 use common::ready_and_call_service;
 
-use crate::service::{common::{
-    ClientConnectionInfo, HandleClientConnectionService, DEFAULT_BUFFERED_CONNECTION_NUMBER,
-}, AgentRsaCryptoFetcher};
+use crate::service::{
+    common::{
+        ClientConnectionInfo, HandleClientConnectionService, DEFAULT_BUFFERED_CONNECTION_NUMBER,
+    },
+    AgentRsaCryptoFetcher,
+};
 use crate::{
     config::SERVER_CONFIG,
     service::common::{DEFAULT_CONCURRENCY_LIMIT, DEFAULT_RATE_LIMIT},
@@ -158,7 +161,7 @@ impl AgentServer {
                             SERVER_CONFIG.rate_limit().unwrap_or(DEFAULT_RATE_LIMIT),
                             Duration::from_secs(60),
                         )
-                        .service(HandleClientConnectionService::new(proxy_addresses, agent_rsa_crypto_fetcher.clone())); 
+                        .service(HandleClientConnectionService::new(proxy_addresses, agent_rsa_crypto_fetcher.clone()));
                     if let Err(e) = ready_and_call_service(
                         &mut handle_client_connection_service,
                         ClientConnectionInfo {
