@@ -13,7 +13,7 @@ use crate::crypto::{
     decrypt_with_aes, decrypt_with_blowfish, encrypt_with_aes, encrypt_with_blowfish,
     RsaCryptoFetcher,
 };
-use crate::{CommonError, Message, PayloadEncryptionType};
+use crate::{Message, PayloadEncryptionType, PpaassError};
 
 const LENGTH_DELIMITED_CODEC_LENGTH_FIELD_LENGTH: usize = 8;
 
@@ -55,14 +55,14 @@ where
     T: RsaCryptoFetcher,
 {
     type Item = Message;
-    type Error = CommonError;
+    type Error = PpaassError;
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
         let length_delimited_decode_result = self.length_delimited_codec.decode(src);
         let length_delimited_decode_result = match length_delimited_decode_result {
             Err(e) => {
                 error!("Fail to decode input message because of timeout: {:#?}", e);
-                return Err(CommonError::CodecError);
+                return Err(PpaassError::CodecError);
             },
             Ok(None) => return Ok(None),
             Ok(Some(r)) => r,
@@ -72,7 +72,7 @@ where
                 match decompress(length_delimited_decode_result.chunk(), None) {
                     Err(e) => {
                         error!("Fail to decompress message because of error: {:#?}", e);
-                        return Err(CommonError::IoError { source: e });
+                        return Err(PpaassError::IoError { source: e });
                     },
                     Ok(r) => Bytes::from(r),
                 };
@@ -105,7 +105,7 @@ where
                     "Fail to decrypt message because of rsa crypto not exist for user: {}",
                     message.user_token
                 );
-                return Err(CommonError::UnknownError);
+                return Err(PpaassError::UnknownError);
             },
             Ok(Some(v)) => v,
         };
@@ -161,7 +161,7 @@ impl<T> Encoder<Message> for MessageCodec<T>
 where
     T: RsaCryptoFetcher,
 {
-    type Error = CommonError;
+    type Error = PpaassError;
 
     fn encode(&mut self, original_message: Message, dst: &mut BytesMut) -> Result<(), Self::Error> {
         debug!(
@@ -179,7 +179,7 @@ where
                 dst,
             ) {
                 error!("Fail to encode original message because of error: {:#?}", e);
-                return Err(CommonError::IoError { source: e });
+                return Err(PpaassError::IoError { source: e });
             }
             return Ok(());
         }
@@ -205,7 +205,7 @@ where
                     "Fail to encrypt message because of rsa crypto not exist for user: {}",
                     user_token
                 );
-                return Err(CommonError::UnknownError);
+                return Err(PpaassError::UnknownError);
             },
             Ok(Some(v)) => v,
         };
@@ -256,7 +256,7 @@ where
             dst,
         ) {
             error!("Fail to encode original message because of error: {:#?}", e);
-            return Err(CommonError::IoError { source: e });
+            return Err(PpaassError::IoError { source: e });
         }
         Ok(())
     }

@@ -20,12 +20,12 @@ use tower::{service_fn, Service, ServiceBuilder};
 use tracing::{debug, error};
 
 use common::{
-    generate_uuid, ready_and_call_service, AgentMessagePayloadTypeValue, CommonError,
-    MessageFramedRead, MessageFramedWrite, MessagePayload, NetAddress,
-    PayloadEncryptionTypeSelectService, PayloadEncryptionTypeSelectServiceRequest,
-    PayloadEncryptionTypeSelectServiceResult, PayloadType, PrepareMessageFramedService,
-    ProxyMessagePayloadTypeValue, ReadMessageService, ReadMessageServiceRequest,
-    ReadMessageServiceResult, RsaCryptoFetcher, WriteMessageService, WriteMessageServiceRequest,
+    generate_uuid, ready_and_call_service, AgentMessagePayloadTypeValue, MessageFramedRead,
+    MessageFramedWrite, MessagePayload, NetAddress, PayloadEncryptionTypeSelectService,
+    PayloadEncryptionTypeSelectServiceRequest, PayloadEncryptionTypeSelectServiceResult,
+    PayloadType, PpaassError, PrepareMessageFramedService, ProxyMessagePayloadTypeValue,
+    ReadMessageService, ReadMessageServiceRequest, ReadMessageServiceResult, RsaCryptoFetcher,
+    WriteMessageService, WriteMessageServiceRequest,
 };
 
 use crate::codec::common::{InitializeProtocolDecoder, Protocol};
@@ -95,7 +95,7 @@ where
     T: RsaCryptoFetcher + Send + Sync + 'static,
 {
     type Response = ();
-    type Error = CommonError;
+    type Error = PpaassError;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
@@ -123,7 +123,7 @@ where
                         "Can not parse protocol from client input stream because of error: {:#?}.",
                         e
                     );
-                    Err(CommonError::CodecError)
+                    Err(PpaassError::CodecError)
                 },
                 Some(Ok(Protocol::Http)) => {
                     let FramedParts {
@@ -209,7 +209,7 @@ struct ConnectToProxyAttempts {
 #[derive(Clone)]
 pub(crate) struct ConnectToProxyService {
     concrete_service:
-        BoxCloneService<ConcreteConnectToProxyRequest, ConnectToProxyServiceResult, CommonError>,
+        BoxCloneService<ConcreteConnectToProxyRequest, ConnectToProxyServiceResult, PpaassError>,
 }
 
 impl ConnectToProxyService {
@@ -226,20 +226,20 @@ impl ConnectToProxyService {
                 {
                     Err(e) => {
                         error!("The connect to proxy timeout: {:#?}.", e);
-                        return Err(CommonError::TimeoutError);
+                        return Err(PpaassError::TimeoutError);
                     },
                     Ok(Err(e)) => {
                         error!("Fail connect to proxy because of error: {:#?}", e);
-                        return Err(CommonError::IoError { source: e });
+                        return Err(PpaassError::IoError { source: e });
                     },
                     Ok(Ok(v)) => v,
                 };
                 proxy_stream
                     .set_nodelay(true)
-                    .map_err(|e| CommonError::IoError { source: e })?;
+                    .map_err(|e| PpaassError::IoError { source: e })?;
                 proxy_stream
                     .set_linger(None)
-                    .map_err(|e| CommonError::IoError { source: e })?;
+                    .map_err(|e| PpaassError::IoError { source: e })?;
                 debug!(
                     "Client {}, success connect to proxy",
                     request.client_address
@@ -253,14 +253,14 @@ impl ConnectToProxyService {
     }
 }
 
-impl Policy<ConcreteConnectToProxyRequest, ConnectToProxyServiceResult, CommonError>
+impl Policy<ConcreteConnectToProxyRequest, ConnectToProxyServiceResult, PpaassError>
     for ConnectToProxyAttempts
 {
     type Future = future::Ready<Self>;
 
     fn retry(
         &self, _req: &ConcreteConnectToProxyRequest,
-        result: Result<&ConnectToProxyServiceResult, &CommonError>,
+        result: Result<&ConnectToProxyServiceResult, &PpaassError>,
     ) -> Option<Self::Future> {
         match result {
             Ok(_) => {
@@ -292,7 +292,7 @@ impl Policy<ConcreteConnectToProxyRequest, ConnectToProxyServiceResult, CommonEr
 
 impl Service<ConnectToProxyServiceRequest> for ConnectToProxyService {
     type Response = ConnectToProxyServiceResult;
-    type Error = CommonError;
+    type Error = PpaassError;
     type Future = BoxFuture<'static, Result<ConnectToProxyServiceResult, Self::Error>>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
@@ -400,7 +400,7 @@ where
     T: RsaCryptoFetcher + Send + Sync + 'static,
 {
     type Response = TcpRelayServiceResult;
-    type Error = CommonError;
+    type Error = PpaassError;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, _cx: &mut Context) -> Poll<Result<(), Self::Error>> {

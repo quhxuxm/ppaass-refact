@@ -8,12 +8,12 @@ use tower::{Service, ServiceBuilder};
 use tracing::error;
 
 use common::{
-    generate_uuid, ready_and_call_service, AgentMessagePayloadTypeValue, CommonError,
-    MessageFramedRead, MessageFramedWrite, MessagePayload, NetAddress,
-    PayloadEncryptionTypeSelectService, PayloadEncryptionTypeSelectServiceRequest,
-    PayloadEncryptionTypeSelectServiceResult, PayloadType, ProxyMessagePayloadTypeValue,
-    ReadMessageService, ReadMessageServiceRequest, ReadMessageServiceResult, RsaCryptoFetcher,
-    WriteMessageService, WriteMessageServiceRequest,
+    generate_uuid, ready_and_call_service, AgentMessagePayloadTypeValue, MessageFramedRead,
+    MessageFramedWrite, MessagePayload, NetAddress, PayloadEncryptionTypeSelectService,
+    PayloadEncryptionTypeSelectServiceRequest, PayloadEncryptionTypeSelectServiceResult,
+    PayloadType, PpaassError, ProxyMessagePayloadTypeValue, ReadMessageService,
+    ReadMessageServiceRequest, ReadMessageServiceResult, RsaCryptoFetcher, WriteMessageService,
+    WriteMessageServiceRequest,
 };
 
 use crate::{
@@ -73,7 +73,7 @@ where
 {
     type Response = Socks5TcpConnectServiceResponse<T>;
 
-    type Error = CommonError;
+    type Error = PpaassError;
 
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
@@ -156,7 +156,7 @@ where
             {
                 None => {
                     error!("Nothing read from proxy.");
-                    Err(CommonError::CodecError)
+                    Err(PpaassError::CodecError)
                 },
                 Some(ReadMessageServiceResult {
                     message_payload:
@@ -190,11 +190,11 @@ where
                     ..
                 }) => {
                     error!("Fail connect to target from proxy.");
-                    Err(CommonError::UnknownError)
+                    Err(PpaassError::UnknownError)
                 },
                 Some(_) => {
                     error!("Invalid payload type read from proxy.");
-                    Err(CommonError::UnknownError)
+                    Err(PpaassError::UnknownError)
                 },
             }
         })

@@ -8,7 +8,7 @@ use bytes::{Buf, BufMut, Bytes, BytesMut};
 use tracing::error;
 
 use crate::NetAddress::IpV4;
-use crate::{error::CommonError, util::generate_uuid};
+use crate::{error::PpaassError, util::generate_uuid};
 
 const ENCRYPTION_TYPE_PLAIN: u8 = 0;
 const ENCRYPTION_TYPE_BLOWFISH: u8 = 1;
@@ -66,12 +66,12 @@ impl ToString for NetAddress {
     }
 }
 impl TryFrom<&mut Bytes> for NetAddress {
-    type Error = CommonError;
+    type Error = PpaassError;
 
     fn try_from(value: &mut Bytes) -> Result<Self, Self::Error> {
         if !value.has_remaining() {
             error!("Fail to parse NetAddress because of no remaining in bytes buffer.");
-            return Err(CommonError::CodecError);
+            return Err(PpaassError::CodecError);
         }
         let address_type = value.get_u8();
         let address = match address_type {
@@ -80,7 +80,7 @@ impl TryFrom<&mut Bytes> for NetAddress {
                 //A ip v4 address is 6 bytes: 4 bytes for host, 2 bytes for port
                 if value.remaining() < 6 {
                     error!("Fail to parse NetAddress(IpV4) because of not enough remaining in bytes buffer.");
-                    return Err(CommonError::CodecError);
+                    return Err(PpaassError::CodecError);
                 }
                 let mut addr_content = [0u8; 4];
                 addr_content.iter_mut().for_each(|item| {
@@ -94,7 +94,7 @@ impl TryFrom<&mut Bytes> for NetAddress {
                 //A ip v6 address is 18 bytes: 16 bytes for host, 2 bytes for port
                 if value.remaining() < 18 {
                     error!("Fail to parse NetAddress(IpV6) because of not enough remaining in bytes buffer.");
-                    return Err(CommonError::CodecError);
+                    return Err(PpaassError::CodecError);
                 }
                 let mut addr_content = [0u8; 16];
                 addr_content.iter_mut().for_each(|item| {
@@ -107,12 +107,12 @@ impl TryFrom<&mut Bytes> for NetAddress {
                 //Convert the NetAddress::Domain
                 if value.remaining() < 4 {
                     error!("Fail to parse NetAddress(Domain) because of not enough remaining in bytes buffer.");
-                    return Err(CommonError::CodecError);
+                    return Err(PpaassError::CodecError);
                 }
                 let host_name_length = value.get_u32() as usize;
                 if value.remaining() < host_name_length + 2 {
                     error!("Fail to parse NetAddress(Domain) because of not enough remaining in bytes buffer, require: {}.", host_name_length + 2);
-                    return Err(CommonError::CodecError);
+                    return Err(PpaassError::CodecError);
                 }
                 let host_bytes = value.copy_to_bytes(host_name_length);
                 let host = match String::from_utf8(host_bytes.to_vec()) {
@@ -122,7 +122,7 @@ impl TryFrom<&mut Bytes> for NetAddress {
                             "Fail to parse NetAddress(Domain) because of error: {:#?}.",
                             e
                         );
-                        return Err(CommonError::CodecError);
+                        return Err(PpaassError::CodecError);
                     },
                 };
                 let port = value.get_u16();
@@ -133,7 +133,7 @@ impl TryFrom<&mut Bytes> for NetAddress {
                     "Fail to parse NetAddress because of invalide address type {}.",
                     invalid_address_type
                 );
-                return Err(CommonError::CodecError);
+                return Err(PpaassError::CodecError);
             },
         };
         Ok(address)
@@ -141,7 +141,7 @@ impl TryFrom<&mut Bytes> for NetAddress {
 }
 
 impl TryFrom<Bytes> for NetAddress {
-    type Error = CommonError;
+    type Error = PpaassError;
 
     fn try_from(mut value: Bytes) -> Result<Self, Self::Error> {
         let value_mut_ref: &mut Bytes = &mut value;
@@ -253,7 +253,7 @@ impl From<PayloadType> for u8 {
 }
 
 impl TryFrom<u8> for PayloadType {
-    type Error = CommonError;
+    type Error = PpaassError;
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
@@ -297,25 +297,25 @@ impl TryFrom<u8> for PayloadType {
 
             invalid_type => {
                 error!("Fail to parse payload type: {}", invalid_type);
-                Err(CommonError::CodecError)
+                Err(PpaassError::CodecError)
             },
         }
     }
 }
 
 impl TryFrom<&mut Bytes> for PayloadEncryptionType {
-    type Error = CommonError;
+    type Error = PpaassError;
 
     fn try_from(value: &mut Bytes) -> Result<Self, Self::Error> {
         if value.remaining() < 5 {
             error!("Fail to parse PayloadEncryptionType because of no remining in byte buffer.");
-            return Err(CommonError::CodecError);
+            return Err(PpaassError::CodecError);
         }
         let enc_type_value = value.get_u8();
         let enc_type_token_length = value.get_u32() as usize;
         if value.remaining() < enc_type_token_length {
             error!("Fail to parse PayloadEncryptionType because of no remining in byte buffer.");
-            return Err(CommonError::CodecError);
+            return Err(PpaassError::CodecError);
         }
         let enc_token = value.copy_to_bytes(enc_type_token_length);
         match enc_type_value {
@@ -327,14 +327,14 @@ impl TryFrom<&mut Bytes> for PayloadEncryptionType {
                     "Fail to parse PayloadEncryptionType because of invalid type: {}.",
                     invalid_type
                 );
-                Err(CommonError::CodecError)
+                Err(PpaassError::CodecError)
             },
         }
     }
 }
 
 impl TryFrom<Bytes> for PayloadEncryptionType {
-    type Error = CommonError;
+    type Error = PpaassError;
 
     fn try_from(mut value: Bytes) -> Result<Self, Self::Error> {
         let value_mut_ref: &mut Bytes = &mut value;
@@ -404,42 +404,42 @@ impl From<MessagePayload> for Bytes {
 }
 
 impl TryFrom<Bytes> for MessagePayload {
-    type Error = CommonError;
+    type Error = PpaassError;
 
     fn try_from(mut value: Bytes) -> Result<Self, Self::Error> {
         if value.remaining() < 1 {
             error!("Fail to parse message payload because of no remaining");
-            return Err(CommonError::CodecError);
+            return Err(PpaassError::CodecError);
         }
         let payload_type: PayloadType = match value.get_u8().try_into() {
             Ok(v) => v,
             Err(e) => {
                 error!("Fail to parse message payload because of error: {:#?}", e);
-                return Err(CommonError::CodecError);
+                return Err(PpaassError::CodecError);
             },
         };
         let source_address: NetAddress = match (&mut value).try_into() {
             Ok(v) => v,
             Err(e) => {
                 error!("Fail to parse source address because of error: {:#?}", e);
-                return Err(CommonError::CodecError);
+                return Err(PpaassError::CodecError);
             },
         };
         let target_address: NetAddress = match (&mut value).try_into() {
             Ok(v) => v,
             Err(e) => {
                 error!("Fail to parse target address because of error: {:#?}", e);
-                return Err(CommonError::CodecError);
+                return Err(PpaassError::CodecError);
             },
         };
         if value.remaining() < 8 {
             error!("Fail to parse message payload because of no remaining");
-            return Err(CommonError::CodecError);
+            return Err(PpaassError::CodecError);
         }
         let data_length = value.get_u64() as usize;
         if value.remaining() < data_length {
             error!("Fail to parse message payload because of no remaining");
-            return Err(CommonError::CodecError);
+            return Err(PpaassError::CodecError);
         }
         let data = value.copy_to_bytes(data_length);
         Ok(Self {
@@ -517,70 +517,70 @@ impl Message {
 }
 
 impl TryFrom<Bytes> for Message {
-    type Error = CommonError;
+    type Error = PpaassError;
 
     fn try_from(mut value: Bytes) -> Result<Self, Self::Error> {
         if value.remaining() < 4 {
             error!("Fail to parse message because of no remaining");
-            return Err(CommonError::CodecError);
+            return Err(PpaassError::CodecError);
         };
         let id_length = value.get_u32() as usize;
         if value.remaining() < id_length {
             error!("Fail to parse message because of no remaining");
-            return Err(CommonError::CodecError);
+            return Err(PpaassError::CodecError);
         };
         let id_bytes = value.copy_to_bytes(id_length as usize);
         let id = match String::from_utf8(id_bytes.to_vec()) {
             Ok(v) => v,
             Err(e) => {
                 error!("Fail to parse message because of error: {:#?}", e);
-                return Err(CommonError::CodecError);
+                return Err(PpaassError::CodecError);
             },
         };
         if value.remaining() < 8 {
             error!("Fail to parse message because of no remaining");
-            return Err(CommonError::CodecError);
+            return Err(PpaassError::CodecError);
         };
         let ref_id_length = value.get_u32() as usize;
         if value.remaining() < ref_id_length {
             error!("Fail to parse message because of no remaining");
-            return Err(CommonError::CodecError);
+            return Err(PpaassError::CodecError);
         };
         let ref_id_bytes = value.copy_to_bytes(ref_id_length as usize);
         let ref_id = match String::from_utf8(ref_id_bytes.to_vec()) {
             Ok(v) => v,
             Err(e) => {
                 error!("Fail to parse message because of error: {:#?}", e);
-                return Err(CommonError::CodecError);
+                return Err(PpaassError::CodecError);
             },
         };
         if value.remaining() < 8 {
             error!("Fail to parse message because of no remaining");
-            return Err(CommonError::CodecError);
+            return Err(PpaassError::CodecError);
         };
         let user_token_length = value.get_u64() as usize;
         if value.remaining() < user_token_length {
             error!("Fail to parse message because of no remaining");
-            return Err(CommonError::CodecError);
+            return Err(PpaassError::CodecError);
         };
         let user_token_bytes = value.copy_to_bytes(user_token_length as usize);
         let user_token = match String::from_utf8(user_token_bytes.to_vec()) {
             Ok(v) => v,
             Err(e) => {
                 error!("Fail to parse message because of error: {:#?}", e);
-                return Err(CommonError::CodecError);
+                return Err(PpaassError::CodecError);
             },
         };
         let payload_encryption_type: PayloadEncryptionType = match (&mut value).try_into() {
             Ok(v) => v,
             Err(e) => {
                 error!("Fail to parse message because of error: {:#?}", e);
-                return Err(CommonError::CodecError);
+                return Err(PpaassError::CodecError);
             },
         };
         if value.remaining() < 8 {
             error!("Fail to parse message because of no remaining");
-            return Err(CommonError::CodecError);
+            return Err(PpaassError::CodecError);
         };
         let payload_length = value.get_u64() as usize;
         let payload = if payload_length == 0 {
@@ -590,7 +590,7 @@ impl TryFrom<Bytes> for Message {
             Some(payload_bytes)
         } else {
             error!("Fail to parse message because of no remaining");
-            return Err(CommonError::CodecError);
+            return Err(PpaassError::CodecError);
         };
         Ok(Self {
             id,

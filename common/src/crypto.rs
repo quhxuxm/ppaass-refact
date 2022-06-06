@@ -10,7 +10,7 @@ use std::fs;
 use std::path::Path;
 use tracing::error;
 
-use crate::CommonError;
+use crate::PpaassError;
 
 const BLOWFISH_CHUNK_LENGTH: usize = 8;
 const AES_CHUNK_LENGTH: usize = 16;
@@ -20,7 +20,7 @@ const PROXY_PRIVATE_KEY_PATH: &str = "ProxyPrivateKey.pem";
 const PROXY_PUBLIC_KEY_PATH: &str = "ProxyPublicKey.pem";
 
 pub trait RsaCryptoFetcher {
-    fn fetch(&self, user_token: &str) -> Result<Option<&RsaCrypto>, CommonError>;
+    fn fetch(&self, user_token: &str) -> Result<Option<&RsaCrypto>, PpaassError>;
 }
 
 /// The util to do RSA encryption and decryption.
@@ -33,7 +33,7 @@ pub struct RsaCrypto {
 }
 
 impl RsaCrypto {
-    pub fn new<PU, PR>(public_key: PU, private_key: PR) -> Result<Self, CommonError>
+    pub fn new<PU, PR>(public_key: PU, private_key: PR) -> Result<Self, PpaassError>
     where
         PU: AsRef<str>,
         PR: AsRef<str>,
@@ -42,14 +42,14 @@ impl RsaCrypto {
             Ok(v) => v,
             Err(e) => {
                 error!("Fail to parse rsa key because of error: {:#?}", e);
-                return Err(CommonError::CodecError);
+                return Err(PpaassError::CodecError);
             },
         };
         let private_key = match RsaPrivateKey::from_pkcs8_pem(private_key.as_ref()) {
             Ok(v) => v,
             Err(e) => {
                 error!("Fail to parse rsa key because of error: {:#?}", e);
-                return Err(CommonError::CodecError);
+                return Err(PpaassError::CodecError);
             },
         };
         Ok(Self {
@@ -58,22 +58,22 @@ impl RsaCrypto {
         })
     }
 
-    pub(crate) fn encrypt(&self, target: &Bytes) -> Result<Bytes, CommonError> {
+    pub(crate) fn encrypt(&self, target: &Bytes) -> Result<Bytes, PpaassError> {
         self.public_key
             .encrypt(&mut OsRng, PaddingScheme::PKCS1v15Encrypt, target)
             .map_err(|e| {
                 error!("Fail to encrypt data with rsa because of error: {:#?}", e);
-                CommonError::CodecError
+                PpaassError::CodecError
             })
             .map(|v| v.into())
     }
 
-    pub(crate) fn decrypt(&self, target: &Bytes) -> Result<Bytes, CommonError> {
+    pub(crate) fn decrypt(&self, target: &Bytes) -> Result<Bytes, PpaassError> {
         self.private_key
             .decrypt(PaddingScheme::PKCS1v15Encrypt, target)
             .map_err(|e| {
                 error!("Fail to decrypt data with rsa because of error: {:#?}", e);
-                CommonError::CodecError
+                PpaassError::CodecError
             })
             .map(|v| v.into())
     }
@@ -159,7 +159,7 @@ pub(crate) fn decrypt_with_blowfish(encryption_token: &Bytes, target: &Bytes) ->
     result.into()
 }
 
-pub fn generate_agent_key_pairs(base_dir: &str, user_token: &str) -> Result<(), CommonError> {
+pub fn generate_agent_key_pairs(base_dir: &str, user_token: &str) -> Result<(), PpaassError> {
     let private_key_path = format!("{}/{}/{}", base_dir, user_token, AGENT_PRIVATE_KEY_PATH);
     let private_key_path = Path::new(private_key_path.as_str());
     let public_key_path = format!("{}/{}/{}", base_dir, user_token, AGENT_PUBLIC_KEY_PATH);
@@ -167,7 +167,7 @@ pub fn generate_agent_key_pairs(base_dir: &str, user_token: &str) -> Result<(), 
     generate_rsa_key_pairs(private_key_path, public_key_path)
 }
 
-pub fn generate_proxy_key_pairs(base_dir: &str, user_token: &str) -> Result<(), CommonError> {
+pub fn generate_proxy_key_pairs(base_dir: &str, user_token: &str) -> Result<(), PpaassError> {
     let private_key_path = format!("{}/{}/{}", base_dir, user_token, PROXY_PRIVATE_KEY_PATH);
     let private_key_path = Path::new(private_key_path.as_str());
     let public_key_path = format!("{}/{}/{}", base_dir, user_token, PROXY_PUBLIC_KEY_PATH);
@@ -177,7 +177,7 @@ pub fn generate_proxy_key_pairs(base_dir: &str, user_token: &str) -> Result<(), 
 
 fn generate_rsa_key_pairs(
     private_key_path: &Path, public_key_path: &Path,
-) -> Result<(), CommonError> {
+) -> Result<(), PpaassError> {
     let private_key = RsaPrivateKey::new(&mut OsRng, 2048).expect("Fail to generate private key");
     let public_key = RsaPublicKey::from(&private_key);
     let private_key_pem = private_key

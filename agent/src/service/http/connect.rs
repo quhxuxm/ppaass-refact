@@ -17,12 +17,12 @@ use tracing::error;
 use url::Url;
 
 use common::{
-    generate_uuid, ready_and_call_service, AgentMessagePayloadTypeValue, CommonError,
-    MessageFramedRead, MessageFramedWrite, MessagePayload, NetAddress,
-    PayloadEncryptionTypeSelectService, PayloadEncryptionTypeSelectServiceRequest,
-    PayloadEncryptionTypeSelectServiceResult, PayloadType, ProxyMessagePayloadTypeValue,
-    ReadMessageService, ReadMessageServiceRequest, ReadMessageServiceResult, RsaCryptoFetcher,
-    WriteMessageService, WriteMessageServiceRequest, WriteMessageServiceResult,
+    generate_uuid, ready_and_call_service, AgentMessagePayloadTypeValue, MessageFramedRead,
+    MessageFramedWrite, MessagePayload, NetAddress, PayloadEncryptionTypeSelectService,
+    PayloadEncryptionTypeSelectServiceRequest, PayloadEncryptionTypeSelectServiceResult,
+    PayloadType, PpaassError, ProxyMessagePayloadTypeValue, ReadMessageService,
+    ReadMessageServiceRequest, ReadMessageServiceResult, RsaCryptoFetcher, WriteMessageService,
+    WriteMessageServiceRequest, WriteMessageServiceResult,
 };
 
 use crate::codec::http::HttpCodec;
@@ -95,7 +95,7 @@ where
 
     async fn send_error_to_client(
         mut client_http_framed: HttpFramed<'_>,
-    ) -> Result<(), CommonError> {
+    ) -> Result<(), PpaassError> {
         let bad_request_status_code = StatusCode::new(ERROR_CODE).unwrap();
         let error_response_reason = ReasonPhrase::new(ERROR_REASON).unwrap();
         let connect_error_response = Response::new(
@@ -115,7 +115,7 @@ where
     T: RsaCryptoFetcher + Send + Sync + 'static,
 {
     type Response = HttpConnectServiceResult<T>;
-    type Error = CommonError;
+    type Error = PpaassError;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
@@ -155,7 +155,7 @@ where
                 _ => {
                     return {
                         Self::send_error_to_client(http_client_framed).await?;
-                        Err(CommonError::CodecError)
+                        Err(PpaassError::CodecError)
                     }
                 },
             };
@@ -178,7 +178,7 @@ where
                     Err(e) => {
                         error!("Fail to encode http data because of error: {:#?} ", e);
                         Self::send_error_to_client(http_client_framed).await?;
-                        return Err(CommonError::CodecError);
+                        return Err(PpaassError::CodecError);
                     },
                     Ok(v) => v,
                 };
@@ -186,7 +186,7 @@ where
             };
             let parsed_request_url = Url::parse(request_url.as_str()).map_err(|e| {
                 error!("Fail to parse request url because of error: {:#?}", e);
-                CommonError::CodecError
+                PpaassError::CodecError
             })?;
             let target_port = match parsed_request_url.port() {
                 None => match parsed_request_url.scheme() {
@@ -198,7 +198,7 @@ where
             let target_host = match parsed_request_url.host() {
                 None => {
                     Self::send_error_to_client(http_client_framed).await?;
-                    return Err(CommonError::CodecError);
+                    return Err(PpaassError::CodecError);
                 },
                 Some(v) => v.to_string(),
             };
@@ -279,7 +279,7 @@ where
                 Ok(Some(v)) => v,
                 Ok(_) => {
                     Self::send_error_to_client(http_client_framed).await?;
-                    return Err(CommonError::UnknownError);
+                    return Err(PpaassError::UnknownError);
                 },
             };
             if let ReadMessageServiceResult {
@@ -330,7 +330,7 @@ where
                 });
             };
             Self::send_error_to_client(http_client_framed).await?;
-            return Err(CommonError::UnknownError);
+            return Err(PpaassError::UnknownError);
         })
     }
 }

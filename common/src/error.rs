@@ -1,5 +1,5 @@
 #[derive(thiserror::Error, Debug)]
-pub enum CommonError {
+pub enum PpaassError {
     #[error("Codec error happen.")]
     CodecError,
     #[error("I/O error happen.")]

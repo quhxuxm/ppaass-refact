@@ -1,4 +1,4 @@
-use ::common::{CommonError, RsaCrypto, RsaCryptoFetcher};
+use ::common::{PpaassError, RsaCrypto, RsaCryptoFetcher};
 use std::fs;
 use tracing::error;
 
@@ -11,11 +11,11 @@ pub struct AgentRsaCryptoFetcher {
 }
 
 impl AgentRsaCryptoFetcher {
-    pub fn new() -> Result<Self, CommonError> {
+    pub fn new() -> Result<Self, PpaassError> {
         let public_key = match fs::read_to_string("ProxyPublicKey.pem") {
             Err(e) => {
                 error!("Fail to read AgentPublicKey.pem because of error: {:#?}", e);
-                return Err(CommonError::IoError { source: e });
+                return Err(PpaassError::IoError { source: e });
             },
             Ok(v) => v,
         };
@@ -25,7 +25,7 @@ impl AgentRsaCryptoFetcher {
                     "Fail to read ProxyPrivateKey.pem because of error: {:#?}",
                     e
                 );
-                return Err(CommonError::IoError { source: e });
+                return Err(PpaassError::IoError { source: e });
             },
             Ok(v) => v,
         };
@@ -40,7 +40,7 @@ impl AgentRsaCryptoFetcher {
     }
 }
 impl RsaCryptoFetcher for AgentRsaCryptoFetcher {
-    fn fetch(&self, _user_token: &str) -> Result<Option<&RsaCrypto>, CommonError> {
+    fn fetch(&self, _user_token: &str) -> Result<Option<&RsaCrypto>, PpaassError> {
         Ok(Some(&self.rsa_crypto))
     }
 }

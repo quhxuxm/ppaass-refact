@@ -6,7 +6,7 @@ use httpcodec::{BodyDecoder, BodyEncoder, Request, RequestDecoder, Response, Res
 use tokio_util::codec::{Decoder, Encoder};
 use tracing::error;
 
-use common::CommonError;
+use common::PpaassError;
 
 pub(crate) struct HttpCodec {
     request_decoder: RequestDecoder<BodyDecoder<RemainingBytesDecoder>>,
@@ -26,14 +26,14 @@ impl Default for HttpCodec {
 
 impl Decoder for HttpCodec {
     type Item = Request<Vec<u8>>;
-    type Error = CommonError;
+    type Error = PpaassError;
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
         let decode_result = self.request_decoder.decode_exact(src.chunk());
         let decode_result = match decode_result {
             Err(e) => {
                 error!("Fail to decode http protocol because of error: {:#?}", e);
-                return Err(CommonError::CodecError);
+                return Err(PpaassError::CodecError);
             },
             Ok(v) => v,
         };
@@ -42,7 +42,7 @@ impl Decoder for HttpCodec {
 }
 
 impl Encoder<Response<Vec<u8>>> for HttpCodec {
-    type Error = CommonError;
+    type Error = PpaassError;
 
     fn encode(&mut self, item: Response<Vec<u8>>, dst: &mut BytesMut) -> Result<(), Self::Error> {
         let encode_result = self.response_encoder.encode_into_bytes(item);
@@ -50,7 +50,7 @@ impl Encoder<Response<Vec<u8>>> for HttpCodec {
             Err(e) => {
                 return {
                     error!("Fail to encode http protocol because of error: {:#?}", e);
-                    Err(CommonError::CodecError)
+                    Err(PpaassError::CodecError)
                 }
             },
             Ok(v) => v,

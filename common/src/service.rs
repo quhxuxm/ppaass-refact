@@ -15,8 +15,8 @@ use tower::Service;
 use tracing::{debug, error};
 
 use crate::{
-    crypto::RsaCryptoFetcher, generate_uuid, CommonError, Message, MessageCodec, MessagePayload,
-    PayloadEncryptionType,
+    crypto::RsaCryptoFetcher, generate_uuid, Message, MessageCodec, MessagePayload,
+    PayloadEncryptionType, PpaassError,
 };
 
 pub type MessageFramedRead<T> = SplitStream<Framed<TcpStream, MessageCodec<T>>>;
@@ -62,7 +62,7 @@ where
     T: RsaCryptoFetcher + Send + Sync + 'static,
 {
     type Response = PrepareMessageFramedResult<T>;
-    type Error = CommonError;
+    type Error = PpaassError;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
@@ -130,7 +130,7 @@ where
     T: RsaCryptoFetcher + Send + Sync + 'static,
 {
     type Response = WriteMessageServiceResult<T>;
-    type Error = CommonError;
+    type Error = PpaassError;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
@@ -217,7 +217,7 @@ where
     T: RsaCryptoFetcher + Send + Sync + 'static,
 {
     type Response = Option<ReadMessageServiceResult<T>>;
-    type Error = CommonError;
+    type Error = PpaassError;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
@@ -235,7 +235,7 @@ where
             {
                 Err(_e) => {
                     error!("The read timeout in {} seconds.", read_timeout_seconds);
-                    return Err(CommonError::TimeoutError);
+                    return Err(PpaassError::TimeoutError);
                 },
                 Ok(None) => {
                     debug!("No message any more.");
@@ -286,7 +286,7 @@ pub struct PayloadEncryptionTypeSelectService;
 
 impl Service<PayloadEncryptionTypeSelectServiceRequest> for PayloadEncryptionTypeSelectService {
     type Response = PayloadEncryptionTypeSelectServiceResult;
-    type Error = CommonError;
+    type Error = PpaassError;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {

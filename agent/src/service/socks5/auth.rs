@@ -11,7 +11,7 @@ use tokio_util::codec::{Framed, FramedParts};
 use tower::Service;
 use tracing::debug;
 
-use common::CommonError;
+use common::PpaassError;
 
 use crate::codec::socks5::Socks5AuthCommandContentCodec;
 use crate::message::socks5::{Socks5AuthCommandResultContent, Socks5AuthMethod};
@@ -52,7 +52,7 @@ impl Debug for Socks5AuthCommandService {
 
 impl Service<Socks5AuthenticateFlowRequest> for Socks5AuthCommandService {
     type Response = Socks5AuthenticateFlowResult;
-    type Error = CommonError;
+    type Error = PpaassError;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, _: &mut Context) -> Poll<Result<(), Self::Error>> {
@@ -71,7 +71,7 @@ impl Service<Socks5AuthenticateFlowRequest> for Socks5AuthCommandService {
                         Socks5AuthCommandResultContent::new(Socks5AuthMethod::NoAcceptableMethods);
                     framed.send(authentication_result).await?;
                     framed.flush().await?;
-                    return Err(CommonError::IoError {
+                    return Err(PpaassError::IoError {
                         source: std::io::Error::new(
                             ErrorKind::InvalidData,
                             "No authenticate frame.",

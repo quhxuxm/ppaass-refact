@@ -1,4 +1,4 @@
-use common::CommonError;
+use common::PpaassError;
 use tokio_util::codec::Decoder;
 
 use tracing::{debug, error};
@@ -14,7 +14,7 @@ pub(crate) struct InitializeProtocolDecoder;
 impl Decoder for InitializeProtocolDecoder {
     type Item = Protocol;
 
-    type Error = CommonError;
+    type Error = PpaassError;
 
     fn decode(&mut self, src: &mut bytes::BytesMut) -> Result<Option<Self::Item>, Self::Error> {
         if src.len() < 1 {
@@ -29,7 +29,7 @@ impl Decoder for InitializeProtocolDecoder {
             },
             SOCKS4_FLAG => {
                 error!("Incoming agent client protocol is socks4, which is unsupported!");
-                Err(CommonError::CodecError)
+                Err(PpaassError::CodecError)
             },
             _ => {
                 debug!("Incoming agent client protocol is http.");

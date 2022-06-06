@@ -5,7 +5,7 @@ use std::task::{Context, Poll};
 use futures::future::BoxFuture;
 use tower::Service;
 
-use common::CommonError;
+use common::PpaassError;
 
 pub(crate) struct UdpAssociateServiceRequest;
 pub(crate) struct UdpAssociateServiceResult;
@@ -14,7 +14,7 @@ pub(crate) struct UdpAssociateService;
 
 impl Service<UdpAssociateServiceRequest> for UdpAssociateService {
     type Response = UdpAssociateServiceResult;
-    type Error = CommonError;
+    type Error = PpaassError;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {

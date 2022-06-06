@@ -9,7 +9,7 @@ use tokio::net::TcpStream;
 use tower::Service;
 use tower::ServiceBuilder;
 
-use common::{ready_and_call_service, CommonError, RsaCryptoFetcher};
+use common::{ready_and_call_service, PpaassError, RsaCryptoFetcher};
 
 use crate::service::common::{TcpRelayService, TcpRelayServiceRequest};
 use crate::service::socks5::auth::{Socks5AuthCommandService, Socks5AuthenticateFlowRequest};
@@ -60,7 +60,7 @@ where
     T: RsaCryptoFetcher + Send + Sync + 'static,
 {
     type Response = Socks5FlowResult;
-    type Error = CommonError;
+    type Error = PpaassError;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {

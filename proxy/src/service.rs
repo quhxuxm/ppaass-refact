@@ -22,7 +22,7 @@ use tower::{service_fn, Service};
 use tracing::{debug, error};
 
 use common::{
-    ready_and_call_service, CommonError, PrepareMessageFramedService, RsaCrypto, RsaCryptoFetcher,
+    ready_and_call_service, PpaassError, PrepareMessageFramedService, RsaCrypto, RsaCryptoFetcher,
 };
 
 use crate::service::tcp::connect::{TcpConnectService, TcpConnectServiceRequest};
@@ -41,7 +41,7 @@ pub(crate) struct ProxyRsaCryptoFetcher {
 }
 
 impl ProxyRsaCryptoFetcher {
-    pub fn new() -> Result<Self, CommonError> {
+    pub fn new() -> Result<Self, PpaassError> {
         let mut result = Self {
             cache: HashMap::new(),
         };
@@ -116,7 +116,7 @@ impl ProxyRsaCryptoFetcher {
 }
 
 impl RsaCryptoFetcher for ProxyRsaCryptoFetcher {
-    fn fetch(&self, user_token: &str) -> Result<Option<&RsaCrypto>, CommonError> {
+    fn fetch(&self, user_token: &str) -> Result<Option<&RsaCrypto>, PpaassError> {
         let val = self.cache.get(user_token);
         match val {
             None => Ok(None),
@@ -161,7 +161,7 @@ where
     T: RsaCryptoFetcher + Send + Sync + 'static,
 {
     type Response = ();
-    type Error = CommonError;
+    type Error = PpaassError;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
@@ -251,7 +251,7 @@ struct ConnectToTargetAttempts {
 #[derive(Clone)]
 pub(crate) struct ConnectToTargetService {
     concrete_service:
-        BoxCloneService<ConnectToTargetServiceRequest, ConnectToTargetServiceResult, CommonError>,
+        BoxCloneService<ConnectToTargetServiceRequest, ConnectToTargetServiceResult, PpaassError>,
 }
 
 impl ConnectToTargetService {
@@ -272,7 +272,7 @@ impl ConnectToTargetService {
                             "The connect to target timeout, duration: {}.",
                             connect_timeout_seconds
                         );
-                        return Err(CommonError::TimeoutError);
+                        return Err(PpaassError::TimeoutError);
                     },
                     Ok(Ok(v)) => v,
                     Ok(Err(e)) => {
@@ -280,15 +280,15 @@ impl ConnectToTargetService {
                             "Fail connect to target {} because of error: {:#?}",
                             &request.target_address, e
                         );
-                        return Err(CommonError::IoError { source: e });
+                        return Err(PpaassError::IoError { source: e });
                     },
                 };
                 target_stream
                     .set_nodelay(true)
-                    .map_err(|e| CommonError::IoError { source: e })?;
+                    .map_err(|e| PpaassError::IoError { source: e })?;
                 target_stream
                     .set_linger(None)
-                    .map_err(|e| CommonError::IoError { source: e })?;
+                    .map_err(|e| PpaassError::IoError { source: e })?;
                 debug!("Success connect to target: {}", request.target_address);
                 Ok(ConnectToTargetServiceResult { target_stream })
             }),
@@ -299,14 +299,14 @@ impl ConnectToTargetService {
     }
 }
 
-impl Policy<ConnectToTargetServiceRequest, ConnectToTargetServiceResult, CommonError>
+impl Policy<ConnectToTargetServiceRequest, ConnectToTargetServiceResult, PpaassError>
     for ConnectToTargetAttempts
 {
     type Future = future::Ready<Self>;
 
     fn retry(
         &self, _req: &ConnectToTargetServiceRequest,
-        result: Result<&ConnectToTargetServiceResult, &CommonError>,
+        result: Result<&ConnectToTargetServiceResult, &PpaassError>,
     ) -> Option<Self::Future> {
         match result {
             Ok(_) => {
@@ -338,7 +338,7 @@ impl Policy<ConnectToTargetServiceRequest, ConnectToTargetServiceResult, CommonE
 
 impl Service<ConnectToTargetServiceRequest> for ConnectToTargetService {
     type Response = ConnectToTargetServiceResult;
-    type Error = CommonError;
+    type Error = PpaassError;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {

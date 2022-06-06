@@ -13,7 +13,7 @@ use tower::ServiceBuilder;
 use tracing::log::{debug, error};
 
 use common::{
-    ready_and_call_service, CommonError, MessageFramedRead, MessageFramedWrite, NetAddress,
+    ready_and_call_service, MessageFramedRead, MessageFramedWrite, NetAddress, PpaassError,
     RsaCryptoFetcher,
 };
 use tcp_connect::Socks5TcpConnectService;
@@ -86,7 +86,7 @@ where
     T: RsaCryptoFetcher + Send + Sync + 'static,
 {
     type Response = Socks5InitCommandServiceResult<T>;
-    type Error = CommonError;
+    type Error = PpaassError;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, _cx: &mut std::task::Context) -> Poll<Result<(), Self::Error>> {
@@ -106,7 +106,7 @@ where
                 Some(Ok(v)) => v,
                 _ => {
                     send_socks5_init_failure(&mut socks5_init_framed).await?;
-                    return Err(CommonError::CodecError);
+                    return Err(PpaassError::CodecError);
                 },
             };
             debug!(
@@ -219,7 +219,7 @@ where
 
 async fn send_socks5_init_failure(
     socks5_client_framed: &mut Socks5InitFramed<'_>,
-) -> Result<(), CommonError> {
+) -> Result<(), PpaassError> {
     let connect_result =
         Socks5InitCommandResultContent::new(Socks5InitCommandResultStatus::Failure, None);
     if let Err(e) = socks5_client_framed.send(connect_result).await {
@@ -234,7 +234,7 @@ async fn send_socks5_init_failure(
             "Fail to flush socks5 connect fail result to client because of error: {:#?}",
             e
         );
-        return Err(CommonError::UnknownError);
+        return Err(PpaassError::UnknownError);
     }
     Ok(())
 }

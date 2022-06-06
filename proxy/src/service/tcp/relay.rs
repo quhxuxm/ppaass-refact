@@ -15,12 +15,12 @@ use tower::ServiceBuilder;
 use tracing::{debug, error};
 
 use common::{
-    generate_uuid, ready_and_call_service, AgentMessagePayloadTypeValue, CommonError,
-    MessageFramedRead, MessageFramedWrite, MessagePayload, NetAddress,
-    PayloadEncryptionTypeSelectService, PayloadEncryptionTypeSelectServiceRequest,
-    PayloadEncryptionTypeSelectServiceResult, PayloadType, ProxyMessagePayloadTypeValue,
-    ReadMessageService, ReadMessageServiceRequest, ReadMessageServiceResult, RsaCryptoFetcher,
-    WriteMessageService, WriteMessageServiceRequest,
+    generate_uuid, ready_and_call_service, AgentMessagePayloadTypeValue, MessageFramedRead,
+    MessageFramedWrite, MessagePayload, NetAddress, PayloadEncryptionTypeSelectService,
+    PayloadEncryptionTypeSelectServiceRequest, PayloadEncryptionTypeSelectServiceResult,
+    PayloadType, PpaassError, ProxyMessagePayloadTypeValue, ReadMessageService,
+    ReadMessageServiceRequest, ReadMessageServiceResult, RsaCryptoFetcher, WriteMessageService,
+    WriteMessageServiceRequest,
 };
 
 use crate::config::DEFAULT_READ_AGENT_TIMEOUT_SECONDS;
@@ -87,7 +87,7 @@ where
     T: RsaCryptoFetcher + Send + Sync + 'static,
 {
     type Response = TcpRelayServiceResult;
-    type Error = CommonError;
+    type Error = PpaassError;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
@@ -214,7 +214,7 @@ where
                 let read_size = match target_stream_read.read_buf(&mut buf).await {
                     Err(e) => {
                         error!("Fail to read data from target because of error: {:#?}", e);
-                        return Err(CommonError::IoError { source: e });
+                        return Err(PpaassError::IoError { source: e });
                     },
                     Ok(size) => {
                         debug!("Read {} bytes from target.", size);
