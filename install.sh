@@ -47,7 +47,6 @@ export RUST_BACKTRACE=1
 cargo build --package proxy --release
 
 # ps -ef | grep gradle | grep -v grep | awk '{print $2}' | xargs kill -9
-sudo cp /ppaass/sourcecode/ppaass/log-proxy.yaml /ppaass/build
 sudo cp /ppaass/sourcecode/ppaass/ppaass-proxy.toml /ppaass/build
 sudo cp -r /ppaass/sourcecode/ppaass/rsa /ppaass/build
 sudo cp /ppaass/sourcecode/ppaass/*.pem /ppaass/build
