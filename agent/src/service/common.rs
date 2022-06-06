@@ -28,7 +28,7 @@ use common::{
     WriteMessageService, WriteMessageServiceRequest,
 };
 
-use crate::codec::common::{InitializeProtocolDecoder, Protocol};
+use crate::codec::common::{Protocol, SwitchProtocolDecoder};
 use crate::config::SERVER_CONFIG;
 use crate::service::http::{HttpFlowRequest, HttpFlowService};
 use crate::service::socks5::{Socks5FlowRequest, Socks5FlowService};
@@ -112,7 +112,7 @@ where
 
             let mut framed = Framed::with_capacity(
                 &mut req.client_stream,
-                InitializeProtocolDecoder,
+                SwitchProtocolDecoder,
                 SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
             );
             return match framed.next().await {

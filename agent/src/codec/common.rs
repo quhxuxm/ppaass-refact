@@ -1,3 +1,5 @@
+use std::mem::size_of;
+
 use common::PpaassError;
 use tokio_util::codec::Decoder;
 
@@ -9,15 +11,15 @@ pub(crate) enum Protocol {
     Http,
     Socks5,
 }
-pub(crate) struct InitializeProtocolDecoder;
+pub(crate) struct SwitchProtocolDecoder;
 
-impl Decoder for InitializeProtocolDecoder {
+impl Decoder for SwitchProtocolDecoder {
     type Item = Protocol;
 
     type Error = PpaassError;
 
     fn decode(&mut self, src: &mut bytes::BytesMut) -> Result<Option<Self::Item>, Self::Error> {
-        if src.len() < 1 {
+        if src.len() < size_of::<u8>() {
             debug!("Incoming agent client stream is empty, nothing to decode.");
             return Ok(None);
         }

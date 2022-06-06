@@ -22,6 +22,7 @@ impl Decoder for Socks5AuthCommandContentCodec {
         }
         let version = src.get_u8();
         if version != 5 {
+            error!("The incoming protocol is not for socks 5.");
             return Err(PpaassError::CodecError);
         }
         let methods_number = src.get_u8();
@@ -56,6 +57,7 @@ impl Decoder for Socks5InitCommandContentCodec {
         }
         let version = src.get_u8();
         if version != 5 {
+            error!("The incoming protocol is not for socks 5.");
             return Err(PpaassError::CodecError);
         }
         let request_type: Socks5InitCommandType = match src.get_u8().try_into() {
