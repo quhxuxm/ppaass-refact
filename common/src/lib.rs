@@ -1,3 +1,5 @@
+pub use crate::crypto::generate_agent_key_pairs;
+pub use crate::crypto::generate_proxy_key_pairs;
 pub use crate::crypto::RsaCrypto;
 pub use crate::crypto::RsaCryptoFetcher;
 /// Public use by outside
@@ -27,7 +29,6 @@ pub use util::generate_uuid;
 pub use util::init_log;
 pub use util::ready_and_call_service;
 pub use util::LogTimer;
-
 mod codec;
 mod crypto;
 mod error;
