@@ -45,13 +45,17 @@ impl ProxyRsaCryptoFetcher {
         let mut result = Self {
             cache: HashMap::new(),
         };
-        let rsa_dir = fs::read_dir("proxy_resources/rsa")?;
+        let rsa_dir_path = SERVER_CONFIG
+            .rsa_root_dir()
+            .as_ref()
+            .expect("Fail to read rsa root directory.");
+        let rsa_dir = fs::read_dir(rsa_dir_path)?;
         rsa_dir.for_each(|entry| {
             let entry = match entry {
                 Err(e) => {
                     error!(
-                        "Fail to read proxy_resources/rsa directory because of error: {:#?}",
-                        e
+                        "Fail to read {} directory because of error: {:#?}",
+                        rsa_dir_path, e
                     );
                     return;
                 },
@@ -62,7 +66,8 @@ impl ProxyRsaCryptoFetcher {
             let user_token = match user_token {
                 None => {
                     error!(
-                        "Fail to read proxy_resources/rsa/{:?} directory because of user token not exist",
+                        "Fail to read {}{:?} directory because of user token not exist",
+                        rsa_dir_path,
                         entry.file_name()
                     );
                     return;
@@ -71,24 +76,24 @@ impl ProxyRsaCryptoFetcher {
             };
 
             let public_key = match fs::read_to_string(Path::new(
-                format!("proxy_resources/rsa/{}/AgentPublicKey.pem", user_token).as_str(),
+                format!("{}{}/AgentPublicKey.pem", rsa_dir_path, user_token).as_str(),
             )) {
                 Err(e) => {
                     error!(
-                        "Fail to read proxy_resources/rsa/{}/AgentPublicKey.pem because of error: {:#?}",
-                        user_token, e
+                        "Fail to read {}{}/AgentPublicKey.pem because of error: {:#?}",
+                        rsa_dir_path, user_token, e
                     );
                     return;
                 },
                 Ok(v) => v,
             };
             let private_key = match fs::read_to_string(Path::new(
-                format!("proxy_resources/rsa/{}/ProxyPrivateKey.pem", user_token).as_str(),
+                format!("{}{}/ProxyPrivateKey.pem", rsa_dir_path, user_token).as_str(),
             )) {
                 Err(e) => {
                     error!(
-                        "Fail to read proxy_resources/rsa/{}/ProxyPrivateKey.pem because of error: {:#?}",
-                        user_token, e
+                        "Fail to read {}{}/ProxyPrivateKey.pem because of error: {:#?}",
+                        rsa_dir_path, user_token, e
                     );
                     return;
                 },
@@ -297,7 +302,7 @@ impl ConnectToTargetService {
 impl Policy<ConnectToTargetServiceRequest, ConnectToTargetServiceResult, CommonError>
     for ConnectToTargetAttempts
 {
-    type Future = futures::future::Ready<Self>;
+    type Future = future::Ready<Self>;
 
     fn retry(
         &self, _req: &ConnectToTargetServiceRequest,

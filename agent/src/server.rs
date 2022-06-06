@@ -105,7 +105,16 @@ impl AgentServer {
                     listener
                 }
             };
-            let agent_rsa_crypto_fetcher =Arc::new( AgentRsaCryptoFetcher{});
+            let agent_rsa_crypto_fetcher=match AgentRsaCryptoFetcher::new(){
+                Err(e)=>{
+                    panic!(
+                        "Fail to generate agent rsa crypto because of error: {:#?}",
+                        e
+                    );
+                }
+                Ok(v)=>v
+            };
+            let agent_rsa_crypto_fetcher =Arc::new( agent_rsa_crypto_fetcher);
             loop {
                 let agent_rsa_crypto_fetcher=agent_rsa_crypto_fetcher.clone();
                 let (client_stream, client_address) = match listener.accept().await {
