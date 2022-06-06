@@ -16,3 +16,4 @@ read_target_timeout_seconds = 600
 target_connection_retry = 2
 thread_number = 2048
 thread_timeout = 5
+compress=true

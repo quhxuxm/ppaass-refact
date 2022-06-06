@@ -18,3 +18,4 @@ read_client_timeout_seconds = 600
 read_proxy_timeout_seconds = 600
 thread_number = 2048
 thread_timeout = 5
+compress=true
