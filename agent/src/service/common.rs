@@ -332,7 +332,7 @@ where
 {
     let buffer_size = SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE);
     ServiceBuilder::new().service(PrepareMessageFramedService::new(
-        buffer_size / 2,
+        buffer_size * 2,
         buffer_size,
         SERVER_CONFIG.compress().unwrap_or(true),
         rsa_crypto_fetcher,
