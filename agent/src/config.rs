@@ -29,7 +29,6 @@ pub(crate) struct Config {
     user_token: Option<String>,
     proxy_addresses: Option<Vec<String>>,
     buffer_size: Option<usize>,
-    max_frame_size: Option<usize>,
     thread_number: Option<usize>,
     max_blocking_threads: Option<usize>,
     thread_timeout: Option<u64>,
@@ -58,9 +57,6 @@ impl Config {
     }
     pub fn buffer_size(&self) -> Option<usize> {
         self.buffer_size
-    }
-    pub fn max_frame_size(&self) -> Option<usize> {
-        self.max_frame_size
     }
     pub fn thread_number(&self) -> Option<usize> {
         self.thread_number

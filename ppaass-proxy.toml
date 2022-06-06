@@ -6,7 +6,6 @@ rsa_root_dir="./rsa/"
 log_dir = "./log"
 log_file = "ppaass-proxy.log"
 max_blocking_threads = 1024
-max_frame_size = 2621440
 max_log_level = "INFO"
 port = 80
 #port = 9999

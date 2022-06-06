@@ -32,7 +32,6 @@ use crate::SERVER_CONFIG;
 mod tcp;
 mod udp;
 const DEFAULT_BUFFER_SIZE: usize = 1024 * 64;
-const DEFAULT_MAX_FRAME_SIZE: usize = DEFAULT_BUFFER_SIZE * 2;
 pub const DEFAULT_BUFFERED_CONNECTION_NUMBER: usize = 1024;
 pub const DEFAULT_RATE_LIMIT: u64 = 1024;
 pub const DEFAULT_CONCURRENCY_LIMIT: usize = 1024;
@@ -171,12 +170,11 @@ where
     fn call(&mut self, req: AgentConnectionInfo) -> Self::Future {
         let rsa_crypto_fetch = self.rsa_crypto_fetch.clone();
         Box::pin(async move {
+            let buffer_size = SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE);
             let mut prepare_message_frame_service =
                 ServiceBuilder::new().service(PrepareMessageFramedService::new(
-                    SERVER_CONFIG
-                        .max_frame_size()
-                        .unwrap_or(DEFAULT_MAX_FRAME_SIZE),
-                    SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
+                    buffer_size / 2,
+                    buffer_size,
                     SERVER_CONFIG.compress().unwrap_or(true),
                     rsa_crypto_fetch.clone(),
                 ));
