@@ -64,7 +64,7 @@ where
             Err(e) => {
                 error!(
                     "Fail to decode input message because of length delimited error: {:?}, hex data:\n{}\n",
-                    e, simple_hex(src)
+                    e, pretty_hex(src)
                 );
                 return Err(PpaassError::CodecError);
             },
@@ -78,7 +78,7 @@ where
                         error!(
                             "Fail to decompress message because of error: {:?}, hex data: \n{}\n",
                             e,
-                            simple_hex(src)
+                            pretty_hex(src)
                         );
                         return Err(PpaassError::IoError { source: e });
                     },
@@ -89,7 +89,7 @@ where
                     error!(
                         "Fail to parse message because of error: {:?}, hex data: \n{}\n",
                         e,
-                        simple_hex(src)
+                        pretty_hex(src)
                     );
                     return Err(e);
                 },
@@ -101,7 +101,7 @@ where
                     error!(
                         "Fail to parse message because of error: {:?}, hex data: \n{}\n",
                         e,
-                        simple_hex(src)
+                        pretty_hex(src)
                     );
                     return Err(e);
                 },
