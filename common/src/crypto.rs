@@ -2,14 +2,22 @@ use bytes::{BufMut, Bytes, BytesMut};
 use crypto::symmetriccipher::{BlockDecryptor, BlockEncryptor};
 use crypto::{aessafe, blowfish};
 use rand::rngs::OsRng;
-use rsa::pkcs8::{DecodePrivateKey, DecodePublicKey};
+use rsa::pkcs8::{
+    DecodePrivateKey, DecodePublicKey, EncodePrivateKey, EncodePublicKey, LineEnding,
+};
 use rsa::{PaddingScheme, PublicKey, RsaPrivateKey, RsaPublicKey};
+use std::fs;
+use std::path::Path;
 use tracing::error;
 
 use crate::CommonError;
 
 const BLOWFISH_CHUNK_LENGTH: usize = 8;
 const AES_CHUNK_LENGTH: usize = 16;
+const AGENT_PRIVATE_KEY_PATH: &str = "AgentPrivateKey.pem";
+const AGENT_PUBLIC_KEY_PATH: &str = "AgentPublicKey.pem";
+const PROXY_PRIVATE_KEY_PATH: &str = "ProxyPrivateKey.pem";
+const PROXY_PUBLIC_KEY_PATH: &str = "ProxyPublicKey.pem";
 
 pub trait RsaCryptoFetcher {
     fn fetch(&self, user_token: &str) -> Result<Option<&RsaCrypto>, CommonError>;
@@ -149,4 +157,32 @@ pub(crate) fn decrypt_with_blowfish(encryption_token: &Bytes, target: &Bytes) ->
         result.put_slice(chunk_decrypted);
     });
     result.into()
+}
+
+pub fn generate_agent_key_pairs() {
+    let private_key_path = Path::new(AGENT_PRIVATE_KEY_PATH);
+    let public_key_path = Path::new(AGENT_PUBLIC_KEY_PATH);
+    generate_rsa_key_pairs(private_key_path, public_key_path);
+}
+
+pub fn generate_proxy_key_pairs() {
+    let private_key_path = Path::new(PROXY_PRIVATE_KEY_PATH);
+    let public_key_path = Path::new(PROXY_PUBLIC_KEY_PATH);
+    generate_rsa_key_pairs(private_key_path, public_key_path);
+}
+
+fn generate_rsa_key_pairs(
+    private_key_path: &Path, public_key_path: &Path,
+) -> Result<(), CommonError> {
+    let private_key = RsaPrivateKey::new(&mut OsRng, 2048).expect("Fail to generate private key");
+    let public_key = RsaPublicKey::from(&private_key);
+    let private_key_pem = private_key
+        .to_pkcs8_pem(LineEnding::CRLF)
+        .expect("Fail to generate pem for private key.");
+    let public_key_pem = public_key
+        .to_public_key_pem(LineEnding::CRLF)
+        .expect("Fail to generate pem for public key.");
+    fs::write(private_key_path, private_key_pem.as_bytes())?;
+    fs::write(public_key_path, public_key_pem.as_bytes())?;
+    Ok(())
 }
