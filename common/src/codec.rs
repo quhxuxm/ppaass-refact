@@ -14,6 +14,7 @@ use crate::crypto::{
     RsaCryptoFetcher,
 };
 use crate::{Message, PayloadEncryptionType, PpaassError};
+use pretty_hex::*;
 
 const LENGTH_DELIMITED_CODEC_LENGTH_FIELD_LENGTH: usize = 8;
 
@@ -61,7 +62,10 @@ where
         let length_delimited_decode_result = self.length_delimited_codec.decode(src);
         let length_delimited_decode_result = match length_delimited_decode_result {
             Err(e) => {
-                error!("Fail to decode input message because of timeout: {:#?}", e);
+                error!(
+                    "Fail to decode input message because of length delimited error: {:?}, hex data:\n{}\n",
+                    e, simple_hex(src)
+                );
                 return Err(PpaassError::CodecError);
             },
             Ok(None) => return Ok(None),
@@ -71,14 +75,22 @@ where
             let lz4_decompress_result =
                 match decompress(length_delimited_decode_result.chunk(), None) {
                     Err(e) => {
-                        error!("Fail to decompress message because of error: {:#?}", e);
+                        error!(
+                            "Fail to decompress message because of error: {:?}, hex data: \n{}\n",
+                            e,
+                            simple_hex(src)
+                        );
                         return Err(PpaassError::IoError { source: e });
                     },
                     Ok(r) => Bytes::from(r),
                 };
             match lz4_decompress_result.try_into() {
                 Err(e) => {
-                    error!("Fail to parse message because of error: {:#?}", e);
+                    error!(
+                        "Fail to parse message because of error: {:?}, hex data: \n{}\n",
+                        e,
+                        simple_hex(src)
+                    );
                     return Err(e);
                 },
                 Ok(r) => r,
@@ -86,7 +98,11 @@ where
         } else {
             match length_delimited_decode_result.freeze().try_into() {
                 Err(e) => {
-                    error!("Fail to parse message because of error: {:#?}", e);
+                    error!(
+                        "Fail to parse message because of error: {:?}, hex data: \n{}\n",
+                        e,
+                        simple_hex(src)
+                    );
                     return Err(e);
                 },
                 Ok(r) => r,
