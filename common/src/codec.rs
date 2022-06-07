@@ -3,7 +3,7 @@ use std::{
     sync::Arc,
 };
 
-use bytes::{Buf, Bytes, BytesMut};
+use bytes::{Buf, BufMut, Bytes, BytesMut};
 use lz4::block::{compress, decompress};
 
 use tokio_util::codec::{Decoder, Encoder, LengthDelimitedCodec};
@@ -17,7 +17,7 @@ use crate::{Message, PayloadEncryptionType, PpaassError};
 use pretty_hex::*;
 
 const LENGTH_DELIMITED_CODEC_LENGTH_FIELD_LENGTH: usize = 8;
-
+const PPAASS_FLAG: &[u8] = "__PPAASS__".as_bytes();
 pub struct MessageCodec<T: RsaCryptoFetcher> {
     rsa_crypto_fetcher: Arc<T>,
     length_delimited_codec: LengthDelimitedCodec,
@@ -59,6 +59,16 @@ where
     type Error = PpaassError;
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
+        if src.len() < PPAASS_FLAG.len() {
+            return Ok(None);
+        }
+        let ppaass_flag = src.copy_to_bytes(PPAASS_FLAG.len());
+        if !PPAASS_FLAG.eq(&ppaass_flag) {
+            error!(
+                    "Fail to decode input message because of it dose not begin with ppaass flag, hex data:\n{}\n", pretty_hex(src)
+            );
+            return Err(PpaassError::CodecError);
+        }
         let length_delimited_decode_result = self.length_delimited_codec.decode(src);
         let length_delimited_decode_result = match length_delimited_decode_result {
             Err(e) => {
@@ -184,6 +194,7 @@ where
             "Encode message to output(decrypted): {:?}",
             original_message
         );
+        dst.put(PPAASS_FLAG);
         if original_message.payload.is_none() {
             let result_bytes: Bytes = original_message.into();
             if let Err(e) = self.length_delimited_codec.encode(
@@ -274,6 +285,7 @@ where
             error!("Fail to encode original message because of error: {:#?}", e);
             return Err(PpaassError::IoError { source: e });
         }
+
         Ok(())
     }
 }

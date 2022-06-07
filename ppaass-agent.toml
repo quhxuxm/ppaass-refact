@@ -1,5 +1,5 @@
-#port = 10080
-port = 10081
+port = 10080
+#port = 10081
 user_token = "user1"
 buffer_size = 1310720
 buffered_connection_number = 4096
