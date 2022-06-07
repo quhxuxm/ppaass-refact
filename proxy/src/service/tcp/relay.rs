@@ -219,7 +219,7 @@ where
                     Ok(size) => {
                         debug!("Read {} bytes from target.", size);
                         match size {
-                            0 if buf.remaining_mut() == 0 => {
+                            0 if buf.remaining_mut() > 0 => {
                                 debug!("Noting to read from target.");
                                 return Ok((buf.freeze(), target_stream_read, 0));
                             },
