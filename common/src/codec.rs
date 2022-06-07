@@ -18,10 +18,16 @@ use pretty_hex::*;
 
 const LENGTH_DELIMITED_CODEC_LENGTH_FIELD_LENGTH: usize = 8;
 const PPAASS_FLAG: &[u8] = "__PPAASS__".as_bytes();
+
+enum DecodeStatus {
+    Head,
+    Data,
+}
 pub struct MessageCodec<T: RsaCryptoFetcher> {
     rsa_crypto_fetcher: Arc<T>,
     length_delimited_codec: LengthDelimitedCodec,
     compress: bool,
+    status: DecodeStatus,
 }
 
 impl<T> Debug for MessageCodec<T>
@@ -47,6 +53,7 @@ where
             rsa_crypto_fetcher,
             length_delimited_codec,
             compress,
+            status: DecodeStatus::Head,
         }
     }
 }
@@ -59,16 +66,19 @@ where
     type Error = PpaassError;
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
-        if src.len() < PPAASS_FLAG.len() {
-            return Ok(None);
-        }
-        let ppaass_flag = src.copy_to_bytes(PPAASS_FLAG.len());
-        if !PPAASS_FLAG.eq(&ppaass_flag) {
-            error!(
-                    "Fail to decode input message because of it dose not begin with ppaass flag, hex data:\n{}\n", pretty_hex(src)
-            );
-            return Err(PpaassError::CodecError);
-        }
+        if let DecodeStatus::Head = self.status {
+            if src.len() < PPAASS_FLAG.len() {
+                return Ok(None);
+            }
+            let ppaass_flag = src.copy_to_bytes(PPAASS_FLAG.len());
+            if !PPAASS_FLAG.eq(&ppaass_flag) {
+                error!(
+                    "Fail to decode input message because of it dose not begin with ppaass flag, hex data:\n{}\n", pretty_hex(src));
+                return Err(PpaassError::CodecError);
+            }
+            self.status = DecodeStatus::Data;
+        };
+
         let length_delimited_decode_result = self.length_delimited_codec.decode(src);
         let length_delimited_decode_result = match length_delimited_decode_result {
             Err(e) => {
@@ -76,9 +86,13 @@ where
                     "Fail to decode input message because of length delimited error: {:?}, hex data:\n{}\n",
                     e, pretty_hex(src)
                 );
+                self.status = DecodeStatus::Head;
                 return Err(PpaassError::CodecError);
             },
-            Ok(None) => return Ok(None),
+            Ok(None) => {
+                self.status = DecodeStatus::Head;
+                return Ok(None);
+            },
             Ok(Some(r)) => r,
         };
         let mut message: Message = if self.compress {
@@ -90,6 +104,7 @@ where
                             e,
                             pretty_hex(src)
                         );
+                        self.status = DecodeStatus::Head;
                         return Err(PpaassError::IoError { source: e });
                     },
                     Ok(r) => Bytes::from(r),
@@ -101,6 +116,7 @@ where
                         e,
                         pretty_hex(src)
                     );
+                    self.status = DecodeStatus::Head;
                     return Err(e);
                 },
                 Ok(r) => r,
@@ -124,6 +140,7 @@ where
                     "Fail to decrypt message because of error when fetch rsa crypto: {:#?}",
                     e
                 );
+                self.status = DecodeStatus::Head;
                 return Err(e);
             },
             Ok(None) => {
@@ -131,6 +148,7 @@ where
                     "Fail to decrypt message because of rsa crypto not exist for user: {}",
                     message.user_token
                 );
+                self.status = DecodeStatus::Head;
                 return Err(PpaassError::UnknownError);
             },
             Ok(Some(v)) => v,
@@ -148,6 +166,7 @@ where
                                 "Fail to decrypt message with blowfish because of error: {:#?}",
                                 e
                             );
+                            self.status = DecodeStatus::Head;
                             return Err(e);
                         },
                         Ok(r) => r,
@@ -168,6 +187,7 @@ where
                                 "Fail to decrypt message with aes because of error: {:#?}",
                                 e
                             );
+                            self.status = DecodeStatus::Head;
                             return Err(e);
                         },
                         Ok(r) => r,
@@ -179,6 +199,7 @@ where
             PayloadEncryptionType::Plain => {},
         };
         debug!("Decode message from input(decrypted): {:?}", message);
+        self.status = DecodeStatus::Head;
         Ok(Some(message))
     }
 }
