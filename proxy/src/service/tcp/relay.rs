@@ -207,13 +207,15 @@ where
         let mut payload_encryption_type_select_service =
             ServiceBuilder::new().service(PayloadEncryptionTypeSelectService);
         loop {
+            let source_address = agent_connect_message_source_address.clone();
+            let target_address = agent_connect_message_target_address.clone();
             let read_target_data_future = async move {
                 let mut buf = BytesMut::with_capacity(
                     SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
                 );
                 let read_size = match target_stream_read.read_buf(&mut buf).await {
                     Err(e) => {
-                        error!("Fail to read data from target because of error: {:#?}", e);
+                        error!("Fail to read data from target because of error, agent source address: {:?}, target address:{:?}, error: {:#?}",source_address, target_address, e);
                         return Err(PpaassError::IoError { source: e });
                     },
                     Ok(size) => {
@@ -229,18 +231,19 @@ where
                 };
                 Ok((buf.freeze(), target_stream_read, read_size))
             };
+            let source_address = agent_connect_message_source_address.clone();
+            let target_address = agent_connect_message_target_address.clone();
+            let timeout_seconds = SERVER_CONFIG
+                .read_target_timeout_seconds()
+                .unwrap_or(DEFAULT_READ_TARGET_TIMEOUT_SECONDS);
             let (buf, inner_target_stream_read, _read_size) = match tokio::time::timeout(
-                Duration::from_secs(
-                    SERVER_CONFIG
-                        .read_target_timeout_seconds()
-                        .unwrap_or(DEFAULT_READ_TARGET_TIMEOUT_SECONDS),
-                ),
+                Duration::from_secs(timeout_seconds),
                 read_target_data_future,
             )
             .await
             {
-                Err(e) => {
-                    error!("The read target data timeout: {:#?}.", e);
+                Err(_e) => {
+                    error!("The read target data timeout, source address:{:?}, target address:{:?}, timeout: {}.", source_address, target_address, timeout_seconds);
                     return;
                 },
                 Ok(Err(e)) => {
@@ -254,8 +257,8 @@ where
                 Ok(Ok(v)) => v,
             };
             let proxy_message_payload = MessagePayload::new(
-                agent_connect_message_source_address.clone(),
-                agent_connect_message_target_address.clone(),
+                source_address,
+                target_address,
                 PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::TcpData),
                 buf,
             );
