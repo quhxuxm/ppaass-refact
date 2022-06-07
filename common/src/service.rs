@@ -9,7 +9,7 @@ use bytes::Bytes;
 use futures::future::BoxFuture;
 use futures::stream::{SplitSink, SplitStream};
 use futures::{SinkExt, StreamExt};
-use tokio::net::TcpStream;
+use tokio::{net::TcpStream, time::timeout};
 use tokio_util::codec::Framed;
 use tower::Service;
 use tracing::{debug, error};
@@ -79,11 +79,11 @@ where
             ),
             self.buffer_size,
         );
-        let (sink, stream) = framed.split();
         Box::pin(async move {
+            let (message_framed_write, message_framed_read) = framed.split();
             Ok(PrepareMessageFramedResult {
-                message_framed_write: sink,
-                message_framed_read: stream,
+                message_framed_write,
+                message_framed_read,
             })
         })
     }
@@ -227,7 +227,7 @@ where
     fn call(&mut self, mut req: ReadMessageServiceRequest<T>) -> Self::Future {
         let read_timeout_seconds = self.read_timeout_seconds;
         Box::pin(async move {
-            let message = match tokio::time::timeout(
+            let message = match timeout(
                 Duration::from_secs(read_timeout_seconds),
                 req.message_framed_read.next(),
             )
