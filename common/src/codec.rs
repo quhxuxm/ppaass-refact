@@ -90,7 +90,7 @@ where
                 return Err(PpaassError::CodecError);
             },
             Ok(None) => {
-                self.status = DecodeStatus::Head;
+                self.status = DecodeStatus::Data;
                 return Ok(None);
             },
             Ok(Some(r)) => r,
