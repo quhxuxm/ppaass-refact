@@ -1,5 +1,6 @@
 use std::{
     fmt::{Debug, Formatter},
+    mem::size_of,
     sync::Arc,
 };
 
@@ -21,7 +22,7 @@ const PPAASS_FLAG: &[u8] = "__PPAASS__".as_bytes();
 
 enum DecodeStatus {
     Head,
-    Data,
+    Data(bool),
 }
 pub struct MessageCodec<T: RsaCryptoFetcher> {
     rsa_crypto_fetcher: Arc<T>,
@@ -66,36 +67,41 @@ where
     type Error = PpaassError;
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
-        if let DecodeStatus::Head = self.status {
-            if src.len() < PPAASS_FLAG.len() {
-                return Ok(None);
-            }
-            let ppaass_flag = src.copy_to_bytes(PPAASS_FLAG.len());
-            if !PPAASS_FLAG.eq(&ppaass_flag) {
-                error!(
+        let compressed = match self.status {
+            DecodeStatus::Head => {
+                if src.len() < PPAASS_FLAG.len() + size_of::<u8>() {
+                    return Ok(None);
+                }
+                let ppaass_flag = src.copy_to_bytes(PPAASS_FLAG.len());
+                if !PPAASS_FLAG.eq(&ppaass_flag) {
+                    error!(
                     "Fail to decode input message because of it dose not begin with ppaass flag, hex data:\n{}\n", pretty_hex(src));
-                return Err(PpaassError::CodecError);
-            }
-            self.status = DecodeStatus::Data;
+                    return Err(PpaassError::CodecError);
+                }
+                let compressed = src.get_u8() == 1;
+                self.status = DecodeStatus::Data(compressed);
+                compressed
+            },
+            DecodeStatus::Data(compressed) => compressed,
         };
 
         let length_delimited_decode_result = self.length_delimited_codec.decode(src);
         let length_delimited_decode_result = match length_delimited_decode_result {
             Err(e) => {
                 error!(
-                    "Fail to decode input message because of length delimited error: {:?}, hex data:\n{}\n",
-                    e, pretty_hex(src)
-                );
+                            "Fail to decode input message because of length delimited error: {:?}, hex data:\n{}\n",
+                            e, pretty_hex(src));
                 self.status = DecodeStatus::Head;
                 return Err(PpaassError::CodecError);
             },
             Ok(None) => {
-                self.status = DecodeStatus::Data;
+                self.status = DecodeStatus::Data(compressed);
                 return Ok(None);
             },
             Ok(Some(r)) => r,
         };
-        let mut message: Message = if self.compress {
+
+        let mut message: Message = if compressed {
             let lz4_decompress_result =
                 match decompress(length_delimited_decode_result.chunk(), None) {
                     Err(e) => {
@@ -220,8 +226,10 @@ where
             let result_bytes: Bytes = original_message.into();
             if let Err(e) = self.length_delimited_codec.encode(
                 if self.compress {
-                    Bytes::from(compress(result_bytes.as_ref(), None, true)?)
+                    dst.put_u8(1);
+                    Bytes::from(compress(result_bytes.chunk(), None, true)?)
                 } else {
+                    dst.put_u8(0);
                     result_bytes
                 },
                 dst,
@@ -297,8 +305,10 @@ where
         let result_bytes: Bytes = message_to_encode.into();
         if let Err(e) = self.length_delimited_codec.encode(
             if self.compress {
+                dst.put_u8(1);
                 Bytes::from(compress(result_bytes.chunk(), None, true)?)
             } else {
+                dst.put_u8(0);
                 result_bytes
             },
             dst,
