@@ -105,6 +105,7 @@ where
                     source_address: connect_flow_result.source_address,
                     target_address: connect_flow_result.target_address,
                     init_data: None,
+                    proxy_address: connect_flow_result.proxy_address,
                 },
             )
             .await?;

@@ -83,6 +83,7 @@ where
                     source_address: connect_result.source_address,
                     init_data: connect_result.init_data,
                     connect_response_message_id: connect_result.message_id,
+                    proxy_address: connect_result.proxy_address,
                 },
             )
             .await?;

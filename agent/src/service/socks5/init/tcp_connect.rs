@@ -56,6 +56,7 @@ where
     pub message_framed_read: MessageFramedRead<T>,
     pub message_framed_write: MessageFramedWrite<T>,
     pub client_address: SocketAddr,
+    pub proxy_address: Option<SocketAddr>,
     pub source_address: NetAddress,
     pub target_address: NetAddress,
     pub connect_response_message_id: String,
@@ -153,6 +154,7 @@ where
                 &mut read_proxy_message_service,
                 ReadMessageServiceRequest {
                     message_framed_read: framed_result.message_framed_read,
+                    read_from_address: framed_result.framed_address,
                 },
             )
             .await?
@@ -182,6 +184,7 @@ where
                     source_address,
                     target_address,
                     connect_response_message_id: message_id,
+                    proxy_address: framed_result.framed_address,
                 }),
                 Some(ReadMessageServiceResult {
                     message_payload:

@@ -145,6 +145,7 @@ where
                 &mut read_agent_message_service,
                 ReadMessageServiceRequest {
                     message_framed_read,
+                    read_from_address: Some(agent_address),
                 },
             )
             .await;

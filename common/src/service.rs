@@ -1,5 +1,8 @@
-use std::fmt::{Debug, Formatter};
 use std::time::Duration;
+use std::{
+    fmt::{Debug, Formatter},
+    net::SocketAddr,
+};
 use std::{
     sync::Arc,
     task::{Context, Poll},
@@ -28,6 +31,7 @@ where
 {
     pub message_framed_write: MessageFramedWrite<T>,
     pub message_framed_read: MessageFramedRead<T>,
+    pub framed_address: Option<SocketAddr>,
 }
 
 #[derive(Clone)]
@@ -70,6 +74,7 @@ where
     }
 
     fn call(&mut self, input_stream: TcpStream) -> Self::Future {
+        let framed_address = input_stream.peer_addr().ok();
         let framed = Framed::with_capacity(
             input_stream,
             MessageCodec::<T>::new(
@@ -84,6 +89,7 @@ where
             Ok(PrepareMessageFramedResult {
                 message_framed_write,
                 message_framed_read,
+                framed_address,
             })
         })
     }
@@ -178,6 +184,7 @@ where
     T: RsaCryptoFetcher,
 {
     pub message_framed_read: MessageFramedRead<T>,
+    pub read_from_address: Option<SocketAddr>,
 }
 
 impl<T> Debug for ReadMessageServiceRequest<T>
@@ -234,7 +241,10 @@ where
             .await
             {
                 Err(_e) => {
-                    error!("The read timeout in {} seconds.", read_timeout_seconds);
+                    error!(
+                        "The read timeout in {} seconds, read from: {:?}.",
+                        read_timeout_seconds, req.read_from_address
+                    );
                     return Err(PpaassError::TimeoutError);
                 },
                 Ok(None) => {

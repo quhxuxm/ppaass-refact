@@ -64,6 +64,7 @@ where
     pub source_address: NetAddress,
     pub target_address: NetAddress,
     pub connect_response_message_id: String,
+    pub proxy_address: Option<SocketAddr>,
 }
 
 #[derive(Clone, Debug)]
@@ -143,6 +144,7 @@ where
                             source_address,
                             target_address,
                             connect_response_message_id,
+                            proxy_address,
                         }) => {
                             //Response for socks5 connect command
                             let init_command_result = Socks5InitCommandResultContent::new(
@@ -159,6 +161,7 @@ where
                                 source_address,
                                 target_address,
                                 connect_response_message_id,
+                                proxy_address,
                             })
                         },
                     }
@@ -192,6 +195,7 @@ where
                             source_address,
                             target_address,
                             connect_response_message_id,
+                            proxy_address,
                         }) => {
                             //Response for socks5 connect command
                             let init_command_result = Socks5InitCommandResultContent::new(
@@ -208,6 +212,7 @@ where
                                 source_address,
                                 target_address,
                                 connect_response_message_id,
+                                proxy_address,
                             })
                         },
                     }

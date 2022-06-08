@@ -70,6 +70,7 @@ where
 {
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,
+    pub proxy_address: Option<SocketAddr>,
     pub init_data: Option<Vec<u8>>,
     pub message_framed_read: MessageFramedRead<T>,
     pub message_framed_write: MessageFramedWrite<T>,
@@ -268,6 +269,7 @@ where
                 &mut read_proxy_message_service,
                 ReadMessageServiceRequest {
                     message_framed_read: framed_result.message_framed_read,
+                    read_from_address: framed_result.framed_address,
                 },
             )
             .await
@@ -310,6 +312,7 @@ where
                     return Ok(HttpConnectServiceResult {
                         client_stream: request.client_stream,
                         client_address: request.client_address,
+                        proxy_address: framed_result.framed_address,
                         init_data: None,
                         message_framed_read,
                         message_framed_write,
@@ -321,6 +324,7 @@ where
                 return Ok(HttpConnectServiceResult {
                     client_stream: request.client_stream,
                     client_address: request.client_address,
+                    proxy_address: framed_result.framed_address,
                     init_data,
                     message_framed_read,
                     message_framed_write,

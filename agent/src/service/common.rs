@@ -355,6 +355,7 @@ where
     pub source_address: NetAddress,
     pub target_address: NetAddress,
     pub init_data: Option<Vec<u8>>,
+    pub proxy_address: Option<SocketAddr>,
 }
 
 impl<T> Debug for TcpRelayServiceRequest<T>
@@ -427,6 +428,7 @@ where
                 client_stream_read_half,
             ));
             tokio::spawn(Self::generate_proxy_to_client_relay(
+                request.proxy_address,
                 target_address_t2a,
                 message_framed_read,
                 client_stream_write_half,
@@ -584,7 +586,8 @@ where
     }
 
     async fn generate_proxy_to_client_relay(
-        target_address_t2a: NetAddress, mut message_framed_read: MessageFramedRead<T>,
+        read_from_address: Option<SocketAddr>, target_address_t2a: NetAddress,
+        mut message_framed_read: MessageFramedRead<T>,
         mut client_stream_write_half: OwnedWriteHalf,
     ) {
         let mut read_proxy_message_service =
@@ -598,6 +601,7 @@ where
                 &mut read_proxy_message_service,
                 ReadMessageServiceRequest {
                     message_framed_read,
+                    read_from_address,
                 },
             )
             .await;
