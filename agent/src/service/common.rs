@@ -10,9 +10,12 @@ use std::{
 use bytes::{BufMut, BytesMut};
 use futures::future::BoxFuture;
 use futures::{future, StreamExt};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::net::TcpStream;
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    time::timeout,
+};
 use tokio_util::codec::{Framed, FramedParts};
 use tower::retry::{Policy, Retry};
 use tower::util::BoxCloneService;
@@ -217,7 +220,7 @@ impl ConnectToProxyService {
             ConnectToProxyAttempts { retry },
             service_fn(move |request: ConcreteConnectToProxyRequest| async move {
                 debug!("Client {}, begin connect to proxy", request.client_address);
-                let proxy_stream = match tokio::time::timeout(
+                let proxy_stream = match timeout(
                     Duration::from_secs(connect_timeout_seconds),
                     TcpStream::connect(request.proxy_addresses.as_slice()),
                 )
@@ -501,14 +504,17 @@ where
             let read_client_timeout_seconds = SERVER_CONFIG
                 .read_client_timeout_seconds()
                 .unwrap_or(DEFAULT_READ_CLIENT_TIMEOUT_SECONDS);
-            match tokio::time::timeout(
+            match timeout(
                 Duration::from_secs(read_client_timeout_seconds),
                 client_stream_read_half.read_buf(&mut buf),
             )
             .await
             {
-                Err(e) => {
-                    error!("The read client data timeout: {:#?}.", e);
+                Err(_e) => {
+                    error!(
+                        "The read client data timeout: {} seconds.",
+                        read_client_timeout_seconds
+                    );
                     return;
                 },
                 Ok(Err(e)) => {
