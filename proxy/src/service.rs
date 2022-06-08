@@ -284,9 +284,11 @@ impl ConnectToTargetService {
                 target_stream
                     .set_nodelay(true)
                     .map_err(|e| PpaassError::IoError { source: e })?;
-                target_stream
-                    .set_linger(None)
-                    .map_err(|e| PpaassError::IoError { source: e })?;
+                if let Some(so_linger) = SERVER_CONFIG.target_stream_so_linger() {
+                    target_stream
+                        .set_linger(Some(Duration::from_secs(so_linger)))
+                        .map_err(|e| PpaassError::IoError { source: e })?;
+                }
                 debug!("Success connect to target: {}", request.target_address);
                 Ok(ConnectToTargetServiceResult { target_stream })
             }),

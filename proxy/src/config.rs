@@ -44,6 +44,8 @@ pub(crate) struct Config {
     read_agent_timeout_seconds: Option<u64>,
     read_target_timeout_seconds: Option<u64>,
     connect_target_timeout_seconds: Option<u64>,
+    agent_stream_so_linger: Option<u64>,
+    target_stream_so_linger: Option<u64>,
 }
 
 impl Config {
@@ -107,5 +109,11 @@ impl Config {
     }
     pub fn connect_target_timeout_seconds(&self) -> Option<u64> {
         self.connect_target_timeout_seconds
+    }
+    pub fn target_stream_so_linger(&self) -> Option<u64> {
+        self.target_stream_so_linger
+    }
+    pub fn agent_stream_so_linger(&self) -> Option<u64> {
+        self.agent_stream_so_linger
     }
 }

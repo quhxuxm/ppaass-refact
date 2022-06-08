@@ -18,3 +18,5 @@ read_proxy_timeout_seconds = 600
 thread_number = 2048
 thread_timeout = 60
 compress=true
+client_stream_so_linger=20
+proxy_stream_so_linger=20

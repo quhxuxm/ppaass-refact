@@ -239,9 +239,11 @@ impl ConnectToProxyService {
                 proxy_stream
                     .set_nodelay(true)
                     .map_err(|e| PpaassError::IoError { source: e })?;
-                proxy_stream
-                    .set_linger(None)
-                    .map_err(|e| PpaassError::IoError { source: e })?;
+                if let Some(so_linger) = SERVER_CONFIG.proxy_stream_so_linger() {
+                    proxy_stream
+                        .set_linger(Some(Duration::from_secs(so_linger)))
+                        .map_err(|e| PpaassError::IoError { source: e })?;
+                }
                 debug!(
                     "Client {}, success connect to proxy",
                     request.client_address
@@ -615,7 +617,10 @@ where
                 ..
             } = match read_proxy_message_result {
                 Err(e) => {
-                    error!("Fail to read proxy data because of error: {:#?}", e);
+                    error!(
+                        "Fail to read proxy data because of error, read from: {:?}: {:#?}",
+                        target_address_t2a, e
+                    );
                     return;
                 },
                 Ok(Some(

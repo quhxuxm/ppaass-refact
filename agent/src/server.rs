@@ -90,6 +90,7 @@ impl AgentServer {
                     listener
                 }
             };
+
             if let Err(e) = std_listener.set_nonblocking(true) {
                 panic!(
                     "Fail to set agent server listener to be non-blocking because of error: {:#?}",
@@ -137,13 +138,15 @@ impl AgentServer {
                     );
                     continue;
                 }
-                if let Err(e) = client_stream.set_linger(None) {
-                    error!(
-                        "Fail to set client connection linger because of error: {:#?}",
-                        e
-                    );
-                    continue;
+                if let Some(so_linger) = SERVER_CONFIG.client_stream_so_linger(){
+                    if let Err(e) = client_stream.set_linger(Some(Duration::from_secs(so_linger))) {
+                        error!(
+                            "Fail to set client connection linger because of error: {:#?}",
+                            e
+                        );
+                    }
                 }
+             
                 let proxy_addresses = proxy_addresses.clone();
                 tokio::spawn(async move {
                     let mut handle_client_connection_service = ServiceBuilder::new()

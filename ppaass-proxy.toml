@@ -16,3 +16,5 @@ target_connection_retry = 2
 thread_number = 2048
 thread_timeout = 60
 compress=true
+agent_stream_so_linger=20
+target_stream_so_linger=20

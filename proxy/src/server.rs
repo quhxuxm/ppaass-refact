@@ -114,13 +114,16 @@ impl ProxyServer {
                     );
                     continue;
                 }
-                if let Err(e) = agent_stream.set_linger(None) {
-                    error!(
-                        "Fail to set agent connection linger because of error: {:#?}",
-                        e
-                    );
-                    continue;
+                if let Some(so_linger) = SERVER_CONFIG.agent_stream_so_linger(){
+                    if let Err(e) = agent_stream.set_linger(Some(Duration::from_secs(so_linger))) {
+                        error!(
+                            "Fail to set agent connection linger because of error: {:#?}",
+                            e
+                        );
+                        continue;
+                    }
                 }
+              
                 let proxy_rsa_crypto_fetcher=proxy_rsa_crypto_fetcher.clone();
                 tokio::spawn(async move {
                     let mut handle_agent_connection_service = ServiceBuilder::new()

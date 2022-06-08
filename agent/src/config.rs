@@ -43,6 +43,8 @@ pub(crate) struct Config {
     read_proxy_timeout_seconds: Option<u64>,
     read_client_timeout_seconds: Option<u64>,
     connect_proxy_timeout_seconds: Option<u64>,
+    client_stream_so_linger: Option<u64>,
+    proxy_stream_so_linger: Option<u64>,
 }
 
 impl Config {
@@ -102,5 +104,11 @@ impl Config {
     }
     pub fn connect_proxy_timeout_seconds(&self) -> Option<u64> {
         self.connect_proxy_timeout_seconds
+    }
+    pub fn client_stream_so_linger(&self) -> Option<u64> {
+        self.client_stream_so_linger
+    }
+    pub fn proxy_stream_so_linger(&self) -> Option<u64> {
+        self.proxy_stream_so_linger
     }
 }
