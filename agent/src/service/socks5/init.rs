@@ -1,11 +1,11 @@
+use std::{fmt::Debug, net::SocketAddr};
 use std::fmt::Formatter;
 use std::sync::Arc;
 use std::task::Poll;
-use std::{fmt::Debug, net::SocketAddr};
 
 use bytes::BytesMut;
-use futures::future::BoxFuture;
 use futures::{SinkExt, StreamExt};
+use futures::future::BoxFuture;
 use tokio::net::TcpStream;
 use tokio_util::codec::{Framed, FramedParts};
 use tower::Service;
@@ -13,23 +13,21 @@ use tower::ServiceBuilder;
 use tracing::log::{debug, error};
 
 use common::{
-    ready_and_call_service, MessageFramedRead, MessageFramedWrite, NetAddress, PpaassError,
+    MessageFramedRead, MessageFramedWrite, NetAddress, PpaassError, ready_and_call_service,
     RsaCryptoFetcher,
 };
 use tcp_connect::Socks5TcpConnectService;
 
-use crate::message::socks5::{
-    Socks5InitCommandResultContent, Socks5InitCommandResultStatus, Socks5InitCommandType,
-};
-
-use crate::service::socks5::init::tcp_connect::Socks5TcpConnectServiceResponse;
-use crate::service::socks5::init::udp_associate::{
-    Socks5UdpAssociateService, Socks5UdpAssociateServiceRequest, Socks5UdpAssociateServiceResponse,
-};
-
 use crate::{
     codec::socks5::Socks5InitCommandContentCodec,
     service::socks5::init::tcp_connect::Socks5TcpConnectServiceRequest,
+};
+use crate::message::socks5::{
+    Socks5InitCommandResultContent, Socks5InitCommandResultStatus, Socks5InitCommandType,
+};
+use crate::service::socks5::init::tcp_connect::Socks5TcpConnectServiceResponse;
+use crate::service::socks5::init::udp_associate::{
+    Socks5UdpAssociateService, Socks5UdpAssociateServiceRequest, Socks5UdpAssociateServiceResponse,
 };
 
 mod tcp_connect;
@@ -127,7 +125,7 @@ where
                             dest_address: dest_address.clone(),
                         },
                     )
-                    .await
+                        .await
                     {
                         Err(e) => {
                             error!(
@@ -179,7 +177,7 @@ where
                             client_address,
                         },
                     )
-                    .await
+                        .await
                     {
                         Err(e) => {
                             error!(

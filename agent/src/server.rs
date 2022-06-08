@@ -10,15 +10,15 @@ use tracing::{error, info};
 
 use common::ready_and_call_service;
 
-use crate::service::{
-    common::{
-        ClientConnectionInfo, HandleClientConnectionService, DEFAULT_BUFFERED_CONNECTION_NUMBER,
-    },
-    AgentRsaCryptoFetcher,
-};
 use crate::{
     config::SERVER_CONFIG,
     service::common::{DEFAULT_CONCURRENCY_LIMIT, DEFAULT_RATE_LIMIT},
+};
+use crate::service::{
+    AgentRsaCryptoFetcher,
+    common::{
+        ClientConnectionInfo, DEFAULT_BUFFERED_CONNECTION_NUMBER, HandleClientConnectionService,
+    },
 };
 
 const DEFAULT_SERVER_PORT: u16 = 10080;
@@ -73,7 +73,6 @@ impl AgentServer {
             }
         }
         let proxy_addresses = Arc::new(proxy_addresses);
-
         self.runtime.block_on(async {
             let std_listener = match std::net::TcpListener::bind(SocketAddrV4::new(
                 Ipv4Addr::new(0, 0, 0, 0),
@@ -90,7 +89,6 @@ impl AgentServer {
                     listener
                 }
             };
-
             if let Err(e) = std_listener.set_nonblocking(true) {
                 panic!(
                     "Fail to set agent server listener to be non-blocking because of error: {:#?}",
@@ -109,18 +107,18 @@ impl AgentServer {
                     listener
                 }
             };
-            let agent_rsa_crypto_fetcher=match AgentRsaCryptoFetcher::new(){
-                Err(e)=>{
+            let agent_rsa_crypto_fetcher = match AgentRsaCryptoFetcher::new() {
+                Err(e) => {
                     panic!(
                         "Fail to generate agent rsa crypto because of error: {:#?}",
                         e
                     );
                 }
-                Ok(v)=>v
+                Ok(v) => v
             };
-            let agent_rsa_crypto_fetcher =Arc::new( agent_rsa_crypto_fetcher);
+            let agent_rsa_crypto_fetcher = Arc::new(agent_rsa_crypto_fetcher);
             loop {
-                let agent_rsa_crypto_fetcher=agent_rsa_crypto_fetcher.clone();
+                let agent_rsa_crypto_fetcher = agent_rsa_crypto_fetcher.clone();
                 let (client_stream, client_address) = match listener.accept().await {
                     Err(e) => {
                         error!(
@@ -138,7 +136,7 @@ impl AgentServer {
                     );
                     continue;
                 }
-                if let Some(so_linger) = SERVER_CONFIG.client_stream_so_linger(){
+                if let Some(so_linger) = SERVER_CONFIG.client_stream_so_linger() {
                     if let Err(e) = client_stream.set_linger(Some(Duration::from_secs(so_linger))) {
                         error!(
                             "Fail to set client connection linger because of error: {:#?}",
@@ -146,7 +144,6 @@ impl AgentServer {
                         );
                     }
                 }
-             
                 let proxy_addresses = proxy_addresses.clone();
                 tokio::spawn(async move {
                     let mut handle_client_connection_service = ServiceBuilder::new()

@@ -1,5 +1,6 @@
 use anyhow::Ok;
 use anyhow::Result;
+
 use common::{generate_agent_key_pairs, generate_proxy_key_pairs};
 
 fn main() -> Result<()> {

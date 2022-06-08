@@ -1,9 +1,9 @@
-use std::task::{Context, Poll};
 use std::{
     fmt::{Debug, Formatter},
     marker::PhantomData,
 };
 use std::{net::SocketAddr, time::Duration};
+use std::task::{Context, Poll};
 
 use bytes::{BufMut, BytesMut};
 use futures::future::BoxFuture;
@@ -15,11 +15,11 @@ use tower::ServiceBuilder;
 use tracing::{debug, error};
 
 use common::{
-    generate_uuid, ready_and_call_service, AgentMessagePayloadTypeValue, MessageFramedRead,
-    MessageFramedWrite, MessagePayload, NetAddress, PayloadEncryptionTypeSelectService,
-    PayloadEncryptionTypeSelectServiceRequest, PayloadEncryptionTypeSelectServiceResult,
-    PayloadType, PpaassError, ProxyMessagePayloadTypeValue, ReadMessageService,
-    ReadMessageServiceRequest, ReadMessageServiceResult, RsaCryptoFetcher, WriteMessageService,
+    AgentMessagePayloadTypeValue, generate_uuid, MessageFramedRead, MessageFramedWrite,
+    MessagePayload, NetAddress, PayloadEncryptionTypeSelectService, PayloadEncryptionTypeSelectServiceRequest,
+    PayloadEncryptionTypeSelectServiceResult, PayloadType,
+    PpaassError, ProxyMessagePayloadTypeValue, ReadMessageService, ReadMessageServiceRequest,
+    ReadMessageServiceResult, ready_and_call_service, RsaCryptoFetcher, WriteMessageService,
     WriteMessageServiceRequest,
 };
 
@@ -148,7 +148,7 @@ where
                     read_from_address: Some(agent_address),
                 },
             )
-            .await;
+                .await;
             let ReadMessageServiceResult {
                 message_payload: MessagePayload { data, .. },
                 message_framed_read: message_framed_read_from_read_agent_result,
@@ -161,11 +161,11 @@ where
                 Ok(Some(
                     v @ ReadMessageServiceResult {
                         message_payload:
-                            MessagePayload {
-                                payload_type:
-                                    PayloadType::AgentPayload(AgentMessagePayloadTypeValue::TcpData),
-                                ..
-                            },
+                        MessagePayload {
+                            payload_type:
+                            PayloadType::AgentPayload(AgentMessagePayloadTypeValue::TcpData),
+                            ..
+                        },
                         ..
                     },
                 )) => v,
@@ -241,7 +241,7 @@ where
                 Duration::from_secs(timeout_seconds),
                 read_target_data_future,
             )
-            .await
+                .await
             {
                 Err(_e) => {
                     error!("The read target data timeout, source address:{:?}, target address:{:?}, timeout: {}.", source_address, target_address, timeout_seconds);
@@ -273,7 +273,7 @@ where
                     user_token: user_token.clone(),
                 },
             )
-            .await
+                .await
             {
                 Err(e) => {
                     error!(
@@ -294,7 +294,7 @@ where
                     message_payload: Some(proxy_message_payload),
                 },
             )
-            .await;
+                .await;
             match write_proxy_message_result {
                 Err(e) => {
                     error!("Fail to read from target because of error(ready): {:#?}", e);

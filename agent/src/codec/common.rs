@@ -1,9 +1,9 @@
 use std::mem::size_of;
 
-use common::PpaassError;
 use tokio_util::codec::Decoder;
-
 use tracing::{debug, error};
+
+use common::PpaassError;
 
 const SOCKS5_FLAG: u8 = 5;
 const SOCKS4_FLAG: u8 = 4;
@@ -11,6 +11,7 @@ pub(crate) enum Protocol {
     Http,
     Socks5,
 }
+
 pub(crate) struct SwitchProtocolDecoder;
 
 impl Decoder for SwitchProtocolDecoder {

@@ -4,8 +4,8 @@ use std::net::SocketAddr;
 use std::task::{Context, Poll};
 
 use bytes::BytesMut;
-use futures::future::BoxFuture;
 use futures::{SinkExt, StreamExt};
+use futures::future::BoxFuture;
 use tokio::net::TcpStream;
 use tokio_util::codec::{Framed, FramedParts};
 use tower::Service;

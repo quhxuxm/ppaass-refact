@@ -1,3 +1,6 @@
+use std::fs;
+use std::path::Path;
+
 use bytes::{BufMut, Bytes, BytesMut};
 use crypto::symmetriccipher::{BlockDecryptor, BlockEncryptor};
 use crypto::{aessafe, blowfish};
@@ -6,8 +9,6 @@ use rsa::pkcs8::{
     DecodePrivateKey, DecodePublicKey, EncodePrivateKey, EncodePublicKey, LineEnding,
 };
 use rsa::{PaddingScheme, PublicKey, RsaPrivateKey, RsaPublicKey};
-use std::fs;
-use std::path::Path;
 use tracing::error;
 
 use crate::PpaassError;
@@ -186,7 +187,6 @@ fn generate_rsa_key_pairs(
     let public_key_pem = public_key
         .to_public_key_pem(LineEnding::CRLF)
         .expect("Fail to generate pem for public key.");
-
     match private_key_path.parent() {
         None => {
             println!("Write private key: {:?}", private_key_path.to_str());
@@ -201,7 +201,6 @@ fn generate_rsa_key_pairs(
             fs::write(private_key_path, private_key_pem.as_bytes())?;
         },
     };
-
     match public_key_path.parent() {
         None => {
             println!("Write public key: {:?}", public_key_path.to_str());
@@ -216,6 +215,5 @@ fn generate_rsa_key_pairs(
             fs::write(public_key_path, public_key_pem.as_bytes())?;
         },
     };
-
     Ok(())
 }

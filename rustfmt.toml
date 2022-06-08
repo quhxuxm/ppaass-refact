@@ -1,5 +1,5 @@
 fn_args_layout = "Compressed"
-match_arm_leading_pipes="Preserve"
+match_arm_leading_pipes = "Preserve"
 match_block_trailing_comma = true
 tab_spaces = 4
 use_field_init_shorthand = true

@@ -86,16 +86,16 @@ impl ProxyServer {
                     listener
                 }
             };
-            let proxy_rsa_crypto_fetcher=match ProxyRsaCryptoFetcher::new(){
-                Err(e)=>{
+            let proxy_rsa_crypto_fetcher = match ProxyRsaCryptoFetcher::new() {
+                Err(e) => {
                     panic!(
                         "Fail to generate proxy server because of error when generate rsa crypto fetcher: {:#?}",
                         e
                     );
                 }
-                Ok(v)=>v
+                Ok(v) => v
             };
-            let proxy_rsa_crypto_fetcher =Arc::new( proxy_rsa_crypto_fetcher);
+            let proxy_rsa_crypto_fetcher = Arc::new(proxy_rsa_crypto_fetcher);
             loop {
                 let (agent_stream, agent_address) = match listener.accept().await {
                     Err(e) => {
@@ -114,7 +114,7 @@ impl ProxyServer {
                     );
                     continue;
                 }
-                if let Some(so_linger) = SERVER_CONFIG.agent_stream_so_linger(){
+                if let Some(so_linger) = SERVER_CONFIG.agent_stream_so_linger() {
                     if let Err(e) = agent_stream.set_linger(Some(Duration::from_secs(so_linger))) {
                         error!(
                             "Fail to set agent connection linger because of error: {:#?}",
@@ -123,8 +123,7 @@ impl ProxyServer {
                         continue;
                     }
                 }
-              
-                let proxy_rsa_crypto_fetcher=proxy_rsa_crypto_fetcher.clone();
+                let proxy_rsa_crypto_fetcher = proxy_rsa_crypto_fetcher.clone();
                 tokio::spawn(async move {
                     let mut handle_agent_connection_service = ServiceBuilder::new()
                         .buffer(

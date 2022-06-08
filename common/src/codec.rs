@@ -6,16 +6,15 @@ use std::{
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use lz4::block::{compress, decompress};
-
+use pretty_hex::*;
 use tokio_util::codec::{Decoder, Encoder, LengthDelimitedCodec};
 use tracing::{debug, error};
 
+use crate::{Message, PayloadEncryptionType, PpaassError};
 use crate::crypto::{
     decrypt_with_aes, decrypt_with_blowfish, encrypt_with_aes, encrypt_with_blowfish,
     RsaCryptoFetcher,
 };
-use crate::{Message, PayloadEncryptionType, PpaassError};
-use pretty_hex::*;
 
 const LENGTH_DELIMITED_CODEC_LENGTH_FIELD_LENGTH: usize = 8;
 const PPAASS_FLAG: &[u8] = "__PPAASS__".as_bytes();
@@ -84,7 +83,6 @@ where
             },
             DecodeStatus::Data(compressed) => compressed,
         };
-
         let length_delimited_decode_result = self.length_delimited_codec.decode(src);
         let length_delimited_decode_result = match length_delimited_decode_result {
             Err(e) => {
@@ -100,7 +98,6 @@ where
             },
             Ok(Some(r)) => r,
         };
-
         let mut message: Message = if compressed {
             let lz4_decompress_result =
                 match decompress(length_delimited_decode_result.chunk(), None) {
@@ -239,7 +236,6 @@ where
             }
             return Ok(());
         }
-
         let Message {
             id,
             ref_id,
@@ -247,7 +243,6 @@ where
             payload_encryption_type,
             payload,
         } = original_message;
-
         let rsa_crypto = match self.rsa_crypto_fetcher.fetch(user_token.as_str()) {
             Err(e) => {
                 error!(
@@ -265,7 +260,6 @@ where
             },
             Ok(Some(v)) => v,
         };
-
         let (encrypted_payload, encrypted_payload_encryption_type) = match payload_encryption_type {
             PayloadEncryptionType::Plain => (payload, PayloadEncryptionType::Plain),
             PayloadEncryptionType::Blowfish(ref original_token) => {
@@ -316,7 +310,6 @@ where
             error!("Fail to encode original message because of error: {:#?}", e);
             return Err(PpaassError::IoError { source: e });
         }
-
         Ok(())
     }
 }

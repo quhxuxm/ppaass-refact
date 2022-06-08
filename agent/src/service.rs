@@ -1,6 +1,8 @@
-use ::common::{PpaassError, RsaCrypto, RsaCryptoFetcher};
 use std::fs;
+
 use tracing::error;
+
+use ::common::{PpaassError, RsaCrypto, RsaCryptoFetcher};
 
 pub(crate) mod common;
 pub(crate) mod http;
