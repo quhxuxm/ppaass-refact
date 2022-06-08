@@ -15,7 +15,7 @@ use futures::{SinkExt, StreamExt};
 use tokio::{net::TcpStream, time::timeout};
 use tokio_util::codec::Framed;
 use tower::Service;
-use tracing::{debug, error};
+use tracing::{debug, error, info};
 
 use crate::{
     crypto::RsaCryptoFetcher, generate_uuid, Message, MessageCodec, MessagePayload,
@@ -253,19 +253,25 @@ where
                 },
                 Ok(Some(Ok(v))) => v,
                 Ok(Some(Err(e))) => {
-                    error!("Fail to decode message because of error: {:#?}", e);
+                    error!(
+                        "Fail to decode message because of error, read from {:?}, error: {:#?}",
+                        req.read_from_address, e
+                    );
                     return Err(e);
                 },
             };
             let payload: MessagePayload = match message.payload {
                 None => {
-                    debug!("No payload in the message.",);
+                    info!(
+                        "No payload in the message, read from: {:?}.",
+                        req.read_from_address
+                    );
                     return Ok(None);
                 },
                 Some(payload_bytes) => match payload_bytes.try_into() {
                     Ok(v) => v,
                     Err(e) => {
-                        error!("Fail to decode message payload because of error: {:#?}", e);
+                        error!("Fail to decode message payload because of error, read from:{:?}, error: {:#?}", req.read_from_address,e);
                         return Err(e);
                     },
                 },
