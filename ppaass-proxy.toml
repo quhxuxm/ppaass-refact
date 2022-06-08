@@ -13,6 +13,6 @@ rate_limit = 65535
 read_agent_timeout_seconds = 600
 read_target_timeout_seconds = 600
 target_connection_retry = 2
-thread_number = 65535
+thread_number = 2048
 thread_timeout = 60
 compress=true
