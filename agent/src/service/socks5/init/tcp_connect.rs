@@ -1,5 +1,8 @@
-use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
+use std::{
+    fmt::{Debug, Formatter},
+    task::Context,
+};
 use std::{net::SocketAddr, task::Poll};
 
 use bytes::Bytes;
@@ -77,7 +80,7 @@ where
 
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
-    fn poll_ready(&mut self, _cx: &mut std::task::Context<'_>) -> Poll<Result<(), Self::Error>> {
+    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         Poll::Ready(Ok(()))
     }
 
