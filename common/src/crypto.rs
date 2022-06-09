@@ -20,8 +20,14 @@ const AGENT_PUBLIC_KEY_PATH: &str = "AgentPublicKey.pem";
 const PROXY_PRIVATE_KEY_PATH: &str = "ProxyPrivateKey.pem";
 const PROXY_PUBLIC_KEY_PATH: &str = "ProxyPublicKey.pem";
 
+/// The rsa crypto fetcher,
+/// each player have a rsa crypto
+/// which can be fund from the storage
+/// with user token
 pub trait RsaCryptoFetcher {
-    fn fetch(&self, user_token: &str) -> Result<Option<&RsaCrypto>, PpaassError>;
+    fn fetch<Q>(&self, user_token: Q) -> Result<Option<&RsaCrypto>, PpaassError>
+    where
+        Q: AsRef<str>;
 }
 
 /// The util to do RSA encryption and decryption.

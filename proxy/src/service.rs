@@ -1,3 +1,4 @@
+use std::time::Duration;
 use std::{collections::HashMap, net::SocketAddr};
 use std::{
     fmt::{Debug, Formatter},
@@ -8,26 +9,25 @@ use std::{
     path::Path,
     task::{Context, Poll},
 };
-use std::time::Duration;
 
 use futures::future;
 use futures::future::BoxFuture;
 use tokio::net::TcpStream;
+use tower::util::BoxCloneService;
 use tower::{
     retry::{Policy, Retry},
     ServiceBuilder,
 };
-use tower::{Service, service_fn};
-use tower::util::BoxCloneService;
+use tower::{service_fn, Service};
 use tracing::{debug, error};
 
 use common::{
-    PpaassError, PrepareMessageFramedService, ready_and_call_service, RsaCrypto, RsaCryptoFetcher,
+    ready_and_call_service, PpaassError, PrepareMessageFramedService, RsaCrypto, RsaCryptoFetcher,
 };
 
-use crate::SERVER_CONFIG;
 use crate::service::tcp::connect::{TcpConnectService, TcpConnectServiceRequest};
 use crate::service::tcp::relay::{TcpRelayService, TcpRelayServiceRequest};
+use crate::SERVER_CONFIG;
 
 mod tcp;
 mod udp;
@@ -114,12 +114,11 @@ impl ProxyRsaCryptoFetcher {
 }
 
 impl RsaCryptoFetcher for ProxyRsaCryptoFetcher {
-    fn fetch(&self, user_token: &str) -> Result<Option<&RsaCrypto>, PpaassError> {
-        let val = self.cache.get(user_token);
-        match val {
-            None => Ok(None),
-            Some(v) => Ok(Some(v)),
-        }
+    fn fetch<Q>(&self, user_token: Q) -> Result<Option<&RsaCrypto>, PpaassError>
+    where
+        Q: AsRef<str>,
+    {
+        Ok(self.cache.get(user_token.as_ref()))
     }
 }
 
@@ -192,7 +191,7 @@ where
                     agent_address: req.agent_address,
                 },
             )
-                .await?;
+            .await?;
             let relay_result = ready_and_call_service(
                 &mut tcp_relay_service,
                 TcpRelayServiceRequest {
@@ -206,7 +205,7 @@ where
                     agent_tcp_connect_message_id: tcp_connect_result.agent_tcp_connect_message_id,
                 },
             )
-                .await;
+            .await;
             match relay_result {
                 Err(e) => {
                     error!("Error happen when relay agent connection, error: {:#?}", e);
@@ -248,7 +247,7 @@ struct ConnectToTargetAttempts {
 #[derive(Clone)]
 pub(crate) struct ConnectToTargetService {
     concrete_service:
-    BoxCloneService<ConnectToTargetServiceRequest, ConnectToTargetServiceResult, PpaassError>,
+        BoxCloneService<ConnectToTargetServiceRequest, ConnectToTargetServiceResult, PpaassError>,
 }
 
 impl ConnectToTargetService {
@@ -262,7 +261,7 @@ impl ConnectToTargetService {
                     Duration::from_secs(connect_timeout_seconds),
                     TcpStream::connect(&request.target_address),
                 )
-                    .await
+                .await
                 {
                     Err(_e) => {
                         error!(
@@ -299,7 +298,7 @@ impl ConnectToTargetService {
 }
 
 impl Policy<ConnectToTargetServiceRequest, ConnectToTargetServiceResult, PpaassError>
-for ConnectToTargetAttempts
+    for ConnectToTargetAttempts
 {
     type Future = future::Ready<Self>;
 

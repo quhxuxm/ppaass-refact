@@ -42,7 +42,10 @@ impl AgentRsaCryptoFetcher {
     }
 }
 impl RsaCryptoFetcher for AgentRsaCryptoFetcher {
-    fn fetch(&self, _user_token: &str) -> Result<Option<&RsaCrypto>, PpaassError> {
+    fn fetch<Q>(&self, _user_token: Q) -> Result<Option<&RsaCrypto>, PpaassError>
+    where
+        Q: AsRef<str>,
+    {
         Ok(Some(&self.rsa_crypto))
     }
 }
