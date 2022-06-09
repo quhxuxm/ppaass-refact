@@ -1,12 +1,12 @@
 use std::time::Duration;
 use std::{
-    net::TcpListener as StdTcpListener,
     net::{Ipv4Addr, SocketAddrV4},
     sync::Arc,
 };
 
-use tokio::net::TcpListener as TokioStdTcpListener;
-use tokio::runtime::{Builder as TokioRuntimeBuilder, Runtime as TokioRuntime};
+use tokio::net::TcpListener;
+use tokio::runtime::Runtime;
+use tower::ServiceBuilder;
 use tracing::{error, info};
 
 use common::ready_and_call_service;
@@ -22,12 +22,12 @@ use crate::{
 const DEFAULT_SERVER_PORT: u16 = 80;
 
 pub(crate) struct ProxyServer {
-    runtime: TokioRuntime,
+    runtime: Runtime,
 }
 
 impl ProxyServer {
     pub(crate) fn new() -> Self {
-        let mut runtime_builder = TokioRuntimeBuilder::new_multi_thread();
+        let mut runtime_builder = tokio::runtime::Builder::new_multi_thread();
         runtime_builder
             .enable_all()
             .thread_keep_alive(Duration::from_secs(
@@ -53,7 +53,7 @@ impl ProxyServer {
 
     pub(crate) fn run(&self) {
         self.runtime.block_on(async {
-            let std_listener = match StdTcpListener::bind(SocketAddrV4::new(
+            let std_listener = match std::net::TcpListener::bind(SocketAddrV4::new(
                 Ipv4Addr::new(0, 0, 0, 0),
                 SERVER_CONFIG.port().unwrap_or(DEFAULT_SERVER_PORT),
             )) {
@@ -74,7 +74,7 @@ impl ProxyServer {
                     e
                 );
             };
-            let listener = match TokioStdTcpListener::from_std(std_listener) {
+            let listener = match TcpListener::from_std(std_listener) {
                 Err(e) => {
                     panic!(
                         "Fail to generate proxy server listener from std listener because of error: {:#?}",
@@ -125,7 +125,22 @@ impl ProxyServer {
                 }
                 let proxy_rsa_crypto_fetcher = proxy_rsa_crypto_fetcher.clone();
                 tokio::spawn(async move {
-                    let mut handle_agent_connection_service =HandleAgentConnectionService::new(proxy_rsa_crypto_fetcher.clone());
+                    let mut handle_agent_connection_service = ServiceBuilder::new()
+                        .buffer(
+                            SERVER_CONFIG
+                                .buffered_connection_number()
+                                .unwrap_or(DEFAULT_BUFFERED_CONNECTION_NUMBER),
+                        )
+                        .concurrency_limit(
+                            SERVER_CONFIG
+                                .concurrent_connection_number()
+                                .unwrap_or(DEFAULT_CONCURRENCY_LIMIT),
+                        )
+                        .rate_limit(
+                            SERVER_CONFIG.rate_limit().unwrap_or(DEFAULT_RATE_LIMIT),
+                            Duration::from_secs(60),
+                        )
+                        .service(HandleAgentConnectionService::new(proxy_rsa_crypto_fetcher.clone()));
                     if let Err(e) = ready_and_call_service(
                         &mut handle_agent_connection_service,
                         AgentConnectionInfo {
