@@ -1,11 +1,11 @@
-use std::{any::type_name, fmt::Debug};
 use std::str::FromStr;
+use std::{any::type_name, fmt::Debug};
 
 use chrono::Local;
 use futures::TryFutureExt;
 use tower::{Service, ServiceExt};
 use tracing::{debug, Instrument};
-use tracing::level_filters::LevelFilter;
+use tracing::{level_filters::LevelFilter, trace};
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::fmt::format::Writer;
 use tracing_subscriber::fmt::time::FormatTime;
@@ -56,7 +56,7 @@ where
     T: Debug,
 {
     let service_type_name = type_name::<S>();
-    let service_call_span = tracing::info_span!(
+    let service_call_span = tracing::trace_span!(
         "CALL_SERVICE=>",
         service_name = service_type_name,
         request = format!("{:#?}", request).as_str()
@@ -69,9 +69,10 @@ where
     {
         Ok(v) => Ok(v),
         Err(e) => {
-            debug!(
+            trace!(
                 "Fail to invoke service [{}] because of errors: {:#?}",
-                service_type_name, e
+                service_type_name,
+                e
             );
             Err(e)
         },
