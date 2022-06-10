@@ -10,11 +10,11 @@ use pretty_hex::*;
 use tokio_util::codec::{Decoder, Encoder, LengthDelimitedCodec};
 use tracing::{debug, error};
 
-use crate::{Message, PayloadEncryptionType, PpaassError};
 use crate::crypto::{
     decrypt_with_aes, decrypt_with_blowfish, encrypt_with_aes, encrypt_with_blowfish,
     RsaCryptoFetcher,
 };
+use crate::{Message, PayloadEncryptionType, PpaassError};
 
 const LENGTH_DELIMITED_CODEC_LENGTH_FIELD_LENGTH: usize = 8;
 const PPAASS_FLAG: &[u8] = "__PPAASS__".as_bytes();

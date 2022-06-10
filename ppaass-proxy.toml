@@ -1,7 +1,7 @@
 buffer_size = 1310720
 buffered_connection_number = 65535
 concurrent_connection_number = 65535
-connect_target_timeout_seconds = 5
+connect_target_timeout_seconds = 20
 rsa_root_dir = "./rsa/"
 log_dir = "./log"
 log_file = "ppaass-proxy.log"
