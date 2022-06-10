@@ -221,11 +221,10 @@ where
         loop {
             let source_address = agent_connect_message_source_address.clone();
             let target_address = agent_connect_message_target_address.clone();
+
             let read_target_data_future = async move {
-                let mut buf = BytesMut::with_capacity(
-                    SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
-                );
-                let read_size = match target_stream_read.read_buf(&mut buf).await {
+                let mut buf = [0u8; DEFAULT_BUFFER_SIZE];
+                let read_size = match target_stream_read.read(&mut buf).await {
                     Err(e) => {
                         error!("Fail to read data from target because of error, agent source address: {:?}, target address:{:?}, error: {:#?}",source_address, target_address, e);
                         return Err(PpaassError::IoError { source: e });
@@ -233,15 +232,15 @@ where
                     Ok(size) => {
                         debug!("Read {} bytes from target, agent source address: {:?}, target address:{:?}.", size, source_address, target_address);
                         match size {
-                            0 if buf.remaining_mut() > 0 => {
+                            0 => {
                                 debug!("Noting to read from target, agent source address: {:?}, target address:{:?}.", source_address, target_address);
-                                return Ok((buf.freeze(), target_stream_read, 0));
+                                return Ok((buf, target_stream_read, 0));
                             },
                             s => s,
                         }
                     },
                 };
-                Ok((buf.freeze(), target_stream_read, read_size))
+                Ok((buf, target_stream_read, read_size))
             };
             let source_address = agent_connect_message_source_address.clone();
             let target_address = agent_connect_message_target_address.clone();

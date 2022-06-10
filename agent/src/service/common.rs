@@ -7,7 +7,7 @@ use std::{
     marker::PhantomData,
 };
 
-use bytes::{BufMut, Bytes, BytesMut};
+use bytes::Bytes;
 use futures::{future, StreamExt};
 use futures::{future::BoxFuture, SinkExt};
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
@@ -505,14 +505,13 @@ where
             };
         }
         loop {
-            let mut buf =
-                BytesMut::with_capacity(SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE));
+            let mut buf = [0u8; DEFAULT_BUFFER_SIZE];
             let read_client_timeout_seconds = SERVER_CONFIG
                 .read_client_timeout_seconds()
                 .unwrap_or(DEFAULT_READ_CLIENT_TIMEOUT_SECONDS);
             let read_data_size = match timeout(
                 Duration::from_secs(read_client_timeout_seconds),
-                client_stream_read_half.read_buf(&mut buf),
+                client_stream_read_half.read(&mut buf),
             )
             .await
             {
@@ -530,7 +529,7 @@ where
                     );
                     return;
                 },
-                Ok(Ok(0)) if buf.remaining_mut() > 0 => {
+                Ok(Ok(0)) => {
                     debug!(
                         "Read all data from client, target address: {:?}",
                         target_address_a2t
