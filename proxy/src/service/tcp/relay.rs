@@ -7,9 +7,12 @@ use std::{net::SocketAddr, time::Duration};
 
 use bytes::{BufMut, BytesMut};
 use futures::future::BoxFuture;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::net::TcpStream;
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    time::timeout,
+};
 use tower::Service;
 use tower::ServiceBuilder;
 use tracing::{debug, error};
@@ -220,10 +223,10 @@ where
                         return Err(PpaassError::IoError { source: e });
                     },
                     Ok(size) => {
-                        debug!("Read {} bytes from target.", size);
+                        debug!("Read {} bytes from target, agent source address: {:?}, target address:{:?}.", size, source_address, target_address);
                         match size {
                             0 if buf.remaining_mut() > 0 => {
-                                debug!("Noting to read from target.");
+                                debug!("Noting to read from target, agent source address: {:?}, target address:{:?}.", source_address, target_address);
                                 return Ok((buf.freeze(), target_stream_read, 0));
                             },
                             s => s,
@@ -237,7 +240,7 @@ where
             let timeout_seconds = SERVER_CONFIG
                 .read_target_timeout_seconds()
                 .unwrap_or(DEFAULT_READ_TARGET_TIMEOUT_SECONDS);
-            let (buf, inner_target_stream_read, _read_size) = match tokio::time::timeout(
+            let (buf, inner_target_stream_read, _read_size) = match timeout(
                 Duration::from_secs(timeout_seconds),
                 read_target_data_future,
             )
