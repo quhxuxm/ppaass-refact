@@ -505,7 +505,8 @@ where
             };
         }
         loop {
-            let mut buf = [0u8; DEFAULT_BUFFER_SIZE];
+            let buffer_size = SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE);
+            let mut buf = vec![0u8; buffer_size];
             let read_client_timeout_seconds = SERVER_CONFIG
                 .read_client_timeout_seconds()
                 .unwrap_or(DEFAULT_READ_CLIENT_TIMEOUT_SECONDS);
