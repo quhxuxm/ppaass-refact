@@ -16,13 +16,13 @@ use crate::crypto::{
 };
 use crate::{Message, PayloadEncryptionType, PpaassError};
 
-const LENGTH_DELIMITED_CODEC_LENGTH_FIELD_LENGTH: usize = 8;
 const PPAASS_FLAG: &[u8] = "__PPAASS__".as_bytes();
 
 enum DecodeStatus {
     Head,
     Data(bool),
 }
+
 pub struct MessageCodec<T: RsaCryptoFetcher> {
     rsa_crypto_fetcher: Arc<T>,
     length_delimited_codec: LengthDelimitedCodec,
@@ -46,8 +46,7 @@ where
     pub fn new(max_frame_size: usize, compress: bool, rsa_crypto_fetcher: Arc<T>) -> Self {
         let mut length_delimited_codec_builder = LengthDelimitedCodec::builder();
         length_delimited_codec_builder.max_frame_length(max_frame_size);
-        length_delimited_codec_builder
-            .length_field_length(LENGTH_DELIMITED_CODEC_LENGTH_FIELD_LENGTH);
+        length_delimited_codec_builder.length_field_length(size_of::<u64>());
         let length_delimited_codec = length_delimited_codec_builder.new_codec();
         Self {
             rsa_crypto_fetcher,
