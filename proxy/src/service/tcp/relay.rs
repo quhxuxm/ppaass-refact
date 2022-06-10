@@ -224,7 +224,7 @@ where
             let read_target_data_future = async move {
                 let buffer_size = SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE);
                 let mut buf = vec![0u8; buffer_size];
-                let read_size = match target_stream_read.read_buf(&mut buf).await {
+                let read_size = match target_stream_read.read(&mut buf).await {
                     Err(e) => {
                         error!("Fail to read data from target because of error, agent source address: {:?}, target address:{:?}, error: {:#?}",source_address, target_address, e);
                         return Err(PpaassError::IoError { source: e });
