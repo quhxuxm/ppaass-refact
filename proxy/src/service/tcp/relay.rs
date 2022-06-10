@@ -5,7 +5,7 @@ use std::{
 };
 use std::{net::SocketAddr, time::Duration};
 
-use bytes::Bytes;
+use bytes::{Bytes, BytesMut};
 use futures::{future::BoxFuture, SinkExt};
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::net::TcpStream;
@@ -219,49 +219,28 @@ where
         let mut payload_encryption_type_select_service =
             ServiceBuilder::new().service(PayloadEncryptionTypeSelectService);
         loop {
-            let source_address = agent_connect_message_source_address.clone();
-            let target_address = agent_connect_message_target_address.clone();
-            let read_target_data_future = async move {
-                // let buffer_size = SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE);
-                let mut buffer = [0u8; DEFAULT_BUFFER_SIZE];
-                let read_size = match target_stream_read.read(&mut buffer).await {
-                    Err(e) => {
-                        error!("Fail to read data from target because of error, agent source address: {:?}, target address:{:?}, error: {:#?}",source_address, target_address, e);
-                        return Err(PpaassError::IoError { source: e });
-                    },
-                    Ok(size) => {
-                        debug!("Read {} bytes from target, agent source address: {:?}, target address:{:?}.", size, source_address, target_address);
-                        match size {
-                            0 => {
-                                debug!("Noting to read from target, agent source address: {:?}, target address:{:?}.", source_address, target_address);
-                                return Ok((buffer, target_stream_read, 0));
-                            },
-                            s => s,
-                        }
-                    },
-                };
-                Ok((buffer, target_stream_read, read_size))
-            };
+            let buffer_size = SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE);
+            let mut buffer = BytesMut::with_capacity(buffer_size);
             let source_address = agent_connect_message_source_address.clone();
             let target_address = agent_connect_message_target_address.clone();
             let timeout_seconds = SERVER_CONFIG
                 .read_target_timeout_seconds()
                 .unwrap_or(DEFAULT_READ_TARGET_TIMEOUT_SECONDS);
-            let (buf, inner_target_stream_read, read_size) = match timeout(
+            let read_size = match timeout(
                 Duration::from_secs(timeout_seconds),
-                read_target_data_future,
+                target_stream_read.read_buf(&mut buffer),
             )
             .await
             {
                 Err(_e) => {
-                    error!("The read target data timeout, source address:{:?}, target address:{:?}, timeout: {}.", source_address, target_address, timeout_seconds);
+                    error!("Fail to read data from target because of timeout, agent source address: {:?}, target address:{:?}, timeout: {:#?}",source_address, target_address,timeout_seconds);
                     return;
                 },
                 Ok(Err(e)) => {
-                    debug!("Fail to read target data because of error, source address:{:?}, target address:{:?}, error: {:#?}", source_address, target_address, e);
+                    error!("Fail to read data from target because of error, agent source address: {:?}, target address:{:?}, error: {:#?}",source_address, target_address, e);
                     return;
                 },
-                Ok(Ok((_, _, 0))) => {
+                Ok(Ok(0)) => {
                     debug!(
                         "Nothing to read from target, source address:{:?}, target address:{:?}.",
                         source_address, target_address
@@ -272,11 +251,12 @@ where
                     }
                     return;
                 },
-                Ok(Ok((buf, inner_target_stream_read, read_size))) => {
-                    (buf, inner_target_stream_read, read_size)
+                Ok(Ok(size)) => {
+                    debug!("Read {} bytes from target, agent source address: {:?}, target address:{:?}.", size, source_address, target_address);
+                    size
                 },
             };
-            let payload_data = Bytes::copy_from_slice(&buf[..read_size]);
+            let payload_data = Bytes::copy_from_slice(&buffer[..read_size]);
             let proxy_message_payload = MessagePayload::new(
                 source_address.clone(),
                 target_address.clone(),
@@ -322,7 +302,6 @@ where
                 },
                 Ok(proxy_message_write_result) => {
                     message_framed_write = proxy_message_write_result.message_framed_write;
-                    target_stream_read = inner_target_stream_read;
                 },
             }
         }
