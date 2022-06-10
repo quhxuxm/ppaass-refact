@@ -1,14 +1,14 @@
 #![allow(unused)]
-use std::fmt::{Display, Formatter};
+use std::fmt::{Debug, Display, Formatter};
 use std::net::{IpAddr, SocketAddr};
 use std::ops::Deref;
 use std::sync::Arc;
 
-use bytes::{Buf, BufMut, Bytes, BytesMut};
-use tracing::error;
-
-use crate::{error::PpaassError, util::generate_uuid};
 use crate::NetAddress::IpV4;
+use crate::{error::PpaassError, util::generate_uuid};
+use bytes::{Buf, BufMut, Bytes, BytesMut};
+use pretty_hex::*;
+use tracing::error;
 
 const ENCRYPTION_TYPE_PLAIN: u8 = 0;
 const ENCRYPTION_TYPE_BLOWFISH: u8 = 1;
@@ -360,7 +360,6 @@ impl From<PayloadEncryptionType> for Bytes {
     }
 }
 
-#[derive(Debug)]
 pub struct MessagePayload {
     /// The source address
     pub source_address: NetAddress,
@@ -370,6 +369,17 @@ pub struct MessagePayload {
     pub payload_type: PayloadType,
     /// The data
     pub data: Bytes,
+}
+
+impl Debug for MessagePayload {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MessagePayload")
+            .field("source_address", &self.source_address)
+            .field("target_address", &self.target_address)
+            .field("payload_type", &self.payload_type)
+            .field("data", &format!("\n\n{}\n", pretty_hex(&self.data)))
+            .finish()
+    }
 }
 
 impl MessagePayload {
@@ -447,7 +457,6 @@ impl TryFrom<Bytes> for MessagePayload {
 }
 
 /// The message
-#[derive(Debug)]
 pub struct Message {
     /// The message id
     pub id: String,
@@ -459,6 +468,18 @@ pub struct Message {
     pub payload_encryption_type: PayloadEncryptionType,
     /// The payload
     pub payload: Option<Bytes>,
+}
+
+impl Debug for Message {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Message")
+            .field("id", &self.id)
+            .field("ref_id", &self.ref_id)
+            .field("user_token", &self.user_token)
+            .field("payload_encryption_type", &self.payload_encryption_type)
+            .field("payload", &"[... omit ...]")
+            .finish()
+    }
 }
 
 impl Message {

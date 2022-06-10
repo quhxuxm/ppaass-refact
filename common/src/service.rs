@@ -1,3 +1,4 @@
+use std::time::Duration;
 use std::{
     fmt::{Debug, Formatter},
     net::SocketAddr,
@@ -6,12 +7,11 @@ use std::{
     sync::Arc,
     task::{Context, Poll},
 };
-use std::time::Duration;
 
 use bytes::Bytes;
-use futures::{SinkExt, StreamExt};
 use futures::future::BoxFuture;
 use futures::stream::{SplitSink, SplitStream};
+use futures::{SinkExt, StreamExt};
 use tokio::{net::TcpStream, time::timeout};
 use tokio_util::codec::Framed;
 use tower::Service;
@@ -161,6 +161,7 @@ where
                     Some(payload),
                 ),
             };
+            debug!("Write message to remote:\n{:?}\n", message);
             let mut message_frame_write = req.message_framed_write;
             if let Err(e) = message_frame_write.send(message).await {
                 error!("Fail to write message because of error: {:#?}", e);
@@ -238,7 +239,7 @@ where
                 Duration::from_secs(read_timeout_seconds),
                 req.message_framed_read.next(),
             )
-                .await
+            .await
             {
                 Err(_e) => {
                     error!(
@@ -260,6 +261,7 @@ where
                     return Err(e);
                 },
             };
+            debug!("Read message from remote:\n{:?}\n", message);
             let payload: MessagePayload = match message.payload {
                 None => {
                     info!(
