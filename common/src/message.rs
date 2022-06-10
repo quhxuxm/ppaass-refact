@@ -476,7 +476,7 @@ impl Debug for Message {
             .field("id", &self.id)
             .field("ref_id", &self.ref_id)
             .field("user_token", &self.user_token)
-            .field("payload_encryption_type", &self.payload_encryption_type)
+            .field("payload_encryption_type", &"[...omit...]")
             .field("payload", &"[... omit ...]")
             .finish()
     }
