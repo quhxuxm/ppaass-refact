@@ -15,7 +15,7 @@ use futures::{SinkExt, StreamExt};
 use tokio::{net::TcpStream, time::timeout};
 use tokio_util::codec::Framed;
 use tower::Service;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, trace};
 
 use crate::{
     crypto::RsaCryptoFetcher, generate_uuid, Message, MessageCodec, MessagePayload,
@@ -153,15 +153,23 @@ where
                     req.payload_encryption_type,
                     None::<Bytes>,
                 ),
-                Some(payload) => Message::new(
-                    generate_uuid(),
-                    req.ref_id,
-                    req.user_token,
-                    req.payload_encryption_type,
-                    Some(payload),
-                ),
+                Some(payload) => {
+                    let message = Message::new(
+                        generate_uuid(),
+                        req.ref_id,
+                        req.user_token,
+                        req.payload_encryption_type,
+                        Some(payload),
+                    );
+                    debug!("Write message to remote:\n\n{:?}\n\n", message);
+                    trace!(
+                        "Write message payload to remote:\n\n{:#?}\n\n",
+                        message.payload
+                    );
+                    message
+                },
             };
-            debug!("Write message to remote:\n{:?}\n", message);
+
             let mut message_frame_write = req.message_framed_write;
             if let Err(e) = message_frame_write.send(message).await {
                 error!("Fail to write message because of error: {:#?}", e);
@@ -261,7 +269,7 @@ where
                     return Err(e);
                 },
             };
-            debug!("Read message from remote:\n{:?}\n", message);
+            debug!("Read message from remote:\n\n{:?}\n\n", message);
             let payload: MessagePayload = match message.payload {
                 None => {
                     info!(
@@ -271,7 +279,10 @@ where
                     return Ok(None);
                 },
                 Some(payload_bytes) => match payload_bytes.try_into() {
-                    Ok(v) => v,
+                    Ok(v) => {
+                        trace!("Read message payload from remote:\n\n{:#?}\n\n", v);
+                        v
+                    },
                     Err(e) => {
                         error!("Fail to decode message payload because of error, read from:{:?}, error: {:#?}", req.read_from_address,e);
                         return Err(e);
