@@ -4,7 +4,7 @@ use std::{any::type_name, fmt::Debug};
 use chrono::Local;
 use futures::TryFutureExt;
 use tower::{Service, ServiceExt};
-use tracing::{debug, Instrument};
+use tracing::Instrument;
 use tracing::{level_filters::LevelFilter, trace};
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::fmt::format::Writer;

@@ -46,7 +46,7 @@ where
     pub fn new(max_frame_size: usize, compress: bool, rsa_crypto_fetcher: Arc<T>) -> Self {
         let mut length_delimited_codec_builder = LengthDelimitedCodec::builder();
         length_delimited_codec_builder.max_frame_length(max_frame_size);
-        length_delimited_codec_builder.length_field_length(size_of::<u64>());
+        length_delimited_codec_builder.length_field_length(size_of::<u32>());
         let length_delimited_codec = length_delimited_codec_builder.new_codec();
         Self {
             rsa_crypto_fetcher,
