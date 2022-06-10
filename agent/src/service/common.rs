@@ -506,13 +506,13 @@ where
         }
         loop {
             let buffer_size = SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE);
-            let mut buf = vec![0u8; buffer_size];
+            let mut buffer = vec![0u8; buffer_size];
             let read_client_timeout_seconds = SERVER_CONFIG
                 .read_client_timeout_seconds()
                 .unwrap_or(DEFAULT_READ_CLIENT_TIMEOUT_SECONDS);
             let read_data_size = match timeout(
                 Duration::from_secs(read_client_timeout_seconds),
-                client_stream_read_half.read(&mut buf),
+                client_stream_read_half.read(&mut buffer),
             )
             .await
             {
@@ -572,7 +572,7 @@ where
                 },
                 Ok(v) => v,
             };
-            let payload_data = Bytes::copy_from_slice(&buf[..read_data_size]);
+            let payload_data = Bytes::copy_from_slice(&buffer[..read_data_size]);
             let write_agent_message_result = ready_and_call_service(
                 &mut write_agent_message_service,
                 WriteMessageServiceRequest {
