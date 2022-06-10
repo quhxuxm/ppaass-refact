@@ -1,3 +1,4 @@
+/// The general error happen in ppaass project.
 #[derive(thiserror::Error, Debug)]
 pub enum PpaassError {
     #[error("Codec error happen.")]

@@ -25,6 +25,7 @@ const PROXY_PUBLIC_KEY_PATH: &str = "ProxyPublicKey.pem";
 /// which can be fund from the storage
 /// with user token
 pub trait RsaCryptoFetcher {
+    /// Fetch the rsa crypto by user token
     fn fetch<Q>(&self, user_token: Q) -> Result<Option<&RsaCrypto>, PpaassError>
     where
         Q: AsRef<str>;
