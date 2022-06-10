@@ -8,8 +8,8 @@ use std::{
 };
 
 use bytes::{BufMut, BytesMut};
-use futures::future::BoxFuture;
 use futures::{future, StreamExt};
+use futures::{future::BoxFuture, SinkExt};
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::net::TcpStream;
 use tokio::{
@@ -518,24 +518,36 @@ where
             {
                 Err(_e) => {
                     error!(
-                        "The read client data timeout: {} seconds.",
-                        read_client_timeout_seconds
+                        "The read client data timeout: {} seconds, target address: {:?}.",
+                        read_client_timeout_seconds, target_address_a2t
                     );
                     return;
                 },
                 Ok(Err(e)) => {
                     error!(
-                        "Fail to read client data from {:#?} because of error: {:#?}",
+                        "Fail to read client data because of error, target address:{:?}, error: {:#?}",
                         target_address_a2t, e
                     );
                     return;
                 },
                 Ok(Ok(0)) if buf.remaining_mut() > 0 => {
-                    debug!("Read all data from agent");
+                    debug!(
+                        "Read all data from client, target address: {:?}",
+                        target_address_a2t
+                    );
+                    if let Err(e) = message_framed_write.flush().await {
+                        error!(
+                            "Fail to write data from agent to proxy because of error, target address: {:?}, error: {:#?}",
+                            target_address_a2t, e
+                        );
+                    }
                     return;
                 },
                 Ok(Ok(size)) => {
-                    debug!("Read {} bytes from client", size);
+                    debug!(
+                        "Read {} bytes from client, target address: {:?}",
+                        size, target_address_a2t
+                    );
                 },
             }
             let PayloadEncryptionTypeSelectServiceResult {
@@ -620,7 +632,7 @@ where
             } = match read_proxy_message_result {
                 Err(e) => {
                     error!(
-                        "Fail to read proxy data because of error, read from: {:?}: {:#?}",
+                        "Fail to read proxy data because of error, target address: {:?}: {:#?}",
                         target_address_t2a, e
                     );
                     return;
@@ -636,7 +648,20 @@ where
                         ..
                     },
                 )) => value,
-                Ok(_) => return,
+                Ok(_) => {
+                    debug!(
+                        "Read all data from proxy, target address: {:?}",
+                        target_address_t2a
+                    );
+                    if let Err(e) = client_stream_write_half.flush().await {
+                        error!(
+                            "Fail to flush proxy data to client because of error, target address:{:?}, error: {:#?}",
+                            target_address_t2a, e
+                        );
+                        let _ = client_stream_write_half.shutdown();
+                    };
+                    return;
+                },
             };
             message_framed_read = message_framed_read_in_result;
             if let Err(e) = client_stream_write_half

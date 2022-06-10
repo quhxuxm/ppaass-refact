@@ -6,7 +6,7 @@ use std::{
 use std::{net::SocketAddr, time::Duration};
 
 use bytes::{BufMut, BytesMut};
-use futures::future::BoxFuture;
+use futures::{future::BoxFuture, SinkExt};
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::net::TcpStream;
 use tokio::{
@@ -160,6 +160,13 @@ where
             } = match read_agent_message_result {
                 Ok(None) => {
                     debug!("Read all data from agent: {:#?}", agent_address);
+                    if let Err(e) = target_stream_write.flush().await {
+                        error!(
+                            "Fail to flush from agent to target because of error, agent address:{:?}, error: {:#?}",
+                           agent_address, e
+                        );
+                        let _ = target_stream_write.shutdown().await;
+                    };
                     return;
                 },
                 Ok(Some(
@@ -256,7 +263,14 @@ where
                     return;
                 },
                 Ok(Ok((_, _, 0))) => {
-                    debug!("Nothing to read from target, return from read target future, source address:{:?}, target address:{:?}.", source_address, target_address);
+                    debug!(
+                        "Nothing to read from target, source address:{:?}, target address:{:?}.",
+                        source_address, target_address
+                    );
+                    if let Err(e) = message_framed_write.flush().await {
+                        error!("Fail to write data from target to agent because of error, source address:{:?}, target address:{:?}, error: {:#?}.",
+                         source_address, target_address, e);
+                    }
                     return;
                 },
                 Ok(Ok(v)) => v,
