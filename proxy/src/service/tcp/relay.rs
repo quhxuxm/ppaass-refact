@@ -5,7 +5,7 @@ use std::{
 };
 use std::{net::SocketAddr, time::Duration};
 
-use bytes::{BufMut, BytesMut};
+use bytes::{BufMut, Bytes, BytesMut};
 use futures::{future::BoxFuture, SinkExt};
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::net::TcpStream;
@@ -248,7 +248,7 @@ where
             let timeout_seconds = SERVER_CONFIG
                 .read_target_timeout_seconds()
                 .unwrap_or(DEFAULT_READ_TARGET_TIMEOUT_SECONDS);
-            let (buf, inner_target_stream_read, _read_size) = match timeout(
+            let (buf, inner_target_stream_read, read_size) = match timeout(
                 Duration::from_secs(timeout_seconds),
                 read_target_data_future,
             )
@@ -273,13 +273,16 @@ where
                     }
                     return;
                 },
-                Ok(Ok(v)) => v,
+                Ok(Ok((buf, inner_target_stream_read, read_size))) => {
+                    (buf, inner_target_stream_read, read_size)
+                },
             };
+            let payload_data = Bytes::copy_from_slice(&buf[..read_size]);
             let proxy_message_payload = MessagePayload::new(
                 source_address.clone(),
                 target_address.clone(),
                 PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::TcpData),
-                buf,
+                payload_data,
             );
             let PayloadEncryptionTypeSelectServiceResult {
                 payload_encryption_type,

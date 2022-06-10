@@ -7,7 +7,7 @@ use std::{
     marker::PhantomData,
 };
 
-use bytes::{BufMut, BytesMut};
+use bytes::{BufMut, Bytes, BytesMut};
 use futures::{future, StreamExt};
 use futures::{future::BoxFuture, SinkExt};
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
@@ -510,7 +510,7 @@ where
             let read_client_timeout_seconds = SERVER_CONFIG
                 .read_client_timeout_seconds()
                 .unwrap_or(DEFAULT_READ_CLIENT_TIMEOUT_SECONDS);
-            match timeout(
+            let read_data_size = match timeout(
                 Duration::from_secs(read_client_timeout_seconds),
                 client_stream_read_half.read_buf(&mut buf),
             )
@@ -548,8 +548,9 @@ where
                         "Read {} bytes from client, target address: {:?}",
                         size, target_address_a2t
                     );
+                    size
                 },
-            }
+            };
             let PayloadEncryptionTypeSelectServiceResult {
                 payload_encryption_type,
                 ..
@@ -571,6 +572,7 @@ where
                 },
                 Ok(v) => v,
             };
+            let payload_data = Bytes::copy_from_slice(&buf[..read_data_size]);
             let write_agent_message_result = ready_and_call_service(
                 &mut write_agent_message_service,
                 WriteMessageServiceRequest {
@@ -582,7 +584,7 @@ where
                         source_address_a2t.clone(),
                         target_address_a2t.clone(),
                         PayloadType::AgentPayload(AgentMessagePayloadTypeValue::TcpData),
-                        buf.freeze(),
+                        payload_data,
                     )),
                 },
             )
