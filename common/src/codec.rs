@@ -72,8 +72,7 @@ where
                 }
                 let ppaass_flag = src.copy_to_bytes(PPAASS_FLAG.len());
                 if !PPAASS_FLAG.eq(&ppaass_flag) {
-                    error!(
-                    "Fail to decode input message because of it dose not begin with ppaass flag, hex data:\n{}\n", pretty_hex(src));
+                    error!( "Fail to decode input message because of it dose not begin with ppaass flag, hex data:\n\n{}\n\n", pretty_hex(src));
                     return Err(PpaassError::CodecError);
                 }
                 let compressed = src.get_u8() == 1;
@@ -218,20 +217,21 @@ where
             original_message
         );
         dst.put(PPAASS_FLAG);
+        if self.compress {
+            dst.put_u8(1);
+        } else {
+            dst.put_u8(0);
+        }
         if original_message.payload.is_none() {
             let result_bytes: Bytes = original_message.into();
-            if let Err(e) = self.length_delimited_codec.encode(
-                if self.compress {
-                    dst.put_u8(1);
-                    Bytes::from(compress(result_bytes.chunk(), None, true)?)
-                } else {
-                    dst.put_u8(0);
-                    result_bytes
-                },
-                dst,
-            ) {
+            let result_bytes = if self.compress {
+                Bytes::from(compress(result_bytes.chunk(), None, true)?)
+            } else {
+                result_bytes
+            };
+            if let Err(e) = self.length_delimited_codec.encode(result_bytes, dst) {
                 error!("Fail to encode original message because of error: {:#?}", e);
-                return Err(PpaassError::IoError { source: e });
+                return Err(PpaassError::CodecError);
             }
             return Ok(());
         }
@@ -255,7 +255,7 @@ where
                     "Fail to encrypt message because of rsa crypto not exist for user: {}",
                     user_token
                 );
-                return Err(PpaassError::UnknownError);
+                return Err(PpaassError::CodecError);
             },
             Ok(Some(v)) => v,
         };
@@ -296,16 +296,12 @@ where
             encrypted_payload,
         );
         let result_bytes: Bytes = message_to_encode.into();
-        if let Err(e) = self.length_delimited_codec.encode(
-            if self.compress {
-                dst.put_u8(1);
-                Bytes::from(compress(result_bytes.chunk(), None, true)?)
-            } else {
-                dst.put_u8(0);
-                result_bytes
-            },
-            dst,
-        ) {
+        let result_bytes = if self.compress {
+            Bytes::from(compress(result_bytes.chunk(), None, true)?)
+        } else {
+            result_bytes
+        };
+        if let Err(e) = self.length_delimited_codec.encode(result_bytes, dst) {
             error!("Fail to encode original message because of error: {:#?}", e);
             return Err(PpaassError::IoError { source: e });
         }
