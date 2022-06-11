@@ -79,6 +79,18 @@ impl ProxyServer {
                     e
                 );
             };
+            if let Err(e)= socket2.set_recv_buffer_size(SERVER_CONFIG.so_recv_buffer_size().unwrap_or(1024*64)){
+                panic!(
+                        "Fail to bind proxy server port because of error: {:#?}",
+                        e
+                    );
+            };
+             if let Err(e)= socket2.set_send_buffer_size(SERVER_CONFIG.so_send_buffer_size().unwrap_or(1024*64)){
+                panic!(
+                        "Fail to bind proxy server port because of error: {:#?}",
+                        e
+                    );
+            };
             let local_socket_address = SocketAddr::V4(SocketAddrV4::new(
                 Ipv4Addr::new(0, 0, 0, 0),
                 SERVER_CONFIG.port().unwrap_or(DEFAULT_SERVER_PORT),

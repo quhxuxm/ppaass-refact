@@ -26,6 +26,8 @@ lazy_static! {
 #[derive(Serialize, Deserialize)]
 pub(crate) struct Config {
     port: Option<u16>,
+    so_recv_buffer_size: Option<usize>,
+    so_send_buffer_size: Option<usize>,
     user_token: Option<String>,
     proxy_addresses: Option<Vec<String>>,
     client_buffer_size: Option<usize>,
@@ -115,5 +117,11 @@ impl Config {
     }
     pub fn so_backlog(&self) -> Option<i32> {
         self.so_backlog
+    }
+    pub fn so_recv_buffer_size(&self) -> Option<usize> {
+        self.so_recv_buffer_size
+    }
+    pub fn so_send_buffer_size(&self) -> Option<usize> {
+        self.so_send_buffer_size
     }
 }
