@@ -115,7 +115,9 @@ where
             let mut framed = Framed::with_capacity(
                 &mut req.client_stream,
                 SwitchProtocolDecoder,
-                SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
+                SERVER_CONFIG
+                    .framed_buffer_size()
+                    .unwrap_or(DEFAULT_BUFFER_SIZE),
             );
             return match framed.next().await {
                 None => Ok(()),
@@ -337,7 +339,9 @@ pub fn generate_prepare_message_framed_service<T>(
 where
     T: RsaCryptoFetcher,
 {
-    let buffer_size = SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE);
+    let buffer_size = SERVER_CONFIG
+        .framed_buffer_size()
+        .unwrap_or(DEFAULT_BUFFER_SIZE);
     ServiceBuilder::new().service(PrepareMessageFramedService::new(
         buffer_size,
         SERVER_CONFIG.compress().unwrap_or(true),

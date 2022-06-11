@@ -168,10 +168,12 @@ where
     fn call(&mut self, req: AgentConnectionInfo) -> Self::Future {
         let rsa_crypto_fetch = self.rsa_crypto_fetch.clone();
         Box::pin(async move {
-            let buffer_size = SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE);
+            let framed_buffer_size = SERVER_CONFIG
+                .framed_buffer_size()
+                .unwrap_or(DEFAULT_BUFFER_SIZE);
             let mut prepare_message_frame_service =
                 ServiceBuilder::new().service(PrepareMessageFramedService::new(
-                    buffer_size,
+                    framed_buffer_size,
                     SERVER_CONFIG.compress().unwrap_or(true),
                     rsa_crypto_fetch.clone(),
                 ));
