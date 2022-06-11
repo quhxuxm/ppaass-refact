@@ -9,7 +9,7 @@ use tokio::net::TcpStream;
 use tower::Service;
 use tower::ServiceBuilder;
 
-use common::{PpaassError, ready_and_call_service, RsaCryptoFetcher};
+use common::{ready_and_call_service, PpaassError, RsaCryptoFetcher};
 
 use crate::service::common::{TcpRelayService, TcpRelayServiceRequest};
 use crate::service::socks5::auth::{Socks5AuthCommandService, Socks5AuthenticateFlowRequest};
@@ -83,7 +83,7 @@ where
                     buffer: req.buffer,
                 },
             )
-                .await?;
+            .await?;
             let connect_flow_result = ready_and_call_service(
                 &mut connect_service,
                 Socks5InitCommandServiceRequest {
@@ -93,7 +93,7 @@ where
                     buffer: authenticate_result.buffer,
                 },
             )
-                .await?;
+            .await?;
             let relay_flow_result = ready_and_call_service(
                 &mut relay_service,
                 TcpRelayServiceRequest {
@@ -108,7 +108,7 @@ where
                     proxy_address: connect_flow_result.proxy_address,
                 },
             )
-                .await?;
+            .await?;
             Ok(Socks5FlowResult {
                 client_address: relay_flow_result.client_address,
             })
