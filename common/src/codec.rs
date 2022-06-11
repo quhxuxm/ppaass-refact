@@ -70,7 +70,7 @@ where
                     return Err(PpaassError::CodecError);
                 }
                 let compressed = src.get_u8() == 1;
-                let body_length = src.get_u64_le();
+                let body_length = src.get_u64();
                 self.status = DecodeStatus::Data(compressed, body_length);
                 (compressed, body_length)
             },
@@ -214,7 +214,7 @@ where
                 result_bytes
             };
             let result_bytes_length = result_bytes.len();
-            dst.put_u64_le(result_bytes_length as u64);
+            dst.put_u64(result_bytes_length as u64);
             dst.put(result_bytes);
             return Ok(());
         }
@@ -285,7 +285,7 @@ where
             result_bytes
         };
         let result_bytes_length = result_bytes.len();
-        dst.put_u64_le(result_bytes_length as u64);
+        dst.put_u64(result_bytes_length as u64);
         dst.put(result_bytes);
         Ok(())
     }

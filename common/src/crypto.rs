@@ -92,8 +92,8 @@ pub(crate) fn encrypt_with_aes(encryption_token: &Bytes, target: &Bytes) -> Byte
     let aes_encryptor = aessafe::AesSafe256Encryptor::new(encryption_token);
     let target_chunks = target.chunks(AES_CHUNK_LENGTH);
     target_chunks.for_each(|chunk| {
-        let chunk_to_encrypt = &mut [0u8; AES_CHUNK_LENGTH];
-        let chunk_encrypted = &mut [0u8; AES_CHUNK_LENGTH];
+        let mut chunk_to_encrypt = [0u8; AES_CHUNK_LENGTH];
+        let mut chunk_encrypted = [0u8; AES_CHUNK_LENGTH];
         if chunk.len() < AES_CHUNK_LENGTH {
             for (i, v) in chunk.iter().enumerate() {
                 chunk_to_encrypt[i] = *v;
@@ -101,8 +101,8 @@ pub(crate) fn encrypt_with_aes(encryption_token: &Bytes, target: &Bytes) -> Byte
         } else {
             chunk_encrypted.copy_from_slice(chunk);
         }
-        aes_encryptor.encrypt_block(chunk_to_encrypt, chunk_encrypted);
-        result.put_slice(chunk_encrypted);
+        aes_encryptor.encrypt_block(&chunk_to_encrypt, &mut chunk_encrypted);
+        result.put_slice(&chunk_encrypted);
     });
     result.into()
 }
@@ -112,7 +112,7 @@ pub(crate) fn decrypt_with_aes(encryption_token: &Bytes, target: &Bytes) -> Byte
     let aes_decryptor = aessafe::AesSafe256Decryptor::new(encryption_token);
     let target_chunks = target.chunks(AES_CHUNK_LENGTH);
     target_chunks.for_each(|chunk| {
-        let chunk_to_decrypt = &mut [0u8; AES_CHUNK_LENGTH];
+        let mut chunk_to_decrypt = [0u8; AES_CHUNK_LENGTH];
         if chunk.len() < AES_CHUNK_LENGTH {
             for (i, v) in chunk.iter().enumerate() {
                 chunk_to_decrypt[i] = *v;
@@ -120,9 +120,9 @@ pub(crate) fn decrypt_with_aes(encryption_token: &Bytes, target: &Bytes) -> Byte
         } else {
             chunk_to_decrypt.copy_from_slice(chunk);
         }
-        let chunk_decrypted = &mut [0u8; AES_CHUNK_LENGTH];
-        aes_decryptor.decrypt_block(chunk_to_decrypt, chunk_decrypted);
-        result.put_slice(chunk_decrypted);
+        let mut chunk_decrypted = [0u8; AES_CHUNK_LENGTH];
+        aes_decryptor.decrypt_block(&chunk_to_decrypt, &mut chunk_decrypted);
+        result.put_slice(&chunk_decrypted);
     });
     result.into()
 }
@@ -132,7 +132,7 @@ pub(crate) fn encrypt_with_blowfish(encryption_token: &Bytes, target: &Bytes) ->
     let blowfish_encryption = blowfish::Blowfish::new(encryption_token);
     let target_chunks = target.chunks(BLOWFISH_CHUNK_LENGTH);
     target_chunks.for_each(|chunk| {
-        let chunk_to_encrypt = &mut [0u8; BLOWFISH_CHUNK_LENGTH];
+        let mut chunk_to_encrypt = [0u8; BLOWFISH_CHUNK_LENGTH];
         if chunk.len() < BLOWFISH_CHUNK_LENGTH {
             for (i, v) in chunk.iter().enumerate() {
                 chunk_to_encrypt[i] = *v;
@@ -140,9 +140,9 @@ pub(crate) fn encrypt_with_blowfish(encryption_token: &Bytes, target: &Bytes) ->
         } else {
             chunk_to_encrypt.copy_from_slice(chunk);
         }
-        let chunk_encrypted = &mut [0u8; BLOWFISH_CHUNK_LENGTH];
-        blowfish_encryption.encrypt_block(chunk_to_encrypt, chunk_encrypted);
-        result.put_slice(chunk_encrypted);
+        let mut chunk_encrypted = [0u8; BLOWFISH_CHUNK_LENGTH];
+        blowfish_encryption.encrypt_block(&chunk_to_encrypt, &mut chunk_encrypted);
+        result.put_slice(&chunk_encrypted);
     });
     result.into()
 }
@@ -152,7 +152,7 @@ pub(crate) fn decrypt_with_blowfish(encryption_token: &Bytes, target: &Bytes) ->
     let blowfish_encryption = blowfish::Blowfish::new(encryption_token);
     let target_chunks = target.chunks(BLOWFISH_CHUNK_LENGTH);
     target_chunks.for_each(|chunk| {
-        let chunk_to_decrypt = &mut [0u8; BLOWFISH_CHUNK_LENGTH];
+        let mut chunk_to_decrypt = [0u8; BLOWFISH_CHUNK_LENGTH];
         if chunk.len() < BLOWFISH_CHUNK_LENGTH {
             for (i, v) in chunk.iter().enumerate() {
                 chunk_to_decrypt[i] = *v;
@@ -160,9 +160,9 @@ pub(crate) fn decrypt_with_blowfish(encryption_token: &Bytes, target: &Bytes) ->
         } else {
             chunk_to_decrypt.copy_from_slice(chunk);
         }
-        let chunk_decrypted = &mut [0u8; BLOWFISH_CHUNK_LENGTH];
-        blowfish_encryption.decrypt_block(chunk_to_decrypt, chunk_decrypted);
-        result.put_slice(chunk_decrypted);
+        let mut chunk_decrypted = [0u8; BLOWFISH_CHUNK_LENGTH];
+        blowfish_encryption.decrypt_block(&chunk_to_decrypt, &mut chunk_decrypted);
+        result.put_slice(&chunk_decrypted);
     });
     result.into()
 }
