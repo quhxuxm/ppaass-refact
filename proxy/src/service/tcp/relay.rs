@@ -5,7 +5,7 @@ use std::{
 };
 use std::{net::SocketAddr, time::Duration};
 
-use bytes::{Bytes, BytesMut};
+use bytes::Bytes;
 use futures::{future::BoxFuture, SinkExt};
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::net::TcpStream;
@@ -220,7 +220,7 @@ where
             ServiceBuilder::new().service(PayloadEncryptionTypeSelectService);
         loop {
             let buffer_size = SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE);
-            let mut buffer = BytesMut::with_capacity(buffer_size);
+            let mut buffer = Vec::with_capacity(buffer_size);
             let source_address = agent_connect_message_source_address.clone();
             let target_address = agent_connect_message_target_address.clone();
             let timeout_seconds = SERVER_CONFIG

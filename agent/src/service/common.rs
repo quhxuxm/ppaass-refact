@@ -7,7 +7,7 @@ use std::{
     marker::PhantomData,
 };
 
-use bytes::{Bytes, BytesMut};
+use bytes::Bytes;
 use futures::{future, StreamExt};
 use futures::{future::BoxFuture, SinkExt};
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
@@ -507,7 +507,7 @@ where
         loop {
             // let buffer_size = SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE);
             let buffer_size = SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE);
-            let mut buffer = BytesMut::with_capacity(buffer_size);
+            let mut buffer = Vec::with_capacity(buffer_size);
             let read_client_timeout_seconds = SERVER_CONFIG
                 .read_client_timeout_seconds()
                 .unwrap_or(DEFAULT_READ_CLIENT_TIMEOUT_SECONDS);
