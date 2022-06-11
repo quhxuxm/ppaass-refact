@@ -1,11 +1,13 @@
-use std::{time::Duration, net::TcpListener as StdTcpListener};
+use std::net::SocketAddr;
+use std::time::Duration;
 use std::{
-    net::{Ipv4Addr, SocketAddrV4},
+    net::{Ipv4Addr, SocketAddrV4, TcpListener as StdTcpListener},
     sync::Arc,
 };
 
-use tokio::{net::TcpListener, runtime::Builder as TokioRuntimeBuilder} ;
+use socket2::{Domain, SockAddr, Socket, Type};
 use tokio::runtime::Runtime as TokioRuntime;
+use tokio::{net::TcpListener, runtime::Builder as TokioRuntimeBuilder};
 use tower::ServiceBuilder;
 use tracing::{error, info};
 
@@ -53,27 +55,47 @@ impl ProxyServer {
 
     pub(crate) fn run(&self) {
         self.runtime.block_on(async {
-            let std_listener = match StdTcpListener::bind(SocketAddrV4::new(
-                Ipv4Addr::new(0, 0, 0, 0),
-                SERVER_CONFIG.port().unwrap_or(DEFAULT_SERVER_PORT),
-            )) {
+            let socket2 = match Socket::new(Domain::IPV4, Type::STREAM, None) {
+                Ok(v) => v,
                 Err(e) => {
                     panic!(
                         "Fail to bind proxy server port because of error: {:#?}",
                         e
                     );
                 }
-                Ok(listener) => {
-                    info!("Success to bind proxy server port, start listening ... ");
-                    listener
-                }
             };
-            if let Err(e) = std_listener.set_nonblocking(true) {
+            if let Err(e) = socket2.set_reuse_address(true) {
+                panic!("Fail to bind proxy server port because of error: {:#?}", e);
+            };
+            if let Err(e)= socket2.set_nodelay(true){
                 panic!(
-                    "Fail to set proxy server listener to be non-blocking because of error: {:#?}",
+                    "Fail to bind proxy server port because of error: {:#?}",
                     e
                 );
             };
+            if let Err(e)=    socket2.set_nonblocking(true){
+                panic!(
+                    "Fail to bind proxy server port because of error: {:#?}",
+                    e
+                );
+            };
+            let local_socket_address = SocketAddr::V4(SocketAddrV4::new(
+                Ipv4Addr::new(0, 0, 0, 0),
+                SERVER_CONFIG.port().unwrap_or(DEFAULT_SERVER_PORT),
+            ));
+            if let Err(e)=socket2.bind(&SockAddr::from(local_socket_address)) {
+                panic!(
+                    "Fail to bind proxy server port because of error: {:#?}",
+                    e
+                );
+            };
+            if let Err(e)=   socket2.listen(SERVER_CONFIG.so_backlog().unwrap_or(1024)){
+                panic!(
+                    "Fail to bind proxy server port because of error: {:#?}",
+                    e
+                );
+            };
+            let std_listener: StdTcpListener = socket2.into();
             let listener = match TcpListener::from_std(std_listener) {
                 Err(e) => {
                     panic!(
@@ -123,7 +145,6 @@ impl ProxyServer {
                         continue;
                     }
                 }
-                
                 let proxy_rsa_crypto_fetcher = proxy_rsa_crypto_fetcher.clone();
                 tokio::spawn(async move {
                     let mut handle_agent_connection_service = ServiceBuilder::new()

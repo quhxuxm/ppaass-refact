@@ -46,6 +46,7 @@ pub(crate) struct Config {
     connect_proxy_timeout_seconds: Option<u64>,
     client_stream_so_linger: Option<u64>,
     proxy_stream_so_linger: Option<u64>,
+    so_backlog: Option<i32>,
 }
 
 impl Config {
@@ -82,15 +83,12 @@ impl Config {
     pub fn compress(&self) -> Option<bool> {
         self.compress
     }
-
     pub fn max_log_level(&self) -> &Option<String> {
         &self.max_log_level
     }
-
     pub fn proxy_connection_retry(&self) -> Option<u16> {
         self.proxy_connection_retry
     }
-
     pub fn buffered_connection_number(&self) -> Option<usize> {
         self.buffered_connection_number
     }
@@ -114,5 +112,8 @@ impl Config {
     }
     pub fn proxy_stream_so_linger(&self) -> Option<u64> {
         self.proxy_stream_so_linger
+    }
+    pub fn so_backlog(&self) -> Option<i32> {
+        self.so_backlog
     }
 }

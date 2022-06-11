@@ -47,56 +47,46 @@ pub(crate) struct Config {
     connect_target_timeout_seconds: Option<u64>,
     agent_stream_so_linger: Option<u64>,
     target_stream_so_linger: Option<u64>,
+    so_backlog: Option<i32>,
 }
 
 impl Config {
     pub fn port(&self) -> Option<u16> {
         self.port
     }
-
     pub fn target_buffer_size(&self) -> Option<usize> {
         self.target_buffer_size
     }
-
     pub fn message_framed_buffer_size(&self) -> Option<usize> {
         self.message_framed_buffer_size
     }
-
     pub fn thread_number(&self) -> Option<usize> {
         self.thread_number
     }
-
     pub fn thread_timeout(&self) -> Option<u64> {
         self.thread_timeout
     }
-
     pub fn log_dir(&self) -> &Option<String> {
         &self.log_dir
     }
-
     pub fn log_file(&self) -> &Option<String> {
         &self.log_file
     }
-
     pub fn max_blocking_threads(&self) -> Option<usize> {
         self.max_blocking_threads
     }
-
     pub fn compress(&self) -> Option<bool> {
         self.compress
     }
-
     pub fn max_log_level(&self) -> &Option<String> {
         &self.max_log_level
     }
     pub fn target_connection_retry(&self) -> Option<u16> {
         self.target_connection_retry
     }
-
     pub fn rsa_root_dir(&self) -> &Option<String> {
         &self.rsa_root_dir
     }
-
     pub fn buffered_connection_number(&self) -> Option<usize> {
         self.buffered_connection_number
     }
@@ -120,5 +110,8 @@ impl Config {
     }
     pub fn agent_stream_so_linger(&self) -> Option<u64> {
         self.agent_stream_so_linger
+    }
+    pub fn so_backlog(&self) -> Option<i32> {
+        self.so_backlog
     }
 }

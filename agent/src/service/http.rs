@@ -7,7 +7,7 @@ use futures::future::BoxFuture;
 use tokio::net::TcpStream;
 use tower::{Service, ServiceBuilder};
 
-use common::{ready_and_call_service, PpaassError, RsaCryptoFetcher};
+use common::{PpaassError, ready_and_call_service, RsaCryptoFetcher};
 
 use crate::service::common::{TcpRelayService, TcpRelayServiceRequest};
 use crate::service::http::connect::{HttpConnectService, HttpConnectServiceRequest};
@@ -71,7 +71,7 @@ where
                     initial_buf: req.buffer,
                 },
             )
-            .await?;
+                .await?;
             let relay_result = ready_and_call_service(
                 &mut relay_service,
                 TcpRelayServiceRequest {
@@ -86,7 +86,7 @@ where
                     proxy_address: connect_result.proxy_address,
                 },
             )
-            .await?;
+                .await?;
             Ok(HttpFlowResult {
                 client_address: relay_result.client_address,
             })

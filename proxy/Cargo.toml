@@ -20,6 +20,7 @@ split-debuginfo = '...' # Platform-specific.
 name = "ppaass-proxy"
 path = "src/main.rs"
 [dependencies]
+socket2 = "0.4"
 anyhow = "1"
 bytes = "1"
 chrono = "0.4"
