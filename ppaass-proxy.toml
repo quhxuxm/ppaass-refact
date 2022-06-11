@@ -1,4 +1,4 @@
-buffer_size = 131072
+buffer_size = 262144
 buffered_connection_number = 65536
 concurrent_connection_number = 65536
 connect_target_timeout_seconds = 120
