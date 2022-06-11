@@ -20,5 +20,5 @@ compress = true
 agent_stream_so_linger = 20
 target_stream_so_linger = 20
 so_backlog = 2048
-so_recv_buffer_size=65536
-so_send_buffer_size=65536
+so_recv_buffer_size=1048576
+so_send_buffer_size=1048576
