@@ -1,11 +1,11 @@
-use std::time::Duration;
+use std::{time::Duration, net::TcpListener as StdTcpListener};
 use std::{
     net::{Ipv4Addr, SocketAddrV4},
     sync::Arc,
 };
 
-use tokio::net::TcpListener;
-use tokio::runtime::Runtime;
+use tokio::{net::TcpListener, runtime::Builder as TokioRuntimeBuilder} ;
+use tokio::runtime::Runtime as TokioRuntime;
 use tower::ServiceBuilder;
 use tracing::{error, info};
 
@@ -22,12 +22,12 @@ use crate::{
 const DEFAULT_SERVER_PORT: u16 = 80;
 
 pub(crate) struct ProxyServer {
-    runtime: Runtime,
+    runtime: TokioRuntime,
 }
 
 impl ProxyServer {
     pub(crate) fn new() -> Self {
-        let mut runtime_builder = tokio::runtime::Builder::new_multi_thread();
+        let mut runtime_builder = TokioRuntimeBuilder::new_multi_thread();
         runtime_builder
             .enable_all()
             .thread_keep_alive(Duration::from_secs(
@@ -53,7 +53,7 @@ impl ProxyServer {
 
     pub(crate) fn run(&self) {
         self.runtime.block_on(async {
-            let std_listener = match std::net::TcpListener::bind(SocketAddrV4::new(
+            let std_listener = match StdTcpListener::bind(SocketAddrV4::new(
                 Ipv4Addr::new(0, 0, 0, 0),
                 SERVER_CONFIG.port().unwrap_or(DEFAULT_SERVER_PORT),
             )) {
@@ -123,6 +123,7 @@ impl ProxyServer {
                         continue;
                     }
                 }
+                
                 let proxy_rsa_crypto_fetcher = proxy_rsa_crypto_fetcher.clone();
                 tokio::spawn(async move {
                     let mut handle_agent_connection_service = ServiceBuilder::new()
