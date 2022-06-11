@@ -226,7 +226,7 @@ where
             let timeout_seconds = SERVER_CONFIG
                 .read_target_timeout_seconds()
                 .unwrap_or(DEFAULT_READ_TARGET_TIMEOUT_SECONDS);
-            let read_size = match timeout(
+            match timeout(
                 Duration::from_secs(timeout_seconds),
                 target_stream_read.read_buf(&mut buffer),
             )
@@ -256,7 +256,7 @@ where
                     size
                 },
             };
-            let payload_data = Bytes::copy_from_slice(&buffer[..read_size]);
+            let payload_data = buffer.split().freeze();
             let proxy_message_payload = MessagePayload::new(
                 source_address.clone(),
                 target_address.clone(),

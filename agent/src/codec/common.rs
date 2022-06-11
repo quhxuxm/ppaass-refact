@@ -1,5 +1,6 @@
 use std::mem::size_of;
 
+use bytes::BytesMut;
 use tokio_util::codec::Decoder;
 use tracing::{debug, error};
 
@@ -19,7 +20,7 @@ impl Decoder for SwitchProtocolDecoder {
 
     type Error = PpaassError;
 
-    fn decode(&mut self, src: &mut bytes::BytesMut) -> Result<Option<Self::Item>, Self::Error> {
+    fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
         if src.len() < size_of::<u8>() {
             debug!("Incoming agent client stream is empty, nothing to decode.");
             return Ok(None);

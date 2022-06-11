@@ -510,7 +510,7 @@ where
             let read_client_timeout_seconds = SERVER_CONFIG
                 .read_client_timeout_seconds()
                 .unwrap_or(DEFAULT_READ_CLIENT_TIMEOUT_SECONDS);
-            let read_data_size = match timeout(
+            match timeout(
                 Duration::from_secs(read_client_timeout_seconds),
                 client_stream_read_half.read_buf(&mut buffer),
             )
@@ -572,7 +572,7 @@ where
                 },
                 Ok(v) => v,
             };
-            let payload_data = Bytes::copy_from_slice(&buffer[..read_data_size]);
+            let payload_data = buffer.split().freeze();
             let write_agent_message_result = ready_and_call_service(
                 &mut write_agent_message_service,
                 WriteMessageServiceRequest {
