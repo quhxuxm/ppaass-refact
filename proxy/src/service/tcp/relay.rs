@@ -219,7 +219,9 @@ where
         let mut payload_encryption_type_select_service =
             ServiceBuilder::new().service(PayloadEncryptionTypeSelectService);
         loop {
-            let buffer_size = SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE);
+            let buffer_size = SERVER_CONFIG
+                .target_buffer_size()
+                .unwrap_or(DEFAULT_BUFFER_SIZE);
             let mut buffer = BytesMut::with_capacity(buffer_size);
             let source_address = agent_connect_message_source_address.clone();
             let target_address = agent_connect_message_target_address.clone();

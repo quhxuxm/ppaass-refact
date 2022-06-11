@@ -29,8 +29,8 @@ pub const DEFAULT_CONNECT_TARGET_TIMEOUT_SECONDS: u64 = 20;
 pub(crate) struct Config {
     port: Option<u16>,
     rsa_root_dir: Option<String>,
-    buffer_size: Option<usize>,
-    framed_buffer_size: Option<usize>,
+    target_buffer_size: Option<usize>,
+    message_framed_buffer_size: Option<usize>,
     thread_number: Option<usize>,
     max_blocking_threads: Option<usize>,
     thread_timeout: Option<u64>,
@@ -54,12 +54,12 @@ impl Config {
         self.port
     }
 
-    pub fn buffer_size(&self) -> Option<usize> {
-        self.buffer_size
+    pub fn target_buffer_size(&self) -> Option<usize> {
+        self.target_buffer_size
     }
 
-    pub fn framed_buffer_size(&self) -> Option<usize> {
-        self.framed_buffer_size
+    pub fn message_framed_buffer_size(&self) -> Option<usize> {
+        self.message_framed_buffer_size
     }
 
     pub fn thread_number(&self) -> Option<usize> {

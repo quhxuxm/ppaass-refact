@@ -116,7 +116,7 @@ where
                 &mut req.client_stream,
                 SwitchProtocolDecoder,
                 SERVER_CONFIG
-                    .framed_buffer_size()
+                    .message_framed_buffer_size()
                     .unwrap_or(DEFAULT_BUFFER_SIZE),
             );
             return match framed.next().await {
@@ -340,7 +340,7 @@ where
     T: RsaCryptoFetcher,
 {
     let buffer_size = SERVER_CONFIG
-        .framed_buffer_size()
+        .message_framed_buffer_size()
         .unwrap_or(DEFAULT_BUFFER_SIZE);
     ServiceBuilder::new().service(PrepareMessageFramedService::new(
         buffer_size,
@@ -509,7 +509,9 @@ where
         }
         loop {
             // let buffer_size = SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE);
-            let buffer_size = SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE);
+            let buffer_size = SERVER_CONFIG
+                .client_buffer_size()
+                .unwrap_or(DEFAULT_BUFFER_SIZE);
             let mut buffer = BytesMut::with_capacity(buffer_size);
             let read_client_timeout_seconds = SERVER_CONFIG
                 .read_client_timeout_seconds()

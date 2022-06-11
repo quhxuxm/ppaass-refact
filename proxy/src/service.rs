@@ -169,7 +169,7 @@ where
         let rsa_crypto_fetch = self.rsa_crypto_fetch.clone();
         Box::pin(async move {
             let framed_buffer_size = SERVER_CONFIG
-                .framed_buffer_size()
+                .message_framed_buffer_size()
                 .unwrap_or(DEFAULT_BUFFER_SIZE);
             let mut prepare_message_frame_service =
                 ServiceBuilder::new().service(PrepareMessageFramedService::new(

@@ -28,8 +28,8 @@ pub(crate) struct Config {
     port: Option<u16>,
     user_token: Option<String>,
     proxy_addresses: Option<Vec<String>>,
-    buffer_size: Option<usize>,
-    framed_buffer_size: Option<usize>,
+    client_buffer_size: Option<usize>,
+    message_framed_buffer_size: Option<usize>,
     thread_number: Option<usize>,
     max_blocking_threads: Option<usize>,
     thread_timeout: Option<u64>,
@@ -58,11 +58,11 @@ impl Config {
     pub fn proxy_addresses(&self) -> &Option<Vec<String>> {
         &self.proxy_addresses
     }
-    pub fn buffer_size(&self) -> Option<usize> {
-        self.buffer_size
+    pub fn client_buffer_size(&self) -> Option<usize> {
+        self.client_buffer_size
     }
-    pub fn framed_buffer_size(&self) -> Option<usize> {
-        self.framed_buffer_size
+    pub fn message_framed_buffer_size(&self) -> Option<usize> {
+        self.message_framed_buffer_size
     }
     pub fn thread_number(&self) -> Option<usize> {
         self.thread_number
