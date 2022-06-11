@@ -9,7 +9,7 @@ use std::{
 };
 
 use bytes::Bytes;
-use futures::future::BoxFuture;
+use futures::future::{self, BoxFuture};
 use futures::stream::{SplitSink, SplitStream};
 use futures::{SinkExt, StreamExt};
 use tokio::{net::TcpStream, time::timeout};
@@ -84,14 +84,12 @@ where
             ),
             self.buffer_size,
         );
-        Box::pin(async move {
-            let (message_framed_write, message_framed_read) = framed.split();
-            Ok(PrepareMessageFramedResult {
-                message_framed_write,
-                message_framed_read,
-                framed_address,
-            })
-        })
+        let (message_framed_write, message_framed_read) = framed.split();
+        Box::pin(future::ready(Ok(PrepareMessageFramedResult {
+            message_framed_write,
+            message_framed_read,
+            framed_address,
+        })))
     }
 }
 
@@ -323,14 +321,14 @@ impl Service<PayloadEncryptionTypeSelectServiceRequest> for PayloadEncryptionTyp
     }
 
     fn call(&mut self, req: PayloadEncryptionTypeSelectServiceRequest) -> Self::Future {
-        Box::pin(async move {
-            Ok(PayloadEncryptionTypeSelectServiceResult {
+        Box::pin(future::ready(Ok(
+            PayloadEncryptionTypeSelectServiceResult {
                 payload_encryption_type: PayloadEncryptionType::Blowfish(
                     req.encryption_token.clone(),
                 ),
                 user_token: req.user_token.clone(),
                 encryption_token: req.encryption_token.clone(),
-            })
-        })
+            },
+        )))
     }
 }
