@@ -509,16 +509,16 @@ where
         }
         loop {
             // let buffer_size = SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE);
-            let buffer_size = SERVER_CONFIG
+            let client_buffer_size = SERVER_CONFIG
                 .client_buffer_size()
                 .unwrap_or(DEFAULT_BUFFER_SIZE);
-            let mut buffer = BytesMut::with_capacity(buffer_size);
+            let mut client_buffer = BytesMut::with_capacity(client_buffer_size);
             let read_client_timeout_seconds = SERVER_CONFIG
                 .read_client_timeout_seconds()
                 .unwrap_or(DEFAULT_READ_CLIENT_TIMEOUT_SECONDS);
             match timeout(
                 Duration::from_secs(read_client_timeout_seconds),
-                client_stream_read_half.read_buf(&mut buffer),
+                client_stream_read_half.read_buf(&mut client_buffer),
             )
             .await
             {
@@ -578,7 +578,7 @@ where
                 },
                 Ok(v) => v,
             };
-            let payload_data = buffer.split().freeze();
+            let payload_data = client_buffer.split().freeze();
             let write_agent_message_result = ready_and_call_service(
                 &mut write_agent_message_service,
                 WriteMessageServiceRequest {

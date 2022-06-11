@@ -219,10 +219,10 @@ where
         let mut payload_encryption_type_select_service =
             ServiceBuilder::new().service(PayloadEncryptionTypeSelectService);
         loop {
-            let buffer_size = SERVER_CONFIG
+            let target_buffer_size = SERVER_CONFIG
                 .target_buffer_size()
                 .unwrap_or(DEFAULT_BUFFER_SIZE);
-            let mut buffer = BytesMut::with_capacity(buffer_size);
+            let mut target_buffer = BytesMut::with_capacity(target_buffer_size);
             let source_address = agent_connect_message_source_address.clone();
             let target_address = agent_connect_message_target_address.clone();
             let timeout_seconds = SERVER_CONFIG
@@ -230,7 +230,7 @@ where
                 .unwrap_or(DEFAULT_READ_TARGET_TIMEOUT_SECONDS);
             match timeout(
                 Duration::from_secs(timeout_seconds),
-                target_stream_read.read_buf(&mut buffer),
+                target_stream_read.read_buf(&mut target_buffer),
             )
             .await
             {
@@ -258,7 +258,7 @@ where
                     size
                 },
             };
-            let payload_data = buffer.split().freeze();
+            let payload_data = target_buffer.split().freeze();
             let proxy_message_payload = MessagePayload::new(
                 source_address.clone(),
                 target_address.clone(),
