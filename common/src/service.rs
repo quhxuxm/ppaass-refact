@@ -74,22 +74,24 @@ where
     }
 
     fn call(&mut self, input_stream: TcpStream) -> Self::Future {
-        let framed_address = input_stream.peer_addr().ok();
-        let framed = Framed::with_capacity(
-            input_stream,
-            MessageCodec::<T>::new(
-                self.max_frame_size,
-                self.compress,
-                self.rsa_crypto_fetcher.clone(),
-            ),
-            self.buffer_size,
-        );
-        let (message_framed_write, message_framed_read) = framed.split();
-        Box::pin(future::ready(Ok(PrepareMessageFramedResult {
-            message_framed_write,
-            message_framed_read,
-            framed_address,
-        })))
+        let max_frame_size = self.max_frame_size;
+        let compress = self.compress;
+        let rsa_crypto_fetcher = self.rsa_crypto_fetcher.clone();
+        let buffer_size = self.buffer_size;
+        Box::pin(async move {
+            let framed_address = input_stream.peer_addr().ok();
+            let framed = Framed::with_capacity(
+                input_stream,
+                MessageCodec::<T>::new(max_frame_size, compress, rsa_crypto_fetcher),
+                buffer_size,
+            );
+            let (message_framed_write, message_framed_read) = framed.split();
+            Ok(PrepareMessageFramedResult {
+                message_framed_write,
+                message_framed_read,
+                framed_address,
+            })
+        })
     }
 }
 
