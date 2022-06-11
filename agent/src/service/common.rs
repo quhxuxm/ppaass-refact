@@ -7,7 +7,7 @@ use std::{
     marker::PhantomData,
 };
 
-use bytes::{Bytes, BytesMut};
+use bytes::BytesMut;
 use futures::{future, StreamExt};
 use futures::{future::BoxFuture, SinkExt};
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
