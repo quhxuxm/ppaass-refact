@@ -513,7 +513,7 @@ where
                 .unwrap_or(DEFAULT_READ_CLIENT_TIMEOUT_SECONDS);
             let read_data_size = match timeout(
                 Duration::from_secs(read_client_timeout_seconds),
-                client_stream_read_half.read_buf(&mut buffer),
+                client_stream_read_half.read(&mut buffer),
             )
             .await
             {

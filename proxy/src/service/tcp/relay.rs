@@ -228,7 +228,7 @@ where
                 .unwrap_or(DEFAULT_READ_TARGET_TIMEOUT_SECONDS);
             let read_size = match timeout(
                 Duration::from_secs(timeout_seconds),
-                target_stream_read.read_buf(&mut buffer),
+                target_stream_read.read(&mut buffer),
             )
             .await
             {
