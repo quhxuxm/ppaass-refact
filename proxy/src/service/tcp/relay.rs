@@ -220,7 +220,7 @@ where
             ServiceBuilder::new().service(PayloadEncryptionTypeSelectService);
         loop {
             let buffer_size = SERVER_CONFIG.buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE);
-            let mut buffer = Vec::with_capacity(buffer_size);
+            let mut buffer = vec![0u8; buffer_size];
             let source_address = agent_connect_message_source_address.clone();
             let target_address = agent_connect_message_target_address.clone();
             let timeout_seconds = SERVER_CONFIG
