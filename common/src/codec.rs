@@ -7,7 +7,7 @@ use std::{
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use lz4::block::{compress, decompress};
 use pretty_hex::*;
-use tokio_util::codec::{Decoder, Encoder, LengthDelimitedCodec};
+use tokio_util::codec::{Decoder, Encoder};
 use tracing::{debug, error};
 
 use crate::crypto::{
@@ -20,12 +20,11 @@ const PPAASS_FLAG: &[u8] = "__PPAASS__".as_bytes();
 
 enum DecodeStatus {
     Head,
-    Data(bool),
+    Data(bool, u64),
 }
 
 pub struct MessageCodec<T: RsaCryptoFetcher> {
     rsa_crypto_fetcher: Arc<T>,
-    length_delimited_codec: LengthDelimitedCodec,
     compress: bool,
     status: DecodeStatus,
 }
@@ -43,14 +42,9 @@ impl<T> MessageCodec<T>
 where
     T: RsaCryptoFetcher,
 {
-    pub fn new(max_frame_size: usize, compress: bool, rsa_crypto_fetcher: Arc<T>) -> Self {
-        let mut length_delimited_codec_builder = LengthDelimitedCodec::builder();
-        length_delimited_codec_builder.max_frame_length(max_frame_size);
-        length_delimited_codec_builder.length_field_length(size_of::<u32>());
-        let length_delimited_codec = length_delimited_codec_builder.new_codec();
+    pub fn new(compress: bool, rsa_crypto_fetcher: Arc<T>) -> Self {
         Self {
             rsa_crypto_fetcher,
-            length_delimited_codec,
             compress,
             status: DecodeStatus::Head,
         }
@@ -65,9 +59,9 @@ where
     type Error = PpaassError;
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
-        let compressed = match self.status {
+        let (compressed, body_length) = match self.status {
             DecodeStatus::Head => {
-                if src.len() < PPAASS_FLAG.len() + size_of::<u8>() {
+                if src.len() < PPAASS_FLAG.len() + size_of::<u8>() + size_of::<u64>() {
                     return Ok(None);
                 }
                 let ppaass_flag = src.copy_to_bytes(PPAASS_FLAG.len());
@@ -76,40 +70,30 @@ where
                     return Err(PpaassError::CodecError);
                 }
                 let compressed = src.get_u8() == 1;
-                self.status = DecodeStatus::Data(compressed);
-                compressed
+                let body_length = src.get_u64_le();
+                self.status = DecodeStatus::Data(compressed, body_length);
+                (compressed, body_length)
             },
-            DecodeStatus::Data(compressed) => compressed,
+            DecodeStatus::Data(compressed, body_length) => (compressed, body_length),
         };
-        let length_delimited_decode_result = self.length_delimited_codec.decode(src);
-        let length_delimited_decode_result = match length_delimited_decode_result {
-            Err(e) => {
-                error!(
-                            "Fail to decode input message because of length delimited error: {:?}, hex data:\n{}\n",
-                            e, pretty_hex(src));
-                self.status = DecodeStatus::Head;
-                return Err(PpaassError::CodecError);
-            },
-            Ok(None) => {
-                self.status = DecodeStatus::Data(compressed);
-                return Ok(None);
-            },
-            Ok(Some(r)) => r,
-        };
+        if src.remaining() < body_length as usize {
+            return Ok(None);
+        }
+        self.status = DecodeStatus::Data(compressed, body_length);
+        let body_bytes = src.copy_to_bytes(body_length as usize);
         let mut message: Message = if compressed {
-            let lz4_decompress_result =
-                match decompress(length_delimited_decode_result.chunk(), None) {
-                    Err(e) => {
-                        error!(
-                            "Fail to decompress message because of error: {:?}, hex data: \n{}\n",
-                            e,
-                            pretty_hex(src)
-                        );
-                        self.status = DecodeStatus::Head;
-                        return Err(PpaassError::IoError { source: e });
-                    },
-                    Ok(r) => Bytes::from(r),
-                };
+            let lz4_decompress_result = match decompress(body_bytes.chunk(), None) {
+                Err(e) => {
+                    error!(
+                        "Fail to decompress message because of error: {:?}, hex data: \n{}\n",
+                        e,
+                        pretty_hex(src)
+                    );
+                    self.status = DecodeStatus::Head;
+                    return Err(PpaassError::IoError { source: e });
+                },
+                Ok(r) => Bytes::from(r),
+            };
             match lz4_decompress_result.try_into() {
                 Err(e) => {
                     error!(
@@ -123,7 +107,7 @@ where
                 Ok(r) => r,
             }
         } else {
-            match length_delimited_decode_result.freeze().try_into() {
+            match body_bytes.try_into() {
                 Err(e) => {
                     error!(
                         "Fail to parse message because of error: {:?}, hex data: \n{}\n",
@@ -229,10 +213,9 @@ where
             } else {
                 result_bytes
             };
-            if let Err(e) = self.length_delimited_codec.encode(result_bytes, dst) {
-                error!("Fail to encode original message because of error: {:#?}", e);
-                return Err(PpaassError::CodecError);
-            }
+            let result_bytes_length = result_bytes.len();
+            dst.put_u64_le(result_bytes_length as u64);
+            dst.put(result_bytes);
             return Ok(());
         }
         let Message {
@@ -301,10 +284,9 @@ where
         } else {
             result_bytes
         };
-        if let Err(e) = self.length_delimited_codec.encode(result_bytes, dst) {
-            error!("Fail to encode original message because of error: {:#?}", e);
-            return Err(PpaassError::IoError { source: e });
-        }
+        let result_bytes_length = result_bytes.len();
+        dst.put_u64_le(result_bytes_length as u64);
+        dst.put(result_bytes);
         Ok(())
     }
 }

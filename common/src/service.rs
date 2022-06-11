@@ -39,7 +39,6 @@ pub struct PrepareMessageFramedService<T>
 where
     T: RsaCryptoFetcher,
 {
-    max_frame_size: usize,
     buffer_size: usize,
     compress: bool,
     rsa_crypto_fetcher: Arc<T>,
@@ -49,11 +48,8 @@ impl<T> PrepareMessageFramedService<T>
 where
     T: RsaCryptoFetcher,
 {
-    pub fn new(
-        max_frame_size: usize, buffer_size: usize, compress: bool, rsa_crypto_fetcher: Arc<T>,
-    ) -> Self {
+    pub fn new(buffer_size: usize, compress: bool, rsa_crypto_fetcher: Arc<T>) -> Self {
         Self {
-            max_frame_size,
             buffer_size,
             compress,
             rsa_crypto_fetcher,
@@ -74,7 +70,6 @@ where
     }
 
     fn call(&mut self, input_stream: TcpStream) -> Self::Future {
-        let max_frame_size = self.max_frame_size;
         let compress = self.compress;
         let rsa_crypto_fetcher = self.rsa_crypto_fetcher.clone();
         let buffer_size = self.buffer_size;
@@ -82,7 +77,7 @@ where
             let framed_address = input_stream.peer_addr().ok();
             let framed = Framed::with_capacity(
                 input_stream,
-                MessageCodec::<T>::new(max_frame_size, compress, rsa_crypto_fetcher),
+                MessageCodec::<T>::new(compress, rsa_crypto_fetcher),
                 buffer_size,
             );
             let (message_framed_write, message_framed_read) = framed.split();
