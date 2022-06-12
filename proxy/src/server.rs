@@ -105,7 +105,7 @@ impl ProxyServer {
                     e
                 );
             };
-            if let Err(e)=   socket2.listen(SERVER_CONFIG.so_backlog().unwrap_or(1024)){
+            if let Err(e) = socket2.listen(SERVER_CONFIG.so_backlog().unwrap_or(1024)){
                 panic!(
                     "Fail to bind proxy server port because of error: {:#?}",
                     e

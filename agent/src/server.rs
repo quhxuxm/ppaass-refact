@@ -104,18 +104,6 @@ impl AgentServer {
                 Ipv4Addr::new(0, 0, 0, 0),
                 SERVER_CONFIG.port().unwrap_or(DEFAULT_SERVER_PORT),
             ));
-            if let Err(e)=socket2.bind(&SockAddr::from(local_socket_address)) {
-                panic!(
-                    "Fail to bind agent server port because of error: {:#?}",
-                    e
-                );
-            };
-            if let Err(e)=   socket2.listen(SERVER_CONFIG.so_backlog().unwrap_or(1024)){
-                panic!(
-                    "Fail to bind agent server port because of error: {:#?}",
-                    e
-                );
-            };
             if let Some(so_recv_buffer_size) = SERVER_CONFIG.so_recv_buffer_size(){
                 if let Err(e)= socket2.set_recv_buffer_size(so_recv_buffer_size){
                     panic!(
@@ -132,6 +120,18 @@ impl AgentServer {
                         );
                 };
             }
+            if let Err(e) = socket2.bind(&SockAddr::from(local_socket_address)) {
+                panic!(
+                    "Fail to bind agent server port because of error: {:#?}",
+                    e
+                );
+            };
+            if let Err(e) = socket2.listen(SERVER_CONFIG.so_backlog().unwrap_or(1024)){
+                panic!(
+                    "Fail to bind agent server port because of error: {:#?}",
+                    e
+                );
+            };
             let std_listener: StdTcpListener = socket2.into();
             let listener = match TcpListener::from_std(std_listener) {
                 Err(e) => {
