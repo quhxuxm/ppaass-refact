@@ -1,31 +1,32 @@
+use std::sync::Arc;
 use std::{
     fmt::{Debug, Formatter},
     task::Context,
 };
 use std::{net::SocketAddr, task::Poll};
-use std::sync::Arc;
 
 use bytes::Bytes;
 use futures::future::BoxFuture;
+use futures::SinkExt;
 use tower::{Service, ServiceBuilder};
 use tracing::error;
 
 use common::{
-    AgentMessagePayloadTypeValue, generate_uuid, MessageFramedRead, MessageFramedWrite,
-    MessagePayload, NetAddress, PayloadEncryptionTypeSelectService, PayloadEncryptionTypeSelectServiceRequest,
-    PayloadEncryptionTypeSelectServiceResult, PayloadType,
-    PpaassError, ProxyMessagePayloadTypeValue, ReadMessageService, ReadMessageServiceRequest,
-    ReadMessageServiceResult, ready_and_call_service, RsaCryptoFetcher, WriteMessageService,
-    WriteMessageServiceRequest,
+    generate_uuid, ready_and_call_service, AgentMessagePayloadTypeValue, MessageFramedRead,
+    MessageFramedWrite, MessagePayload, NetAddress, PayloadEncryptionTypeSelectService,
+    PayloadEncryptionTypeSelectServiceRequest, PayloadEncryptionTypeSelectServiceResult,
+    PayloadType, PpaassError, ProxyMessagePayloadTypeValue, ReadMessageService,
+    ReadMessageServiceRequest, ReadMessageServiceResult, RsaCryptoFetcher, WriteMessageService,
+    WriteMessageServiceRequest, WriteMessageServiceResult,
 };
 
 use crate::{
     config::SERVER_CONFIG,
     message::socks5::Socks5Addr,
     service::common::{
-        ConnectToProxyService, ConnectToProxyServiceRequest,
-        DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS, DEFAULT_READ_PROXY_TIMEOUT_SECONDS,
-        DEFAULT_RETRY_TIMES, generate_prepare_message_framed_service,
+        generate_prepare_message_framed_service, ConnectToProxyService,
+        ConnectToProxyServiceRequest, DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS,
+        DEFAULT_READ_PROXY_TIMEOUT_SECONDS, DEFAULT_RETRY_TIMES,
     },
 };
 
@@ -117,12 +118,12 @@ where
                     client_address: request.client_address,
                 },
             )
-                .await?;
+            .await?;
             let framed_result = ready_and_call_service(
                 &mut prepare_message_framed_service,
                 connect_to_proxy_service_result.proxy_stream,
             )
-                .await?;
+            .await?;
             let PayloadEncryptionTypeSelectServiceResult {
                 payload_encryption_type,
                 ..
@@ -133,8 +134,8 @@ where
                     user_token: SERVER_CONFIG.user_token().clone().unwrap(),
                 },
             )
-                .await?;
-            let write_message_result = ready_and_call_service(
+            .await?;
+            let message_framed_write = match ready_and_call_service(
                 &mut write_agent_message_service,
                 WriteMessageServiceRequest {
                     message_framed_write: framed_result.message_framed_write,
@@ -149,7 +150,20 @@ where
                     )),
                 },
             )
-                .await?;
+            .await
+            {
+                Err(e) => {
+                    return Err(e);
+                },
+                Ok(WriteMessageServiceResult {
+                    mut message_framed_write,
+                }) => {
+                    if let Err(e) = message_framed_write.flush().await {
+                        return Err(e);
+                    }
+                    message_framed_write
+                },
+            };
             match ready_and_call_service(
                 &mut read_proxy_message_service,
                 ReadMessageServiceRequest {
@@ -157,7 +171,7 @@ where
                     read_from_address: framed_result.framed_address,
                 },
             )
-                .await?
+            .await?
             {
                 None => {
                     error!("Nothing read from proxy.");
@@ -165,22 +179,22 @@ where
                 },
                 Some(ReadMessageServiceResult {
                     message_payload:
-                    MessagePayload {
-                        payload_type:
-                        PayloadType::ProxyPayload(
-                            ProxyMessagePayloadTypeValue::TcpConnectSuccess,
-                        ),
-                        source_address,
-                        target_address,
-                        ..
-                    },
+                        MessagePayload {
+                            payload_type:
+                                PayloadType::ProxyPayload(
+                                    ProxyMessagePayloadTypeValue::TcpConnectSuccess,
+                                ),
+                            source_address,
+                            target_address,
+                            ..
+                        },
                     message_framed_read,
                     message_id,
                     ..
                 }) => Ok(Socks5TcpConnectServiceResponse {
                     client_address,
                     message_framed_read,
-                    message_framed_write: write_message_result.message_framed_write,
+                    message_framed_write,
                     source_address,
                     target_address,
                     connect_response_message_id: message_id,
@@ -188,11 +202,11 @@ where
                 }),
                 Some(ReadMessageServiceResult {
                     message_payload:
-                    MessagePayload {
-                        payload_type:
-                        PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::TcpConnectFail),
-                        ..
-                    },
+                        MessagePayload {
+                            payload_type:
+                                PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::TcpConnectFail),
+                            ..
+                        },
                     ..
                 }) => {
                     error!("Fail connect to target from proxy.");

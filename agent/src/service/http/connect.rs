@@ -6,8 +6,8 @@ use std::task::{Context, Poll};
 use bytecodec::bytes::BytesEncoder;
 use bytecodec::EncodeExt;
 use bytes::{Bytes, BytesMut};
-use futures::{SinkExt, StreamExt};
 use futures::future::BoxFuture;
+use futures::{SinkExt, StreamExt};
 use httpcodec::{BodyEncoder, HttpVersion, ReasonPhrase, RequestEncoder, Response, StatusCode};
 use tokio::net::TcpStream;
 use tokio_util::codec::{Framed, FramedParts};
@@ -17,21 +17,21 @@ use tracing::error;
 use url::Url;
 
 use common::{
-    AgentMessagePayloadTypeValue, generate_uuid, MessageFramedRead, MessageFramedWrite,
-    MessagePayload, NetAddress, PayloadEncryptionTypeSelectService, PayloadEncryptionTypeSelectServiceRequest,
-    PayloadEncryptionTypeSelectServiceResult, PayloadType,
-    PpaassError, ProxyMessagePayloadTypeValue, ReadMessageService, ReadMessageServiceRequest,
-    ReadMessageServiceResult, ready_and_call_service, RsaCryptoFetcher, WriteMessageService,
+    generate_uuid, ready_and_call_service, AgentMessagePayloadTypeValue, MessageFramedRead,
+    MessageFramedWrite, MessagePayload, NetAddress, PayloadEncryptionTypeSelectService,
+    PayloadEncryptionTypeSelectServiceRequest, PayloadEncryptionTypeSelectServiceResult,
+    PayloadType, PpaassError, ProxyMessagePayloadTypeValue, ReadMessageService,
+    ReadMessageServiceRequest, ReadMessageServiceResult, RsaCryptoFetcher, WriteMessageService,
     WriteMessageServiceRequest, WriteMessageServiceResult,
 };
 
 use crate::codec::http::HttpCodec;
-use crate::SERVER_CONFIG;
 use crate::service::common::{
-    ConnectToProxyService, ConnectToProxyServiceRequest, ConnectToProxyServiceResult,
-    DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS, DEFAULT_READ_PROXY_TIMEOUT_SECONDS,
-    DEFAULT_RETRY_TIMES, generate_prepare_message_framed_service,
+    generate_prepare_message_framed_service, ConnectToProxyService, ConnectToProxyServiceRequest,
+    ConnectToProxyServiceResult, DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS,
+    DEFAULT_READ_PROXY_TIMEOUT_SECONDS, DEFAULT_RETRY_TIMES,
 };
+use crate::SERVER_CONFIG;
 
 const HTTPS_SCHEMA: &str = "https";
 const SCHEMA_SEP: &str = "://";
@@ -211,7 +211,7 @@ where
                     client_address: request.client_address,
                 },
             )
-                .await
+            .await
             {
                 Err(e) => {
                     Self::send_error_to_client(http_client_framed).await?;
@@ -239,10 +239,8 @@ where
                     user_token: SERVER_CONFIG.user_token().clone().unwrap(),
                 },
             )
-                .await?;
-            let WriteMessageServiceResult {
-                message_framed_write,
-            } = match ready_and_call_service(
+            .await?;
+            let message_framed_write = match ready_and_call_service(
                 &mut write_agent_message_service,
                 WriteMessageServiceRequest {
                     message_framed_write: framed_result.message_framed_write,
@@ -257,13 +255,21 @@ where
                     )),
                 },
             )
-                .await
+            .await
             {
                 Err(e) => {
                     Self::send_error_to_client(http_client_framed).await?;
                     return Err(e);
                 },
-                Ok(v) => v,
+                Ok(WriteMessageServiceResult {
+                    mut message_framed_write,
+                }) => {
+                    if let Err(e) = message_framed_write.flush().await {
+                        Self::send_error_to_client(http_client_framed).await?;
+                        return Err(e);
+                    }
+                    message_framed_write
+                },
             };
             let read_tcp_connect_response_result = match ready_and_call_service(
                 &mut read_proxy_message_service,
@@ -272,7 +278,7 @@ where
                     read_from_address: framed_result.framed_address,
                 },
             )
-                .await
+            .await
             {
                 Err(e) => {
                     Self::send_error_to_client(http_client_framed).await?;
@@ -286,13 +292,13 @@ where
             };
             if let ReadMessageServiceResult {
                 message_payload:
-                MessagePayload {
-                    target_address,
-                    source_address,
-                    payload_type:
-                    PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::TcpConnectSuccess),
-                    ..
-                },
+                    MessagePayload {
+                        target_address,
+                        source_address,
+                        payload_type:
+                            PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::TcpConnectSuccess),
+                        ..
+                    },
                 message_framed_read,
                 message_id,
                 ..
@@ -334,7 +340,7 @@ where
                 });
             };
             Self::send_error_to_client(http_client_framed).await?;
-            return Err(PpaassError::UnknownError);
+            Err(PpaassError::UnknownError)
         })
     }
 }

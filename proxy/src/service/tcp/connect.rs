@@ -4,6 +4,7 @@ use std::task::{Context, Poll};
 
 use bytes::Bytes;
 use futures::future::BoxFuture;
+use futures::SinkExt;
 use tokio::net::TcpStream;
 use tower::Service;
 use tower::ServiceBuilder;
@@ -11,22 +12,22 @@ use tracing::error;
 use tracing::log::debug;
 
 use common::{
-    AgentMessagePayloadTypeValue, generate_uuid, MessageFramedRead, MessageFramedWrite,
-    MessagePayload, NetAddress, PayloadEncryptionTypeSelectService, PayloadEncryptionTypeSelectServiceRequest,
-    PayloadEncryptionTypeSelectServiceResult, PayloadType,
-    PpaassError, ProxyMessagePayloadTypeValue, ReadMessageService, ReadMessageServiceRequest,
-    ReadMessageServiceResult, ready_and_call_service, RsaCryptoFetcher, WriteMessageService,
-    WriteMessageServiceRequest,
+    generate_uuid, ready_and_call_service, AgentMessagePayloadTypeValue, MessageFramedRead,
+    MessageFramedWrite, MessagePayload, NetAddress, PayloadEncryptionTypeSelectService,
+    PayloadEncryptionTypeSelectServiceRequest, PayloadEncryptionTypeSelectServiceResult,
+    PayloadType, PpaassError, ProxyMessagePayloadTypeValue, ReadMessageService,
+    ReadMessageServiceRequest, ReadMessageServiceResult, RsaCryptoFetcher, WriteMessageService,
+    WriteMessageServiceRequest, WriteMessageServiceResult,
 };
 
 use crate::config::{
     DEFAULT_CONNECT_TARGET_RETRY, DEFAULT_CONNECT_TARGET_TIMEOUT_SECONDS,
     DEFAULT_READ_AGENT_TIMEOUT_SECONDS,
 };
-use crate::SERVER_CONFIG;
 use crate::service::{
     ConnectToTargetService, ConnectToTargetServiceRequest, ConnectToTargetServiceResult,
 };
+use crate::SERVER_CONFIG;
 
 pub(crate) struct TcpConnectServiceRequest<T>
 where
@@ -106,16 +107,16 @@ where
                     read_from_address: Some(req.agent_address),
                 },
             )
-                .await?;
+            .await?;
             if let Some(ReadMessageServiceResult {
                 message_payload:
-                MessagePayload {
-                    payload_type:
-                    PayloadType::AgentPayload(AgentMessagePayloadTypeValue::TcpConnect),
-                    target_address,
-                    source_address,
-                    ..
-                },
+                    MessagePayload {
+                        payload_type:
+                            PayloadType::AgentPayload(AgentMessagePayloadTypeValue::TcpConnect),
+                        target_address,
+                        source_address,
+                        ..
+                    },
                 message_framed_read,
                 user_token,
                 message_id,
@@ -131,7 +132,7 @@ where
                         user_token: user_token.clone(),
                     },
                 )
-                    .await?;
+                .await?;
                 let connect_to_target_result = ready_and_call_service(
                     &mut connect_to_target_service,
                     ConnectToTargetServiceRequest {
@@ -139,7 +140,7 @@ where
                         agent_address: req.agent_address,
                     },
                 )
-                    .await;
+                .await;
                 let ConnectToTargetServiceResult { target_stream } = match connect_to_target_result
                 {
                     Err(e) => {
@@ -153,7 +154,7 @@ where
                             PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::TcpConnectFail),
                             Bytes::new(),
                         );
-                        ready_and_call_service(
+                        match ready_and_call_service(
                             &mut write_proxy_message_service,
                             WriteMessageServiceRequest {
                                 message_framed_write: req.message_framed_write,
@@ -163,7 +164,19 @@ where
                                 ref_id: Some(message_id),
                             },
                         )
-                            .await?;
+                        .await
+                        {
+                            Err(e) => {
+                                return Err(e);
+                            },
+                            Ok(WriteMessageServiceResult {
+                                mut message_framed_write,
+                            }) => {
+                                if let Err(e) = message_framed_write.flush().await {
+                                    return Err(e);
+                                }
+                            },
+                        };
                         return Err(e);
                     },
                     Ok(v) => v,
@@ -178,7 +191,7 @@ where
                     PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::TcpConnectSuccess),
                     Bytes::new(),
                 );
-                let write_proxy_message_result = ready_and_call_service(
+                let message_framed_write = match ready_and_call_service(
                     &mut write_proxy_message_service,
                     WriteMessageServiceRequest {
                         message_framed_write: req.message_framed_write,
@@ -188,9 +201,20 @@ where
                         ref_id: Some(message_id.clone()),
                     },
                 )
-                    .await?;
+                .await
+                {
+                    Err(e) => return Err(e),
+                    Ok(WriteMessageServiceResult {
+                        mut message_framed_write,
+                    }) => {
+                        if let Err(e) = message_framed_write.flush().await {
+                            return Err(e);
+                        }
+                        message_framed_write
+                    },
+                };
                 return Ok(TcpConnectServiceResult {
-                    message_framed_write: write_proxy_message_result.message_framed_write,
+                    message_framed_write,
                     message_framed_read,
                     target_stream,
                     agent_tcp_connect_message_id: message_id,

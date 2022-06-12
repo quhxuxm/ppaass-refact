@@ -23,7 +23,7 @@ use common::{
     PayloadEncryptionTypeSelectServiceRequest, PayloadEncryptionTypeSelectServiceResult,
     PayloadType, PpaassError, ProxyMessagePayloadTypeValue, ReadMessageService,
     ReadMessageServiceRequest, ReadMessageServiceResult, RsaCryptoFetcher, WriteMessageService,
-    WriteMessageServiceRequest,
+    WriteMessageServiceRequest, WriteMessageServiceResult,
 };
 
 use crate::config::DEFAULT_READ_AGENT_TIMEOUT_SECONDS;
@@ -300,7 +300,7 @@ where
                     },
                     Ok(v) => v,
                 };
-                let write_proxy_message_result = ready_and_call_service(
+                message_framed_write = match ready_and_call_service(
                     &mut write_proxy_message_service,
                     WriteMessageServiceRequest {
                         message_framed_write,
@@ -310,16 +310,16 @@ where
                         message_payload: Some(proxy_message_payload),
                     },
                 )
-                .await;
-                match write_proxy_message_result {
+                .await
+                {
                     Err(e) => {
                         error!("Fail to read from target because of error(ready), source address:{:?}, target address:{:?}, error: {:#?}", source_address, target_address, e);
                         return;
                     },
-                    Ok(proxy_message_write_result) => {
-                        message_framed_write = proxy_message_write_result.message_framed_write;
-                    },
-                }
+                    Ok(WriteMessageServiceResult {
+                        message_framed_write,
+                    }) => message_framed_write,
+                };
             }
         }
     }
