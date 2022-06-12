@@ -1,24 +1,24 @@
+use std::net::SocketAddr;
+use std::time::Duration;
 use std::{
     net::{Ipv4Addr, SocketAddrV4, TcpListener as StdTcpListener},
     sync::Arc,
 };
-use std::net::SocketAddr;
-use std::time::Duration;
 
 use socket2::{Domain, SockAddr, Socket, Type};
-use tokio::{net::TcpListener, runtime::Builder as TokioRuntimeBuilder};
 use tokio::runtime::Runtime as TokioRuntime;
+use tokio::{net::TcpListener, runtime::Builder as TokioRuntimeBuilder};
 use tower::ServiceBuilder;
 use tracing::{error, info};
 
 use common::ready_and_call_service;
 
+use crate::service::{
+    AgentConnectionInfo, HandleAgentConnectionService, ProxyRsaCryptoFetcher, DEFAULT_RATE_LIMIT,
+};
 use crate::{
     config::SERVER_CONFIG,
     service::{DEFAULT_BUFFERED_CONNECTION_NUMBER, DEFAULT_CONCURRENCY_LIMIT},
-};
-use crate::service::{
-    AgentConnectionInfo, DEFAULT_RATE_LIMIT, HandleAgentConnectionService, ProxyRsaCryptoFetcher,
 };
 
 const DEFAULT_SERVER_PORT: u16 = 80;
@@ -58,6 +58,28 @@ impl ProxyServer {
                     );
                 }
             };
+            let local_socket_address = SocketAddr::V4(SocketAddrV4::new(
+                Ipv4Addr::new(0, 0, 0, 0),
+                SERVER_CONFIG.port().unwrap_or(DEFAULT_SERVER_PORT),
+            ));
+            if let Err(e) = socket.bind(&SockAddr::from(local_socket_address)) {
+                panic!(
+                    "Fail to create proxy server because of error: {:#?}",
+                    e
+                );
+            };
+            if let Err(e) = socket.listen(SERVER_CONFIG.so_backlog().unwrap_or(1024)) {
+                panic!(
+                    "Fail to create proxy server because of error: {:#?}",
+                    e
+                );
+            };
+            if let Err(e) = socket.set_nonblocking(true) {
+                panic!(
+                    "Fail to create proxy server because of error: {:#?}",
+                    e
+                );
+            };
             if let Err(e) = socket.set_keepalive(true) {
                 panic!("Fail to create proxy server because of error: {:#?}", e);
             }
@@ -65,12 +87,6 @@ impl ProxyServer {
                 panic!("Fail to create proxy server because of error: {:#?}", e);
             };
             if let Err(e) = socket.set_nodelay(true) {
-                panic!(
-                    "Fail to create proxy server because of error: {:#?}",
-                    e
-                );
-            };
-            if let Err(e) = socket.set_nonblocking(true) {
                 panic!(
                     "Fail to create proxy server because of error: {:#?}",
                     e
@@ -92,22 +108,6 @@ impl ProxyServer {
                     );
                 };
             }
-            let local_socket_address = SocketAddr::V4(SocketAddrV4::new(
-                Ipv4Addr::new(0, 0, 0, 0),
-                SERVER_CONFIG.port().unwrap_or(DEFAULT_SERVER_PORT),
-            ));
-            if let Err(e) = socket.bind(&SockAddr::from(local_socket_address)) {
-                panic!(
-                    "Fail to create proxy server because of error: {:#?}",
-                    e
-                );
-            };
-            if let Err(e) = socket.listen(SERVER_CONFIG.so_backlog().unwrap_or(1024)) {
-                panic!(
-                    "Fail to create proxy server because of error: {:#?}",
-                    e
-                );
-            };
             let std_listener: StdTcpListener = socket.into();
             let listener = match TcpListener::from_std(std_listener) {
                 Err(e) => {

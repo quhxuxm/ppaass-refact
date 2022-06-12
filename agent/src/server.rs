@@ -11,15 +11,15 @@ use tracing::{error, info};
 
 use common::ready_and_call_service;
 
+use crate::service::{
+    common::{
+        ClientConnectionInfo, HandleClientConnectionService, DEFAULT_BUFFERED_CONNECTION_NUMBER,
+    },
+    AgentRsaCryptoFetcher,
+};
 use crate::{
     config::SERVER_CONFIG,
     service::common::{DEFAULT_CONCURRENCY_LIMIT, DEFAULT_RATE_LIMIT},
-};
-use crate::service::{
-    AgentRsaCryptoFetcher,
-    common::{
-        ClientConnectionInfo, DEFAULT_BUFFERED_CONNECTION_NUMBER, HandleClientConnectionService,
-    },
 };
 
 const DEFAULT_SERVER_PORT: u16 = 10080;
@@ -84,6 +84,22 @@ impl AgentServer {
                     );
                 }
             };
+            let local_socket_address = SocketAddr::V4(SocketAddrV4::new(
+                Ipv4Addr::new(0, 0, 0, 0),
+                SERVER_CONFIG.port().unwrap_or(DEFAULT_SERVER_PORT),
+            ));
+            if let Err(e) = socket.bind(&SockAddr::from(local_socket_address)) {
+                panic!(
+                    "Fail to create agent server because of error: {:#?}",
+                    e
+                );
+            };
+            if let Err(e) = socket.listen(SERVER_CONFIG.so_backlog().unwrap_or(1024)) {
+                panic!(
+                    "Fail to create agent server because of error: {:#?}",
+                    e
+                );
+            };
             if let Err(e) = socket.set_keepalive(true) {
                 panic!("Fail to create agent server because of error: {:#?}", e);
             }
@@ -102,10 +118,6 @@ impl AgentServer {
                     e
                 );
             };
-            let local_socket_address = SocketAddr::V4(SocketAddrV4::new(
-                Ipv4Addr::new(0, 0, 0, 0),
-                SERVER_CONFIG.port().unwrap_or(DEFAULT_SERVER_PORT),
-            ));
             if let Some(so_recv_buffer_size) = SERVER_CONFIG.so_recv_buffer_size() {
                 if let Err(e) = socket.set_recv_buffer_size(so_recv_buffer_size) {
                     panic!(
@@ -122,18 +134,6 @@ impl AgentServer {
                     );
                 };
             }
-            if let Err(e) = socket.bind(&SockAddr::from(local_socket_address)) {
-                panic!(
-                    "Fail to create agent server because of error: {:#?}",
-                    e
-                );
-            };
-            if let Err(e) = socket.listen(SERVER_CONFIG.so_backlog().unwrap_or(1024)) {
-                panic!(
-                    "Fail to create agent server because of error: {:#?}",
-                    e
-                );
-            };
             let std_listener: StdTcpListener = socket.into();
             let listener = match TcpListener::from_std(std_listener) {
                 Err(e) => {
