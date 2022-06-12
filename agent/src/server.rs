@@ -5,21 +5,21 @@ use std::time::Duration;
 
 use socket2::{Domain, SockAddr, Socket, Type};
 use tokio::net::TcpListener;
-use tokio::runtime::Runtime;
+use tokio::runtime::{Builder as TokioRuntimeBuilder, Runtime};
 use tower::ServiceBuilder;
 use tracing::{error, info};
 
 use common::ready_and_call_service;
 
-use crate::service::{
-    common::{
-        ClientConnectionInfo, HandleClientConnectionService, DEFAULT_BUFFERED_CONNECTION_NUMBER,
-    },
-    AgentRsaCryptoFetcher,
-};
 use crate::{
     config::SERVER_CONFIG,
     service::common::{DEFAULT_CONCURRENCY_LIMIT, DEFAULT_RATE_LIMIT},
+};
+use crate::service::{
+    AgentRsaCryptoFetcher,
+    common::{
+        ClientConnectionInfo, DEFAULT_BUFFERED_CONNECTION_NUMBER, HandleClientConnectionService,
+    },
 };
 
 const DEFAULT_SERVER_PORT: u16 = 10080;
@@ -30,7 +30,7 @@ pub(crate) struct AgentServer {
 
 impl AgentServer {
     pub(crate) fn new() -> Self {
-        let mut runtime_builder = tokio::runtime::Builder::new_multi_thread();
+        let mut runtime_builder = TokioRuntimeBuilder::new_multi_thread();
         runtime_builder
             .enable_all()
             .thread_keep_alive(Duration::from_secs(
@@ -79,59 +79,58 @@ impl AgentServer {
                 Ok(v) => v,
                 Err(e) => {
                     panic!(
-                        "Fail to bind agent server port because of error: {:#?}",
+                        "Fail to create agent server because of error: {:#?}",
                         e
                     );
                 }
             };
-            if let Err(e) = socket.set_keepalive(true){
-                panic!("Fail to bind agent server port because of error: {:#?}", e);
+            if let Err(e) = socket.set_keepalive(true) {
+                panic!("Fail to create agent server because of error: {:#?}", e);
             }
             if let Err(e) = socket.set_reuse_address(true) {
-                panic!("Fail to bind agent server port because of error: {:#?}", e);
+                panic!("Fail to create agent server because of error: {:#?}", e);
             };
-           if let Err(e)= socket.set_nodelay(true){
-               panic!(
-                   "Fail to bind agent server port because of error: {:#?}",
-                   e
-               );
-           };
-            if let Err(e)=    socket.set_nonblocking(true){
+            if let Err(e) = socket.set_nodelay(true) {
                 panic!(
-                    "Fail to bind agent server port because of error: {:#?}",
+                    "Fail to create agent server because of error: {:#?}",
                     e
                 );
             };
-
+            if let Err(e) = socket.set_nonblocking(true) {
+                panic!(
+                    "Fail to create agent server because of error: {:#?}",
+                    e
+                );
+            };
             let local_socket_address = SocketAddr::V4(SocketAddrV4::new(
                 Ipv4Addr::new(0, 0, 0, 0),
                 SERVER_CONFIG.port().unwrap_or(DEFAULT_SERVER_PORT),
             ));
-            if let Some(so_recv_buffer_size) = SERVER_CONFIG.so_recv_buffer_size(){
-                if let Err(e)= socket.set_recv_buffer_size(so_recv_buffer_size){
+            if let Some(so_recv_buffer_size) = SERVER_CONFIG.so_recv_buffer_size() {
+                if let Err(e) = socket.set_recv_buffer_size(so_recv_buffer_size) {
                     panic!(
-                            "Fail to bind agent server port because of error: {:#?}",
-                            e
-                        );
+                        "Fail to create agent server because of error: {:#?}",
+                        e
+                    );
                 };
             }
-            if let Some(so_send_buffer_size) = SERVER_CONFIG.so_send_buffer_size(){
-                if let Err(e)= socket.set_send_buffer_size(so_send_buffer_size){
+            if let Some(so_send_buffer_size) = SERVER_CONFIG.so_send_buffer_size() {
+                if let Err(e) = socket.set_send_buffer_size(so_send_buffer_size) {
                     panic!(
-                            "Fail to bind agent server port because of error: {:#?}",
-                            e
-                        );
+                        "Fail to create agent server because of error: {:#?}",
+                        e
+                    );
                 };
             }
             if let Err(e) = socket.bind(&SockAddr::from(local_socket_address)) {
                 panic!(
-                    "Fail to bind agent server port because of error: {:#?}",
+                    "Fail to create agent server because of error: {:#?}",
                     e
                 );
             };
-            if let Err(e) = socket.listen(SERVER_CONFIG.so_backlog().unwrap_or(1024)){
+            if let Err(e) = socket.listen(SERVER_CONFIG.so_backlog().unwrap_or(1024)) {
                 panic!(
-                    "Fail to bind agent server port because of error: {:#?}",
+                    "Fail to create agent server because of error: {:#?}",
                     e
                 );
             };

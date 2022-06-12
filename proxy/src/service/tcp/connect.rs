@@ -11,11 +11,11 @@ use tracing::error;
 use tracing::log::debug;
 
 use common::{
-    generate_uuid, ready_and_call_service, AgentMessagePayloadTypeValue, MessageFramedRead,
-    MessageFramedWrite, MessagePayload, NetAddress, PayloadEncryptionTypeSelectService,
-    PayloadEncryptionTypeSelectServiceRequest, PayloadEncryptionTypeSelectServiceResult,
-    PayloadType, PpaassError, ProxyMessagePayloadTypeValue, ReadMessageService,
-    ReadMessageServiceRequest, ReadMessageServiceResult, RsaCryptoFetcher, WriteMessageService,
+    AgentMessagePayloadTypeValue, generate_uuid, MessageFramedRead, MessageFramedWrite,
+    MessagePayload, NetAddress, PayloadEncryptionTypeSelectService, PayloadEncryptionTypeSelectServiceRequest,
+    PayloadEncryptionTypeSelectServiceResult, PayloadType,
+    PpaassError, ProxyMessagePayloadTypeValue, ReadMessageService, ReadMessageServiceRequest,
+    ReadMessageServiceResult, ready_and_call_service, RsaCryptoFetcher, WriteMessageService,
     WriteMessageServiceRequest,
 };
 
@@ -23,10 +23,10 @@ use crate::config::{
     DEFAULT_CONNECT_TARGET_RETRY, DEFAULT_CONNECT_TARGET_TIMEOUT_SECONDS,
     DEFAULT_READ_AGENT_TIMEOUT_SECONDS,
 };
+use crate::SERVER_CONFIG;
 use crate::service::{
     ConnectToTargetService, ConnectToTargetServiceRequest, ConnectToTargetServiceResult,
 };
-use crate::SERVER_CONFIG;
 
 pub(crate) struct TcpConnectServiceRequest<T>
 where
@@ -106,16 +106,16 @@ where
                     read_from_address: Some(req.agent_address),
                 },
             )
-            .await?;
+                .await?;
             if let Some(ReadMessageServiceResult {
                 message_payload:
-                    MessagePayload {
-                        payload_type:
-                            PayloadType::AgentPayload(AgentMessagePayloadTypeValue::TcpConnect),
-                        target_address,
-                        source_address,
-                        ..
-                    },
+                MessagePayload {
+                    payload_type:
+                    PayloadType::AgentPayload(AgentMessagePayloadTypeValue::TcpConnect),
+                    target_address,
+                    source_address,
+                    ..
+                },
                 message_framed_read,
                 user_token,
                 message_id,
@@ -131,7 +131,7 @@ where
                         user_token: user_token.clone(),
                     },
                 )
-                .await?;
+                    .await?;
                 let connect_to_target_result = ready_and_call_service(
                     &mut connect_to_target_service,
                     ConnectToTargetServiceRequest {
@@ -139,7 +139,7 @@ where
                         agent_address: req.agent_address,
                     },
                 )
-                .await;
+                    .await;
                 let ConnectToTargetServiceResult { target_stream } = match connect_to_target_result
                 {
                     Err(e) => {
@@ -163,7 +163,7 @@ where
                                 ref_id: Some(message_id),
                             },
                         )
-                        .await?;
+                            .await?;
                         return Err(e);
                     },
                     Ok(v) => v,
@@ -188,7 +188,7 @@ where
                         ref_id: Some(message_id.clone()),
                     },
                 )
-                .await?;
+                    .await?;
                 return Ok(TcpConnectServiceResult {
                     message_framed_write: write_proxy_message_result.message_framed_write,
                     message_framed_read,

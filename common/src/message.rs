@@ -8,8 +8,8 @@ use bytes::{Buf, BufMut, Bytes, BytesMut};
 use pretty_hex::*;
 use tracing::error;
 
-use crate::NetAddress::IpV4;
 use crate::{error::PpaassError, util::generate_uuid};
+use crate::NetAddress::IpV4;
 
 const ENCRYPTION_TYPE_PLAIN: u8 = 0;
 const ENCRYPTION_TYPE_BLOWFISH: u8 = 1;
