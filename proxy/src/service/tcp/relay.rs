@@ -5,7 +5,7 @@ use std::{
 };
 use std::{net::SocketAddr, time::Duration};
 
-use bytes::BytesMut;
+use bytes::{Bytes, BytesMut};
 use futures::{future::BoxFuture, SinkExt};
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::net::TcpStream;
@@ -189,14 +189,21 @@ where
                     return;
                 },
             };
-            if let Err(e) = target_stream_write.write_all(data.as_ref()).await {
-                error!(
-                    "Fail to write from agent to target because of error: {:#?}",
-                    e
-                );
-                let _ = target_stream_write.shutdown().await;
-                return;
-            };
+            let data_chunks = data.chunks(
+                SERVER_CONFIG
+                    .target_buffer_size()
+                    .unwrap_or(DEFAULT_BUFFER_SIZE) as usize,
+            );
+            for (_, chunk) in data_chunks.enumerate() {
+                if let Err(e) = target_stream_write.write(chunk).await {
+                    error!(
+                        "Fail to write from agent to target because of error: {:#?}",
+                        e
+                    );
+                    let _ = target_stream_write.shutdown().await;
+                    return;
+                };
+            }
             if let Err(e) = target_stream_write.flush().await {
                 error!(
                     "Fail to flush from agent to target because of error: {:#?}",
@@ -222,7 +229,7 @@ where
             let target_buffer_size = SERVER_CONFIG
                 .target_buffer_size()
                 .unwrap_or(DEFAULT_BUFFER_SIZE);
-            let mut target_buffer = BytesMut::with_capacity(target_buffer_size);
+            let mut target_buffer = BytesMut::new();
             let source_address = agent_connect_message_source_address.clone();
             let target_address = agent_connect_message_target_address.clone();
             let timeout_seconds = SERVER_CONFIG
@@ -259,52 +266,60 @@ where
                 },
             };
             let payload_data = target_buffer.split().freeze();
-            let proxy_message_payload = MessagePayload::new(
-                source_address.clone(),
-                target_address.clone(),
-                PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::TcpData),
-                payload_data,
+            let payload_data_chunks = payload_data.chunks(
+                SERVER_CONFIG
+                    .message_framed_buffer_size()
+                    .unwrap_or(DEFAULT_BUFFER_SIZE),
             );
-            let PayloadEncryptionTypeSelectServiceResult {
-                payload_encryption_type,
-                ..
-            } = match ready_and_call_service(
-                &mut payload_encryption_type_select_service,
-                PayloadEncryptionTypeSelectServiceRequest {
-                    encryption_token: generate_uuid().into(),
-                    user_token: user_token.clone(),
-                },
-            )
-            .await
-            {
-                Err(e) => {
-                    error!(
+            for (_, chunk) in payload_data_chunks.enumerate() {
+                let chunk_data = Bytes::copy_from_slice(chunk);
+                let proxy_message_payload = MessagePayload::new(
+                    source_address.clone(),
+                    target_address.clone(),
+                    PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::TcpData),
+                    chunk_data,
+                );
+                let PayloadEncryptionTypeSelectServiceResult {
+                    payload_encryption_type,
+                    ..
+                } = match ready_and_call_service(
+                    &mut payload_encryption_type_select_service,
+                    PayloadEncryptionTypeSelectServiceRequest {
+                        encryption_token: generate_uuid().into(),
+                        user_token: user_token.clone(),
+                    },
+                )
+                .await
+                {
+                    Err(e) => {
+                        error!(
                         "Fail to select payload encryption type because of error, source address:{:?}, target address:{:?}, error: {:#?}",source_address, target_address,
                         e
                     );
-                    return;
-                },
-                Ok(v) => v,
-            };
-            let write_proxy_message_result = ready_and_call_service(
-                &mut write_proxy_message_service,
-                WriteMessageServiceRequest {
-                    message_framed_write,
-                    ref_id: Some(agent_tcp_connect_message_id.clone()),
-                    user_token: user_token.clone(),
-                    payload_encryption_type,
-                    message_payload: Some(proxy_message_payload),
-                },
-            )
-            .await;
-            match write_proxy_message_result {
-                Err(e) => {
-                    error!("Fail to read from target because of error(ready), source address:{:?}, target address:{:?}, error: {:#?}", source_address, target_address, e);
-                    return;
-                },
-                Ok(proxy_message_write_result) => {
-                    message_framed_write = proxy_message_write_result.message_framed_write;
-                },
+                        return;
+                    },
+                    Ok(v) => v,
+                };
+                let write_proxy_message_result = ready_and_call_service(
+                    &mut write_proxy_message_service,
+                    WriteMessageServiceRequest {
+                        message_framed_write,
+                        ref_id: Some(agent_tcp_connect_message_id.clone()),
+                        user_token: user_token.clone(),
+                        payload_encryption_type,
+                        message_payload: Some(proxy_message_payload),
+                    },
+                )
+                .await;
+                match write_proxy_message_result {
+                    Err(e) => {
+                        error!("Fail to read from target because of error(ready), source address:{:?}, target address:{:?}, error: {:#?}", source_address, target_address, e);
+                        return;
+                    },
+                    Ok(proxy_message_write_result) => {
+                        message_framed_write = proxy_message_write_result.message_framed_write;
+                    },
+                }
             }
         }
     }
