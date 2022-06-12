@@ -55,7 +55,7 @@ impl ProxyServer {
 
     pub(crate) fn run(&self) {
         self.runtime.block_on(async {
-            let socket2 = match Socket::new(Domain::IPV4, Type::STREAM, Some(socket2::Protocol::TCP)) {
+            let socket = match Socket::new(Domain::IPV4, Type::STREAM, Some(socket2::Protocol::TCP)) {
                 Ok(v) => v,
                 Err(e) => {
                     panic!(
@@ -64,23 +64,26 @@ impl ProxyServer {
                     );
                 }
             };
-            if let Err(e) = socket2.set_reuse_address(true) {
+            if let Err(e) = socket.set_keepalive(true){
+                panic!("Fail to bind proxy server port because of error: {:#?}", e);
+            }
+            if let Err(e) = socket.set_reuse_address(true) {
                 panic!("Fail to bind proxy server port because of error: {:#?}", e);
             };
-            if let Err(e)= socket2.set_nodelay(true){
+            if let Err(e)= socket.set_nodelay(true){
                 panic!(
                     "Fail to bind proxy server port because of error: {:#?}",
                     e
                 );
             };
-            if let Err(e) = socket2.set_nonblocking(true){
+            if let Err(e) = socket.set_nonblocking(true){
                 panic!(
                     "Fail to bind proxy server port because of error: {:#?}",
                     e
                 );
             };
             if let Some(so_recv_buffer_size) = SERVER_CONFIG.so_recv_buffer_size(){
-                if let Err(e)= socket2.set_recv_buffer_size(so_recv_buffer_size){
+                if let Err(e)= socket.set_recv_buffer_size(so_recv_buffer_size){
                     panic!(
                             "Fail to bind proxy server port because of error: {:#?}",
                             e
@@ -88,7 +91,7 @@ impl ProxyServer {
                 };
             }
             if let Some(so_send_buffer_size) = SERVER_CONFIG.so_send_buffer_size(){
-                if let Err(e)= socket2.set_send_buffer_size(so_send_buffer_size){
+                if let Err(e)= socket.set_send_buffer_size(so_send_buffer_size){
                     panic!(
                             "Fail to bind proxy server port because of error: {:#?}",
                             e
@@ -99,19 +102,19 @@ impl ProxyServer {
                 Ipv4Addr::new(0, 0, 0, 0),
                 SERVER_CONFIG.port().unwrap_or(DEFAULT_SERVER_PORT),
             ));
-            if let Err(e)=socket2.bind(&SockAddr::from(local_socket_address)) {
+            if let Err(e)=socket.bind(&SockAddr::from(local_socket_address)) {
                 panic!(
                     "Fail to bind proxy server port because of error: {:#?}",
                     e
                 );
             };
-            if let Err(e) = socket2.listen(SERVER_CONFIG.so_backlog().unwrap_or(1024)){
+            if let Err(e) = socket.listen(SERVER_CONFIG.so_backlog().unwrap_or(1024)){
                 panic!(
                     "Fail to bind proxy server port because of error: {:#?}",
                     e
                 );
             };
-            let std_listener: StdTcpListener = socket2.into();
+            let std_listener: StdTcpListener = socket.into();
             let listener = match TcpListener::from_std(std_listener) {
                 Err(e) => {
                     panic!(
