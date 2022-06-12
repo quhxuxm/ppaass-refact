@@ -1,33 +1,33 @@
-use std::{
-    fmt::{Debug, Formatter},
-    marker::PhantomData,
-};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::Duration;
+use std::{
+    fmt::{Debug, Formatter},
+    marker::PhantomData,
+};
 
 use bytes::BytesMut;
 use futures::{future, StreamExt};
 use futures::{future::BoxFuture, SinkExt};
+use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
+use tokio::net::TcpStream;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     time::timeout,
 };
-use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
-use tokio::net::TcpStream;
 use tokio_util::codec::{Framed, FramedParts};
-use tower::{Service, service_fn, ServiceBuilder};
 use tower::retry::{Policy, Retry};
 use tower::util::BoxCloneService;
+use tower::{service_fn, Service, ServiceBuilder};
 use tracing::{debug, error};
 
 use common::{
-    AgentMessagePayloadTypeValue, generate_uuid, MessageFramedRead, MessageFramedWrite,
-    MessagePayload, NetAddress, PayloadEncryptionTypeSelectService, PayloadEncryptionTypeSelectServiceRequest,
-    PayloadEncryptionTypeSelectServiceResult, PayloadType,
-    PpaassError, PrepareMessageFramedService, ProxyMessagePayloadTypeValue, ReadMessageService,
-    ReadMessageServiceRequest, ReadMessageServiceResult, ready_and_call_service, RsaCryptoFetcher,
+    generate_uuid, ready_and_call_service, AgentMessagePayloadTypeValue, MessageFramedRead,
+    MessageFramedWrite, MessagePayload, NetAddress, PayloadEncryptionTypeSelectService,
+    PayloadEncryptionTypeSelectServiceRequest, PayloadEncryptionTypeSelectServiceResult,
+    PayloadType, PpaassError, PrepareMessageFramedService, ProxyMessagePayloadTypeValue,
+    ReadMessageService, ReadMessageServiceRequest, ReadMessageServiceResult, RsaCryptoFetcher,
     WriteMessageService, WriteMessageServiceRequest,
 };
 
@@ -141,7 +141,7 @@ where
                             buffer,
                         },
                     )
-                        .await?;
+                    .await?;
                     Ok(())
                 },
                 Some(Ok(Protocol::Socks5)) => {
@@ -157,7 +157,7 @@ where
                             buffer,
                         },
                     )
-                        .await?;
+                    .await?;
                     debug!(
                         "Client {} complete socks5 relay",
                         flow_result.client_address
@@ -212,7 +212,7 @@ struct ConnectToProxyAttempts {
 #[derive(Clone)]
 pub(crate) struct ConnectToProxyService {
     concrete_service:
-    BoxCloneService<ConcreteConnectToProxyRequest, ConnectToProxyServiceResult, PpaassError>,
+        BoxCloneService<ConcreteConnectToProxyRequest, ConnectToProxyServiceResult, PpaassError>,
 }
 
 impl ConnectToProxyService {
@@ -225,7 +225,7 @@ impl ConnectToProxyService {
                     Duration::from_secs(connect_timeout_seconds),
                     TcpStream::connect(request.proxy_addresses.as_slice()),
                 )
-                    .await
+                .await
                 {
                     Err(_e) => {
                         error!(
@@ -262,7 +262,7 @@ impl ConnectToProxyService {
 }
 
 impl Policy<ConcreteConnectToProxyRequest, ConnectToProxyServiceResult, PpaassError>
-for ConnectToProxyAttempts
+    for ConnectToProxyAttempts
 {
     type Future = future::Ready<Self>;
 
@@ -317,7 +317,7 @@ impl Service<ConnectToProxyServiceRequest> for ConnectToProxyService {
                     client_address: request.client_address,
                 },
             )
-                .await;
+            .await;
             return match concrete_connect_result {
                 Ok(r) => Ok(r),
                 Err(e) => {
@@ -469,7 +469,7 @@ where
                     user_token: SERVER_CONFIG.user_token().clone().unwrap(),
                 },
             )
-                .await
+            .await
             {
                 Err(e) => {
                     error!(
@@ -495,7 +495,7 @@ where
                     )),
                 },
             )
-                .await;
+            .await;
             let _write_agent_message_result = match write_agent_message_result {
                 Err(e) => {
                     error!(
@@ -520,7 +520,7 @@ where
                 Duration::from_secs(read_client_timeout_seconds),
                 client_stream_read_half.read_buf(&mut client_buffer),
             )
-                .await
+            .await
             {
                 Err(_e) => {
                     error!(
@@ -567,7 +567,7 @@ where
                     user_token: SERVER_CONFIG.user_token().clone().unwrap(),
                 },
             )
-                .await
+            .await
             {
                 Err(e) => {
                     error!(
@@ -594,7 +594,7 @@ where
                     )),
                 },
             )
-                .await;
+            .await;
             let write_agent_message_result = match write_agent_message_result {
                 Err(e) => {
                     error!(
@@ -628,14 +628,14 @@ where
                     read_from_address,
                 },
             )
-                .await;
+            .await;
             let ReadMessageServiceResult {
                 message_framed_read: message_framed_read_in_result,
                 message_payload:
-                MessagePayload {
-                    data: proxy_raw_data,
-                    ..
-                },
+                    MessagePayload {
+                        data: proxy_raw_data,
+                        ..
+                    },
                 ..
             } = match read_proxy_message_result {
                 Err(e) => {
@@ -648,11 +648,11 @@ where
                 Ok(Some(
                     value @ ReadMessageServiceResult {
                         message_payload:
-                        MessagePayload {
-                            payload_type:
-                            PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::TcpData),
-                            ..
-                        },
+                            MessagePayload {
+                                payload_type:
+                                    PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::TcpData),
+                                ..
+                            },
                         ..
                     },
                 )) => value,
@@ -673,7 +673,7 @@ where
             };
             message_framed_read = message_framed_read_in_result;
             if let Err(e) = client_stream_write_half
-                .write(proxy_raw_data.as_ref())
+                .write_all(proxy_raw_data.as_ref())
                 .await
             {
                 error!(
