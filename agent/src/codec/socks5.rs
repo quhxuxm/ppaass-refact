@@ -10,6 +10,8 @@ use crate::message::socks5::{
     Socks5UdpDataCommandContent, Socks5UdpDataCommandResultContent,
 };
 
+use super::common::SOCKS5_FLAG;
+
 pub(crate) struct Socks5AuthCommandContentCodec;
 
 impl Decoder for Socks5AuthCommandContentCodec {
@@ -56,7 +58,7 @@ impl Decoder for Socks5InitCommandContentCodec {
             return Ok(None);
         }
         let version = src.get_u8();
-        if version != 5 {
+        if version != SOCKS5_FLAG {
             error!("The incoming protocol is not for socks 5.");
             return Err(PpaassError::CodecError);
         }

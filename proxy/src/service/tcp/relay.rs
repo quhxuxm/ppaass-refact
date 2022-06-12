@@ -154,7 +154,10 @@ where
             )
             .await;
             let ReadMessageServiceResult {
-                message_payload: MessagePayload { data, .. },
+                message_payload:
+                    MessagePayload {
+                        data: agent_data, ..
+                    },
                 message_framed_read: message_framed_read_from_read_agent_result,
                 ..
             } = match read_agent_message_result {
@@ -189,13 +192,13 @@ where
                     return;
                 },
             };
-            let data_chunks = data.chunks(
+            let agent_data_chunks = agent_data.chunks(
                 SERVER_CONFIG
                     .target_buffer_size()
                     .unwrap_or(DEFAULT_BUFFER_SIZE) as usize,
             );
-            for (_, chunk) in data_chunks.enumerate() {
-                if let Err(e) = target_stream_write.write_all(chunk).await {
+            for (_, chunk) in agent_data_chunks.enumerate() {
+                if let Err(e) = target_stream_write.write(chunk).await {
                     error!(
                         "Fail to write from agent to target because of error: {:#?}",
                         e

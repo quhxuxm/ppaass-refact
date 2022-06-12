@@ -6,8 +6,8 @@ use tracing::{debug, error};
 
 use common::PpaassError;
 
-const SOCKS5_FLAG: u8 = 5;
-const SOCKS4_FLAG: u8 = 4;
+pub(crate) const SOCKS5_FLAG: u8 = 5;
+pub(crate) const SOCKS4_FLAG: u8 = 4;
 pub(crate) enum Protocol {
     Http,
     Socks5,

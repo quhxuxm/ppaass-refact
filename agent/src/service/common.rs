@@ -704,7 +704,7 @@ where
                 .unwrap_or(DEFAULT_BUFFER_SIZE);
             let proxy_raw_data_chunks = proxy_raw_data.chunks(client_buffer_size);
             for (_, chunk) in proxy_raw_data_chunks.enumerate() {
-                if let Err(e) = client_stream_write_half.write_all(chunk).await {
+                if let Err(e) = client_stream_write_half.write(chunk).await {
                     error!(
                         "Fail to write proxy data from {:#?} to client because of error: {:#?}",
                         target_address_t2a, e
