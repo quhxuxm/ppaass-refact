@@ -195,7 +195,7 @@ where
                     .unwrap_or(DEFAULT_BUFFER_SIZE) as usize,
             );
             for (_, chunk) in data_chunks.enumerate() {
-                if let Err(e) = target_stream_write.write(chunk).await {
+                if let Err(e) = target_stream_write.write_all(chunk).await {
                     error!(
                         "Fail to write from agent to target because of error: {:#?}",
                         e
@@ -229,7 +229,7 @@ where
             let target_buffer_size = SERVER_CONFIG
                 .target_buffer_size()
                 .unwrap_or(DEFAULT_BUFFER_SIZE);
-            let mut target_buffer = BytesMut::new();
+            let mut target_buffer = BytesMut::with_capacity(target_buffer_size);
             let source_address = agent_connect_message_source_address.clone();
             let target_address = agent_connect_message_target_address.clone();
             let timeout_seconds = SERVER_CONFIG

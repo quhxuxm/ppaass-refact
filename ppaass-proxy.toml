@@ -1,5 +1,5 @@
-target_buffer_size = 131072
-message_framed_buffer_size = 2097152
+target_buffer_size = 2097152
+message_framed_buffer_size = 131072
 buffered_connection_number = 2048
 concurrent_connection_number = 2048
 connect_target_timeout_seconds = 120

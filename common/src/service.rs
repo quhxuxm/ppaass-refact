@@ -1,3 +1,4 @@
+use std::time::Duration;
 use std::{
     fmt::{Debug, Formatter},
     net::SocketAddr,
@@ -6,12 +7,11 @@ use std::{
     sync::Arc,
     task::{Context, Poll},
 };
-use std::time::Duration;
 
 use bytes::Bytes;
-use futures::{SinkExt, StreamExt};
 use futures::future::{self, BoxFuture};
 use futures::stream::{SplitSink, SplitStream};
+use futures::{SinkExt, StreamExt};
 use tokio::{net::TcpStream, time::timeout};
 use tokio_util::codec::Framed;
 use tower::Service;
@@ -170,11 +170,6 @@ where
                 let _ = message_frame_write.close().await;
                 return Err(e);
             }
-            if let Err(e) = message_frame_write.flush().await {
-                error!("Fail to flash message because of error: {:#?}", e);
-                let _ = message_frame_write.close().await;
-                return Err(e);
-            }
             Ok(WriteMessageServiceResult {
                 message_framed_write: message_frame_write,
             })
@@ -241,7 +236,7 @@ where
                 Duration::from_secs(read_timeout_seconds),
                 req.message_framed_read.next(),
             )
-                .await
+            .await
             {
                 Err(_e) => {
                     error!(

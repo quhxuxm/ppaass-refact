@@ -7,7 +7,7 @@ use std::{
     marker::PhantomData,
 };
 
-use bytes::BytesMut;
+use bytes::{Bytes, BytesMut};
 use futures::{future, StreamExt};
 use futures::{future::BoxFuture, SinkExt};
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
@@ -28,7 +28,7 @@ use common::{
     PayloadEncryptionTypeSelectServiceRequest, PayloadEncryptionTypeSelectServiceResult,
     PayloadType, PpaassError, PrepareMessageFramedService, ProxyMessagePayloadTypeValue,
     ReadMessageService, ReadMessageServiceRequest, ReadMessageServiceResult, RsaCryptoFetcher,
-    WriteMessageService, WriteMessageServiceRequest,
+    WriteMessageService, WriteMessageServiceRequest, WriteMessageServiceResult,
 };
 
 use crate::codec::common::{Protocol, SwitchProtocolDecoder};
@@ -496,7 +496,7 @@ where
                 },
             )
             .await;
-            let _write_agent_message_result = match write_agent_message_result {
+            message_framed_write = match write_agent_message_result {
                 Err(e) => {
                     error!(
                         "Fail to write agent message to proxy because of error: {:#?}",
@@ -504,7 +504,18 @@ where
                     );
                     return;
                 },
-                Ok(v) => message_framed_write = v.message_framed_write,
+                Ok(WriteMessageServiceResult {
+                    mut message_framed_write,
+                }) => {
+                    if let Err(e) = message_framed_write.flush().await {
+                        error!(
+                            "Fail to flush agent message to proxy because of error: {:#?}",
+                            e
+                        );
+                        return;
+                    };
+                    message_framed_write
+                },
             };
         }
         loop {
@@ -579,33 +590,49 @@ where
                 Ok(v) => v,
             };
             let payload_data = client_buffer.split().freeze();
-            let write_agent_message_result = ready_and_call_service(
-                &mut write_agent_message_service,
-                WriteMessageServiceRequest {
-                    message_framed_write,
-                    ref_id: Some(connect_response_message_id.clone()),
-                    user_token: SERVER_CONFIG.user_token().clone().unwrap(),
-                    payload_encryption_type,
-                    message_payload: Some(MessagePayload::new(
-                        source_address_a2t.clone(),
-                        target_address_a2t.clone(),
-                        PayloadType::AgentPayload(AgentMessagePayloadTypeValue::TcpData),
-                        payload_data,
-                    )),
-                },
-            )
-            .await;
-            let write_agent_message_result = match write_agent_message_result {
-                Err(e) => {
-                    error!(
-                        "Fail to write agent message to proxy because of error: {:#?}",
-                        e
-                    );
-                    return;
-                },
-                Ok(v) => v,
+            let payload_data_chunks = payload_data.chunks(
+                SERVER_CONFIG
+                    .message_framed_buffer_size()
+                    .unwrap_or(DEFAULT_BUFFER_SIZE),
+            );
+            for (_, chunk) in payload_data_chunks.enumerate() {
+                let chunk_data = Bytes::copy_from_slice(chunk);
+                let write_agent_message_result = ready_and_call_service(
+                    &mut write_agent_message_service,
+                    WriteMessageServiceRequest {
+                        message_framed_write,
+                        ref_id: Some(connect_response_message_id.clone()),
+                        user_token: SERVER_CONFIG.user_token().clone().unwrap(),
+                        payload_encryption_type: payload_encryption_type.clone(),
+                        message_payload: Some(MessagePayload::new(
+                            source_address_a2t.clone(),
+                            target_address_a2t.clone(),
+                            PayloadType::AgentPayload(AgentMessagePayloadTypeValue::TcpData),
+                            chunk_data,
+                        )),
+                    },
+                )
+                .await;
+                message_framed_write = match write_agent_message_result {
+                    Err(e) => {
+                        error!(
+                            "Fail to write agent message to proxy because of error: {:#?}",
+                            e
+                        );
+                        return;
+                    },
+                    Ok(WriteMessageServiceResult {
+                        message_framed_write,
+                    }) => message_framed_write,
+                };
+            }
+            if let Err(e) = message_framed_write.flush().await {
+                error!(
+                    "Fail to flush agent message to proxy because of error: {:#?}",
+                    e
+                );
+                return;
             };
-            message_framed_write = write_agent_message_result.message_framed_write;
         }
     }
 
@@ -672,16 +699,19 @@ where
                 },
             };
             message_framed_read = message_framed_read_in_result;
-            if let Err(e) = client_stream_write_half
-                .write(proxy_raw_data.as_ref())
-                .await
-            {
-                error!(
-                    "Fail to write proxy data from {:#?} to client because of error: {:#?}",
-                    target_address_t2a, e
-                );
-                return;
-            };
+            let client_buffer_size = SERVER_CONFIG
+                .client_buffer_size()
+                .unwrap_or(DEFAULT_BUFFER_SIZE);
+            let proxy_raw_data_chunks = proxy_raw_data.chunks(client_buffer_size);
+            for (_, chunk) in proxy_raw_data_chunks.enumerate() {
+                if let Err(e) = client_stream_write_half.write_all(chunk).await {
+                    error!(
+                        "Fail to write proxy data from {:#?} to client because of error: {:#?}",
+                        target_address_t2a, e
+                    );
+                    return;
+                };
+            }
             if let Err(e) = client_stream_write_half.flush().await {
                 error!(
                     "Fail to flush proxy data from {:#?} to client because of error: {:#?}",
