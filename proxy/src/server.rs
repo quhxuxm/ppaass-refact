@@ -55,7 +55,7 @@ impl ProxyServer {
 
     pub(crate) fn run(&self) {
         self.runtime.block_on(async {
-            let socket2 = match Socket::new(Domain::IPV4, Type::STREAM, None) {
+            let socket2 = match Socket::new(Domain::IPV4, Type::STREAM, Some(socket2::Protocol::TCP)) {
                 Ok(v) => v,
                 Err(e) => {
                     panic!(
@@ -73,7 +73,7 @@ impl ProxyServer {
                     e
                 );
             };
-            if let Err(e)=    socket2.set_nonblocking(true){
+            if let Err(e) = socket2.set_nonblocking(true){
                 panic!(
                     "Fail to bind proxy server port because of error: {:#?}",
                     e

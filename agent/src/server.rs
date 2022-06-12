@@ -75,7 +75,7 @@ impl AgentServer {
         }
         let proxy_addresses = Arc::new(proxy_addresses);
         self.runtime.block_on(async {
-            let socket2 = match Socket::new(Domain::IPV4, Type::STREAM, None) {
+            let socket2 = match Socket::new(Domain::IPV4, Type::STREAM, Some(socket2::Protocol::TCP)) {
                 Ok(v) => v,
                 Err(e) => {
                     panic!(
