@@ -257,11 +257,61 @@ where
                         "Nothing to read from target, source address:{:?}, target address:{:?}.",
                         source_address, target_address
                     );
-                    if let Err(e) = message_framed_write.flush().await {
-                        error!("Fail to write data from target to agent because of error, source address:{:?}, target address:{:?}, error: {:#?}.",
+                    let PayloadEncryptionTypeSelectServiceResult {
+                        payload_encryption_type,
+                        ..
+                    } = match ready_and_call_service(
+                        &mut payload_encryption_type_select_service,
+                        PayloadEncryptionTypeSelectServiceRequest {
+                            encryption_token: generate_uuid().into(),
+                            user_token: user_token.clone(),
+                        },
+                    )
+                    .await
+                    {
+                        Err(e) => {
+                            error!(
+                        "Fail to select payload encryption type because of error, source address:{:?}, target address:{:?}, error: {:#?}",source_address, target_address,
+                        e
+                    );
+                            return;
+                        },
+                        Ok(v) => v,
+                    };
+
+                    let close_connection_message_payload = MessagePayload::new(
+                        source_address.clone(),
+                        target_address.clone(),
+                        PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::TcpConnectionClose),
+                        Bytes::new(),
+                    );
+
+                    match ready_and_call_service(
+                        &mut write_proxy_message_service,
+                        WriteMessageServiceRequest {
+                            message_framed_write,
+                            ref_id: Some(agent_tcp_connect_message_id.clone()),
+                            user_token: user_token.clone(),
+                            payload_encryption_type,
+                            message_payload: Some(close_connection_message_payload),
+                        },
+                    )
+                    .await
+                    {
+                        Err(e) => {
+                            error!("Fail to read from target because of error(ready), source address:{:?}, target address:{:?}, error: {:#?}", source_address, target_address, e);
+                            return;
+                        },
+                        Ok(WriteMessageServiceResult {
+                            mut message_framed_write,
+                        }) => {
+                            if let Err(e) = message_framed_write.flush().await {
+                                error!("Fail to write data from target to agent because of error, source address:{:?}, target address:{:?}, error: {:#?}.",
                          source_address, target_address, e);
-                    }
-                    return;
+                            }
+                            return;
+                        },
+                    };
                 },
                 Ok(Ok(size)) => {
                     debug!("Read {} bytes from target, agent source address: {:?}, target address:{:?}.", size, source_address, target_address);

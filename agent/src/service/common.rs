@@ -20,7 +20,7 @@ use tokio_util::codec::{Framed, FramedParts};
 use tower::retry::{Policy, Retry};
 use tower::util::BoxCloneService;
 use tower::{service_fn, Service, ServiceBuilder};
-use tracing::{debug, error};
+use tracing::{debug, error, info};
 
 use common::{
     generate_uuid, ready_and_call_service, AgentMessagePayloadTypeValue, MessageFramedRead,
@@ -683,6 +683,23 @@ where
                         ..
                     },
                 )) => value,
+                Ok(Some(ReadMessageServiceResult {
+                    message_payload:
+                        MessagePayload {
+                            payload_type:
+                                PayloadType::ProxyPayload(
+                                    ProxyMessagePayloadTypeValue::TcpConnectionClose,
+                                ),
+                            ..
+                        },
+                    ..
+                })) => {
+                    info!(
+                        "Proxy connection closed, target address: {:?}",
+                        target_address_t2a
+                    );
+                    return;
+                },
                 Ok(_) => {
                     debug!(
                         "Read all data from proxy, target address: {:?}",
