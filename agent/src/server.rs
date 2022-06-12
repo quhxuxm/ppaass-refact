@@ -1,13 +1,12 @@
-use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4, TcpListener as StdTcpListener};
+use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use socket2::{Domain, SockAddr, Socket, Type};
-use tokio::net::TcpListener;
+use tokio::net::TcpSocket;
 use tokio::runtime::{Builder as TokioRuntimeBuilder, Runtime};
 use tower::ServiceBuilder;
-use tracing::{error, info};
+use tracing::error;
 
 use common::ready_and_call_service;
 
@@ -75,77 +74,37 @@ impl AgentServer {
         }
         let proxy_addresses = Arc::new(proxy_addresses);
         self.runtime.block_on(async {
-            let socket = match Socket::new(Domain::IPV4, Type::STREAM, Some(socket2::Protocol::TCP)) {
-                Ok(v) => v,
+            let server_socket = match TcpSocket::new_v4() {
                 Err(e) => {
-                    panic!(
-                        "Fail to create agent server because of error: {:#?}",
-                        e
-                    );
-                }
+                    panic!("Fail to create agent server because of error: {:#?}", e);
+                },
+                Ok(v) => v,
             };
+            if let Err(e) = server_socket.set_reuseaddr(true) {
+                panic!("Fail to create agent server because of error: {:#?}", e);
+            };
+            if let Some(so_recv_buffer_size) = SERVER_CONFIG.so_recv_buffer_size() {
+                if let Err(e) = server_socket.set_recv_buffer_size(so_recv_buffer_size) {
+                    panic!("Fail to create agent server because of error: {:#?}", e);
+                };
+            }
+            if let Some(so_send_buffer_size) = SERVER_CONFIG.so_send_buffer_size() {
+                if let Err(e) = server_socket.set_send_buffer_size(so_send_buffer_size) {
+                    panic!("Fail to create agent server because of error: {:#?}", e);
+                };
+            }
             let local_socket_address = SocketAddr::V4(SocketAddrV4::new(
                 Ipv4Addr::new(0, 0, 0, 0),
                 SERVER_CONFIG.port().unwrap_or(DEFAULT_SERVER_PORT),
             ));
-            if let Err(e) = socket.bind(&SockAddr::from(local_socket_address)) {
-                panic!(
-                    "Fail to create agent server because of error: {:#?}",
-                    e
-                );
-            };
-            if let Err(e) = socket.listen(SERVER_CONFIG.so_backlog().unwrap_or(1024)) {
-                panic!(
-                    "Fail to create agent server because of error: {:#?}",
-                    e
-                );
-            };
-            if let Err(e) = socket.set_keepalive(true) {
-                panic!("Fail to create agent server because of error: {:#?}", e);
-            }
-            if let Err(e) = socket.set_reuse_address(true) {
+            if let Err(e) = server_socket.bind(local_socket_address) {
                 panic!("Fail to create agent server because of error: {:#?}", e);
             };
-            if let Err(e) = socket.set_nodelay(true) {
-                panic!(
-                    "Fail to create agent server because of error: {:#?}",
-                    e
-                );
-            };
-            if let Err(e) = socket.set_nonblocking(true) {
-                panic!(
-                    "Fail to create agent server because of error: {:#?}",
-                    e
-                );
-            };
-            if let Some(so_recv_buffer_size) = SERVER_CONFIG.so_recv_buffer_size() {
-                if let Err(e) = socket.set_recv_buffer_size(so_recv_buffer_size) {
-                    panic!(
-                        "Fail to create agent server because of error: {:#?}",
-                        e
-                    );
-                };
-            }
-            if let Some(so_send_buffer_size) = SERVER_CONFIG.so_send_buffer_size() {
-                if let Err(e) = socket.set_send_buffer_size(so_send_buffer_size) {
-                    panic!(
-                        "Fail to create agent server because of error: {:#?}",
-                        e
-                    );
-                };
-            }
-            let std_listener: StdTcpListener = socket.into();
-            let listener = match TcpListener::from_std(std_listener) {
+            let listener = match server_socket.listen(SERVER_CONFIG.so_backlog().unwrap_or(1024)) {
                 Err(e) => {
-                    panic!(
-                        "Fail to generate agent server listener from std listener because of error: {:#?}",
-                        e
-                    );
-                }
-                Ok(listener) => {
-                    info!("Success to generate agent server listener.");
-                    listener
-                }
+                    panic!("Fail to create agent server because of error: {:#?}", e);
+                },
+                Ok(v) => v,
             };
             let agent_rsa_crypto_fetcher = match AgentRsaCryptoFetcher::new() {
                 Err(e) => {
@@ -153,8 +112,8 @@ impl AgentServer {
                         "Fail to generate agent rsa crypto because of error: {:#?}",
                         e
                     );
-                }
-                Ok(v) => v
+                },
+                Ok(v) => v,
             };
             let agent_rsa_crypto_fetcher = Arc::new(agent_rsa_crypto_fetcher);
             loop {
@@ -166,7 +125,7 @@ impl AgentServer {
                             e
                         );
                         continue;
-                    }
+                    },
                     Ok((client_stream, client_address)) => (client_stream, client_address),
                 };
                 if let Err(e) = client_stream.set_nodelay(true) {
@@ -201,7 +160,10 @@ impl AgentServer {
                             SERVER_CONFIG.rate_limit().unwrap_or(DEFAULT_RATE_LIMIT),
                             Duration::from_secs(60),
                         )
-                        .service(HandleClientConnectionService::new(proxy_addresses, agent_rsa_crypto_fetcher.clone()));
+                        .service(HandleClientConnectionService::new(
+                            proxy_addresses,
+                            agent_rsa_crypto_fetcher.clone(),
+                        ));
                     if let Err(e) = ready_and_call_service(
                         &mut handle_client_connection_service,
                         ClientConnectionInfo {
@@ -209,7 +171,7 @@ impl AgentServer {
                             client_address,
                         },
                     )
-                        .await
+                    .await
                     {
                         error!(
                             "Error happen when handle client connection [{}], error:{:#?}",

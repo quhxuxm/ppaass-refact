@@ -29,8 +29,8 @@ pub const DEFAULT_CONNECT_TARGET_TIMEOUT_SECONDS: u64 = 20;
 pub(crate) struct Config {
     port: Option<u16>,
     rsa_root_dir: Option<String>,
-    so_recv_buffer_size: Option<usize>,
-    so_send_buffer_size: Option<usize>,
+    so_recv_buffer_size: Option<u32>,
+    so_send_buffer_size: Option<u32>,
     target_buffer_size: Option<usize>,
     message_framed_buffer_size: Option<usize>,
     thread_number: Option<usize>,
@@ -49,7 +49,7 @@ pub(crate) struct Config {
     connect_target_timeout_seconds: Option<u64>,
     agent_stream_so_linger: Option<u64>,
     target_stream_so_linger: Option<u64>,
-    so_backlog: Option<i32>,
+    so_backlog: Option<u32>,
 }
 
 impl Config {
@@ -113,13 +113,13 @@ impl Config {
     pub fn agent_stream_so_linger(&self) -> Option<u64> {
         self.agent_stream_so_linger
     }
-    pub fn so_backlog(&self) -> Option<i32> {
+    pub fn so_backlog(&self) -> Option<u32> {
         self.so_backlog
     }
-    pub fn so_recv_buffer_size(&self) -> Option<usize> {
+    pub fn so_recv_buffer_size(&self) -> Option<u32> {
         self.so_recv_buffer_size
     }
-    pub fn so_send_buffer_size(&self) -> Option<usize> {
+    pub fn so_send_buffer_size(&self) -> Option<u32> {
         self.so_send_buffer_size
     }
 }

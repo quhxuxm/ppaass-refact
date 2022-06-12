@@ -26,8 +26,8 @@ lazy_static! {
 #[derive(Serialize, Deserialize)]
 pub(crate) struct Config {
     port: Option<u16>,
-    so_recv_buffer_size: Option<usize>,
-    so_send_buffer_size: Option<usize>,
+    so_recv_buffer_size: Option<u32>,
+    so_send_buffer_size: Option<u32>,
     user_token: Option<String>,
     proxy_addresses: Option<Vec<String>>,
     client_buffer_size: Option<usize>,
@@ -48,7 +48,7 @@ pub(crate) struct Config {
     connect_proxy_timeout_seconds: Option<u64>,
     client_stream_so_linger: Option<u64>,
     proxy_stream_so_linger: Option<u64>,
-    so_backlog: Option<i32>,
+    so_backlog: Option<u32>,
 }
 
 impl Config {
@@ -115,13 +115,13 @@ impl Config {
     pub fn proxy_stream_so_linger(&self) -> Option<u64> {
         self.proxy_stream_so_linger
     }
-    pub fn so_backlog(&self) -> Option<i32> {
+    pub fn so_backlog(&self) -> Option<u32> {
         self.so_backlog
     }
-    pub fn so_recv_buffer_size(&self) -> Option<usize> {
+    pub fn so_recv_buffer_size(&self) -> Option<u32> {
         self.so_recv_buffer_size
     }
-    pub fn so_send_buffer_size(&self) -> Option<usize> {
+    pub fn so_send_buffer_size(&self) -> Option<u32> {
         self.so_send_buffer_size
     }
 }
