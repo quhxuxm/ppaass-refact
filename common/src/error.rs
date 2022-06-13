@@ -9,6 +9,6 @@ pub enum PpaassError {
         #[from]
         source: StdIoError,
     },
-    #[error("Timeout error happen, expend: {expend}.")]
-    TimeoutError { expend: u64 },
+    #[error("Timeout error happen, elapsed: {elapsed}.")]
+    TimeoutError { elapsed: u64 },
 }

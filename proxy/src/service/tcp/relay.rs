@@ -5,6 +5,7 @@ use std::{
 };
 use std::{net::SocketAddr, time::Duration};
 
+use anyhow::{anyhow, Result};
 use bytes::{Bytes, BytesMut};
 use futures::{future::BoxFuture, SinkExt};
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
@@ -253,7 +254,7 @@ where
         mut message_framed_write: MessageFramedWrite<T>, agent_tcp_connect_message_id: String,
         user_token: String, agent_connect_message_source_address: NetAddress,
         agent_connect_message_target_address: NetAddress, mut target_stream_read: OwnedReadHalf,
-    ) {
+    ) -> Result<()> {
         let mut write_proxy_message_service =
             ServiceBuilder::new().service(WriteMessageService::default());
         let mut payload_encryption_type_select_service =
@@ -275,42 +276,20 @@ where
             .await
             {
                 Err(_e) => {
-                    error!("Fail to read data from target because of timeout, agent source address: {:?}, target address:{:?}, timeout: {:#?}",source_address, target_address,timeout_seconds);
-                    if let Err(e) = message_framed_write.flush().await {
-                        error!("Fail to flush data to agent because of error, agent source address: {:?}, target address:{:?}, error: {:#?}",source_address, target_address,e);
-                    }
-                    if let Err(e) = message_framed_write.close().await {
-                        error!("Fail to flush data to agent because of error, agent source address: {:?}, target address:{:?}, error: {:#?}",source_address, target_address,e);
-                    };
-                    return;
+                    message_framed_write.flush().await?;
+                    message_framed_write.close().await?;
+                    return Err(anyhow!("Read target data timeout: {}", timeout_seconds));
                 },
                 Ok(Err(e)) => {
-                    error!("Fail to read data from target because of error, agent source address: {:?}, target address:{:?}, error: {:#?}",source_address, target_address, e);
-                    if let Err(e) = message_framed_write.flush().await {
-                        error!("Fail to flush data to agent because of error, agent source address: {:?}, target address:{:?}, error: {:#?}",source_address, target_address,e);
-                    }
-                    if let Err(e) = message_framed_write.close().await {
-                        error!("Fail to flush data to agent because of error, agent source address: {:?}, target address:{:?}, error: {:#?}",source_address, target_address,e);
-                    };
-                    return;
+                    message_framed_write.flush().await?;
+                    message_framed_write.close().await?;
+                    return Err(anyhow!("Read target data error happen: {:#?}", e));
                 },
                 Ok(Ok(0)) => {
-                    debug!(
-                        "Nothing to read from target, source address:{:?}, target address:{:?}.",
-                        source_address, target_address
-                    );
-                    if let Err(e) = message_framed_write.flush().await {
-                        error!("Fail to flush data to agent because of error, agent source address: {:?}, target address:{:?}, error: {:#?}",source_address, target_address,e);
-                    }
-                    if let Err(e) = message_framed_write.close().await {
-                        error!("Fail to flush data to agent because of error, agent source address: {:?}, target address:{:?}, error: {:#?}",source_address, target_address,e);
-                    };
-                    return;
+                    message_framed_write.flush().await?;
+                    return Ok(());
                 },
-                Ok(Ok(size)) => {
-                    debug!("Read {} bytes from target, agent source address: {:?}, target address:{:?}.", size, source_address, target_address);
-                    size
-                },
+                Ok(Ok(size)) => size,
             };
             let payload_data = target_buffer.split().freeze();
             let payload_data_chunks = payload_data.chunks(
@@ -339,18 +318,18 @@ where
                 .await
                 {
                     Err(e) => {
-                        error!( "Fail to select payload encryption type because of error, source address:{:?}, target address:{:?}, error: {:#?}",source_address, target_address, e);
-                        if let Err(e) = message_framed_write.flush().await {
-                            error!("Fail to flush data to agent because of error, agent source address: {:?}, target address:{:?}, error: {:#?}",source_address, target_address,e);
-                        }
-                        if let Err(e) = message_framed_write.close().await {
-                            error!("Fail to flush data to agent because of error, agent source address: {:?}, target address:{:?}, error: {:#?}",source_address, target_address,e);
-                        };
-                        return;
+                        message_framed_write.flush().await?;
+                        message_framed_write.close().await?;
+                        return Err(anyhow!(
+                            "Fail to select payload encryption type because of error: {:#?}",
+                            e
+                        ));
                     },
                     Ok(v) => v,
                 };
-                message_framed_write = match ready_and_call_service(
+                WriteMessageServiceResult {
+                    message_framed_write,
+                } = ready_and_call_service(
                     &mut write_proxy_message_service,
                     WriteMessageServiceRequest {
                         message_framed_write,
@@ -360,16 +339,7 @@ where
                         message_payload: Some(proxy_message_payload),
                     },
                 )
-                .await
-                {
-                    Err(e) => {
-                        error!("Fail to read from target because of error(ready), source address:{:?}, target address:{:?}, error: {:#?}", source_address, target_address, e);
-                        return;
-                    },
-                    Ok(WriteMessageServiceResult {
-                        message_framed_write,
-                    }) => message_framed_write,
-                };
+                .await?;
             }
         }
     }

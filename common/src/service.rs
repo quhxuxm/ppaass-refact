@@ -249,7 +249,7 @@ where
                         read_timeout_seconds, req.read_from_address
                     );
                     return Err(PpaassError::TimeoutError {
-                        expend: read_timeout_seconds,
+                        elapsed: read_timeout_seconds,
                     });
                 },
                 Ok(None) => {

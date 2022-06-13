@@ -233,7 +233,7 @@ impl ConnectToProxyService {
                             connect_timeout_seconds
                         );
                         return Err(PpaassError::TimeoutError {
-                            expend: connect_timeout_seconds,
+                            elapsed: connect_timeout_seconds,
                         });
                     },
                     Ok(Err(e)) => {

@@ -82,7 +82,7 @@ where
             },
             DecodeStatus::Data(body_is_compressed, body_length) => (body_is_compressed, body_length),
         };
-        if src.len() <(header_length+ body_length as usize) {
+        if src.remaining() <body_length as usize {
             debug!("Input message is not enough to decode body, buffer remaining: {}, body length: {}.", src.remaining(), body_length);
             return Ok(None);
         }
