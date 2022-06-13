@@ -7,7 +7,7 @@ use std::{net::SocketAddr, time::Duration};
 
 use anyhow::{anyhow, Result};
 use bytes::{Bytes, BytesMut};
-use futures::{future::BoxFuture, SinkExt};
+use futures::{future::BoxFuture, SinkExt, TryFutureExt};
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::net::TcpStream;
 use tokio::{
@@ -25,7 +25,7 @@ use common::{
     PayloadEncryptionTypeSelectServiceRequest, PayloadEncryptionTypeSelectServiceResult,
     PayloadType, PpaassError, ProxyMessagePayloadTypeValue, ReadMessageService,
     ReadMessageServiceRequest, ReadMessageServiceResult, RsaCryptoFetcher, WriteMessageService,
-    WriteMessageServiceRequest, WriteMessageServiceResult,
+    WriteMessageServiceError, WriteMessageServiceRequest, WriteMessageServiceResult,
 };
 
 use crate::config::DEFAULT_READ_AGENT_TIMEOUT_SECONDS;
@@ -116,14 +116,25 @@ where
                 message_framed_read,
                 target_stream_write,
             ));
-            tokio::spawn(Self::generate_target_to_proxy_relay(
-                message_framed_write,
-                agent_tcp_connect_message_id,
-                user_token,
-                agent_connect_message_source_address,
-                agent_connect_message_target_address,
-                target_stream_read,
-            ));
+            tokio::spawn(async move {
+                if let Err(message_framed_write) = Self::relay_target_to_proxy(
+                    message_framed_write,
+                    agent_tcp_connect_message_id,
+                    user_token,
+                    agent_connect_message_source_address,
+                    agent_connect_message_target_address,
+                    target_stream_read,
+                )
+                .await
+                {
+                    if let Err(e) = message_framed_write.flush().await {
+                        error!("Fail to flush proxy writer when relay data from target to proxy have error:{:#?}", e);
+                    };
+                    if let Err(e) = message_framed_write.close().await {
+                        error!("Fail to close proxy writer when relay data from target to proxy have error:{:#?}", e);
+                    };
+                }
+            });
             Ok(TcpRelayServiceResult {
                 target_address: target_address_for_return,
                 agent_address: req.agent_address,
@@ -220,17 +231,11 @@ where
                     return;
                 },
             };
-            let agent_data_chunks = agent_data.chunks(
-                SERVER_CONFIG
-                    .target_buffer_size()
-                    .unwrap_or(DEFAULT_BUFFER_SIZE) as usize,
-            );
+            let agent_data_chunks = agent_data
+                .chunks(SERVER_CONFIG.target_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE) as usize);
             for (_, chunk) in agent_data_chunks.enumerate() {
                 if let Err(e) = target_stream_write.write(chunk).await {
-                    error!(
-                        "Fail to write from agent to target because of error: {:#?}",
-                        e
-                    );
+                    error!("Fail to write from agent to target because of error: {:#?}", e);
                     if let Err(e) = target_stream_write.shutdown().await {
                         error!("Fail to shutdown target stream because of error: {:#?}", e);
                     };
@@ -250,19 +255,17 @@ where
         }
     }
 
-    async fn generate_target_to_proxy_relay(
+    async fn relay_target_to_proxy(
         mut message_framed_write: MessageFramedWrite<T>, agent_tcp_connect_message_id: String,
         user_token: String, agent_connect_message_source_address: NetAddress,
         agent_connect_message_target_address: NetAddress, mut target_stream_read: OwnedReadHalf,
-    ) -> Result<()> {
-        let mut write_proxy_message_service =
-            ServiceBuilder::new().service(WriteMessageService::default());
-        let mut payload_encryption_type_select_service =
-            ServiceBuilder::new().service(PayloadEncryptionTypeSelectService);
+    ) -> Result<(), MessageFramedWrite<T>> {
         loop {
-            let target_buffer_size = SERVER_CONFIG
-                .target_buffer_size()
-                .unwrap_or(DEFAULT_BUFFER_SIZE);
+            let mut write_proxy_message_service: WriteMessageService = Default::default();
+            let mut payload_encryption_type_select_service: PayloadEncryptionTypeSelectService =
+                Default::default();
+            let target_buffer_size =
+                SERVER_CONFIG.target_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE);
             let mut target_buffer = BytesMut::with_capacity(target_buffer_size);
             let source_address = agent_connect_message_source_address.clone();
             let target_address = agent_connect_message_target_address.clone();
@@ -276,27 +279,20 @@ where
             .await
             {
                 Err(_e) => {
-                    message_framed_write.flush().await?;
-                    message_framed_write.close().await?;
-                    return Err(anyhow!("Read target data timeout: {}", timeout_seconds));
+                    return Err(message_framed_write);
                 },
-                Ok(Err(e)) => {
-                    message_framed_write.flush().await?;
-                    message_framed_write.close().await?;
-                    return Err(anyhow!("Read target data error happen: {:#?}", e));
+                Ok(Err(_e)) => {
+                    return Err(message_framed_write);
                 },
                 Ok(Ok(0)) => {
-                    message_framed_write.flush().await?;
+                    message_framed_write.flush().await.map_err(|_e| message_framed_write)?;
                     return Ok(());
                 },
                 Ok(Ok(size)) => size,
             };
             let payload_data = target_buffer.split().freeze();
-            let payload_data_chunks = payload_data.chunks(
-                SERVER_CONFIG
-                    .message_framed_buffer_size()
-                    .unwrap_or(DEFAULT_BUFFER_SIZE),
-            );
+            let payload_data_chunks = payload_data
+                .chunks(SERVER_CONFIG.message_framed_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE));
             for (_, chunk) in payload_data_chunks.enumerate() {
                 let chunk_data = Bytes::copy_from_slice(chunk);
                 let proxy_message_payload = MessagePayload::new(
@@ -305,10 +301,7 @@ where
                     PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::TcpData),
                     chunk_data,
                 );
-                let PayloadEncryptionTypeSelectServiceResult {
-                    payload_encryption_type,
-                    ..
-                } = match ready_and_call_service(
+                let payload_encryption_type = match ready_and_call_service(
                     &mut payload_encryption_type_select_service,
                     PayloadEncryptionTypeSelectServiceRequest {
                         encryption_token: generate_uuid().into(),
@@ -317,19 +310,13 @@ where
                 )
                 .await
                 {
-                    Err(e) => {
-                        message_framed_write.flush().await?;
-                        message_framed_write.close().await?;
-                        return Err(anyhow!(
-                            "Fail to select payload encryption type because of error: {:#?}",
-                            e
-                        ));
-                    },
-                    Ok(v) => v,
+                    Err(e) => return Err(message_framed_write),
+                    Ok(PayloadEncryptionTypeSelectServiceResult {
+                        payload_encryption_type,
+                        ..
+                    }) => payload_encryption_type,
                 };
-                WriteMessageServiceResult {
-                    message_framed_write,
-                } = ready_and_call_service(
+                message_framed_write = match ready_and_call_service(
                     &mut write_proxy_message_service,
                     WriteMessageServiceRequest {
                         message_framed_write,
@@ -339,7 +326,17 @@ where
                         message_payload: Some(proxy_message_payload),
                     },
                 )
-                .await?;
+                .await
+                {
+                    Err(WriteMessageServiceError {
+                        message_framed_write,
+                        ..
+                    }) => return Err(message_framed_write),
+                    Ok(WriteMessageServiceResult {
+                        message_framed_write,
+                        ..
+                    }) => message_framed_write,
+                };
             }
         }
     }

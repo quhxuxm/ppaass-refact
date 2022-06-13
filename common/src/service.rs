@@ -123,6 +123,27 @@ where
     pub message_framed_write: MessageFramedWrite<T>,
 }
 
+pub struct WriteMessageServiceError<T>
+where
+    T: RsaCryptoFetcher,
+{
+    pub message_framed_write: MessageFramedWrite<T>,
+    pub source: PpaassError,
+}
+
+impl<T> Debug for WriteMessageServiceError<T>
+where
+    T: RsaCryptoFetcher,
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "WriteMessageServiceError: message_framed_write: {:?}, error:{:?}",
+            self.message_framed_write, self.source
+        )
+    }
+}
+
 #[derive(Clone, Default)]
 pub struct WriteMessageService;
 
@@ -131,7 +152,7 @@ where
     T: RsaCryptoFetcher + Send + Sync + 'static,
 {
     type Response = WriteMessageServiceResult<T>;
-    type Error = PpaassError;
+    type Error = WriteMessageServiceError<T>;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
@@ -157,26 +178,26 @@ where
                         Some(payload),
                     );
                     debug!("Write message to remote:\n\n{:?}\n\n", message);
-                    trace!(
-                        "Write message payload to remote:\n\n{:#?}\n\n",
-                        message.payload
-                    );
+                    trace!("Write message payload to remote:\n\n{:#?}\n\n", message.payload);
                     message
                 },
             };
-            let mut message_frame_write = req.message_framed_write;
-            if let Err(e) = message_frame_write.send(message).await {
+            let mut message_framed_write = req.message_framed_write;
+            if let Err(e) = message_framed_write.send(message).await {
                 error!("Fail to write message because of error: {:#?}", e);
-                if let Err(e) = message_frame_write.flush().await {
+                if let Err(e) = message_framed_write.flush().await {
                     error!("Fail to flush message because of error: {:#?}", e);
                 }
-                if let Err(e) = message_frame_write.close().await {
+                if let Err(e) = message_framed_write.close().await {
                     error!("Fail to close message writer because of error: {:#?}", e);
                 };
-                return Err(e);
+                return Err(WriteMessageServiceError {
+                    message_framed_write,
+                    source: e,
+                });
             }
             Ok(WriteMessageServiceResult {
-                message_framed_write: message_frame_write,
+                message_framed_write,
             })
         })
     }
@@ -268,10 +289,7 @@ where
             debug!("Read message from remote:\n\n{:?}\n\n", message);
             let payload: MessagePayload = match message.payload {
                 None => {
-                    info!(
-                        "No payload in the message, read from: {:?}.",
-                        req.read_from_address
-                    );
+                    info!("No payload in the message, read from: {:?}.", req.read_from_address);
                     return Ok(None);
                 },
                 Some(payload_bytes) => match payload_bytes.try_into() {
@@ -307,6 +325,7 @@ pub struct PayloadEncryptionTypeSelectServiceResult {
     pub payload_encryption_type: PayloadEncryptionType,
 }
 
+#[derive(Clone, Default)]
 pub struct PayloadEncryptionTypeSelectService;
 
 impl Service<PayloadEncryptionTypeSelectServiceRequest> for PayloadEncryptionTypeSelectService {
@@ -319,14 +338,10 @@ impl Service<PayloadEncryptionTypeSelectServiceRequest> for PayloadEncryptionTyp
     }
 
     fn call(&mut self, req: PayloadEncryptionTypeSelectServiceRequest) -> Self::Future {
-        Box::pin(future::ready(Ok(
-            PayloadEncryptionTypeSelectServiceResult {
-                payload_encryption_type: PayloadEncryptionType::Blowfish(
-                    req.encryption_token.clone(),
-                ),
-                user_token: req.user_token.clone(),
-                encryption_token: req.encryption_token.clone(),
-            },
-        )))
+        Box::pin(future::ready(Ok(PayloadEncryptionTypeSelectServiceResult {
+            payload_encryption_type: PayloadEncryptionType::Blowfish(req.encryption_token.clone()),
+            user_token: req.user_token.clone(),
+            encryption_token: req.encryption_token.clone(),
+        })))
     }
 }
