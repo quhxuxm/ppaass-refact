@@ -712,6 +712,18 @@ where
                         "Fail to read proxy data because of error, target address: {:?}: {:#?}",
                         target_address_t2a, e
                     );
+                    if let Err(e) = client_stream_write_half.flush().await {
+                        error!(
+                            "Fail to flush proxy data to client because of error, target address:{:?}, error: {:#?}",
+                            target_address_t2a, e
+                        );
+                        if let Err(e) = client_stream_write_half.shutdown().await {
+                            error!(
+                                "Fail to flush proxy data to client because of error, target address:{:?}, error: {:#?}",
+                                target_address_t2a, e
+                            );
+                        };
+                    };
                     return;
                 },
                 Ok(Some(
