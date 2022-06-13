@@ -512,6 +512,12 @@ where
                             "Fail to flush agent message to proxy because of error: {:#?}",
                             e
                         );
+                        if let Err(e) = message_framed_write.close().await {
+                            error!(
+                                "Fail to close agent message to proxy because of error: {:#?}",
+                                e
+                            );
+                        };
                         return;
                     };
                     message_framed_write
@@ -538,6 +544,18 @@ where
                         "The read client data timeout: {} seconds, target address: {:?}.",
                         read_client_timeout_seconds, target_address_a2t
                     );
+                    if let Err(e) = message_framed_write.flush().await {
+                        error!(
+                            "The read client data timeout: {} seconds, target address: {:?}, error: {:#?}.",
+                            read_client_timeout_seconds, target_address_a2t, e
+                        );
+                    };
+                    if let Err(e) = message_framed_write.close().await {
+                        error!(
+                            "The read client data timeout: {} seconds, target address: {:?}, error: {:#?}.",
+                            read_client_timeout_seconds, target_address_a2t, e
+                        );
+                    };
                     return;
                 },
                 Ok(Err(e)) => {
@@ -545,6 +563,18 @@ where
                         "Fail to read client data because of error, target address:{:?}, error: {:#?}",
                         target_address_a2t, e
                     );
+                    if let Err(e) = message_framed_write.flush().await {
+                        error!(
+                            "The read client data timeout: {} seconds, target address: {:?}, error: {:#?}.",
+                            read_client_timeout_seconds, target_address_a2t, e
+                        );
+                    };
+                    if let Err(e) = message_framed_write.close().await {
+                        error!(
+                            "The read client data timeout: {} seconds, target address: {:?}, error: {:#?}.",
+                            read_client_timeout_seconds, target_address_a2t, e
+                        );
+                    };
                     return;
                 },
                 Ok(Ok(0)) => {
@@ -557,6 +587,12 @@ where
                             "Fail to write data from agent to proxy because of error, target address: {:?}, error: {:#?}",
                             target_address_a2t, e
                         );
+                        if let Err(e) = message_framed_write.close().await {
+                            error!(
+                                "The read client data timeout: {} seconds, target address: {:?}, error: {:#?}.",
+                                read_client_timeout_seconds, target_address_a2t, e
+                            );
+                        };
                     }
                     return;
                 },
@@ -631,6 +667,12 @@ where
                     "Fail to flush agent message to proxy because of error: {:#?}",
                     e
                 );
+                if let Err(e) = message_framed_write.close().await {
+                    error!(
+                        "The read client data timeout: {} seconds, target address: {:?}, error: {:#?}.",
+                        read_client_timeout_seconds, target_address_a2t, e
+                    );
+                };
                 return;
             };
         }
@@ -693,7 +735,12 @@ where
                             "Fail to flush proxy data to client because of error, target address:{:?}, error: {:#?}",
                             target_address_t2a, e
                         );
-                        let _ = client_stream_write_half.shutdown();
+                        if let Err(e) = client_stream_write_half.shutdown().await {
+                            error!(
+                                "Fail to flush proxy data to client because of error, target address:{:?}, error: {:#?}",
+                                target_address_t2a, e
+                            );
+                        };
                     };
                     return;
                 },
@@ -709,6 +756,18 @@ where
                         "Fail to write proxy data from {:#?} to client because of error: {:#?}",
                         target_address_t2a, e
                     );
+                    if let Err(e) = client_stream_write_half.flush().await {
+                        error!(
+                            "Fail to flush proxy data to client because of error, target address:{:?}, error: {:#?}",
+                            target_address_t2a, e
+                        );
+                    };
+                    if let Err(e) = client_stream_write_half.shutdown().await {
+                        error!(
+                            "Fail to flush proxy data to client because of error, target address:{:?}, error: {:#?}",
+                            target_address_t2a, e
+                        );
+                    };
                     return;
                 };
             }
@@ -717,6 +776,12 @@ where
                     "Fail to flush proxy data from {:#?} to client because of error: {:#?}",
                     target_address_t2a, e
                 );
+                if let Err(e) = client_stream_write_half.shutdown().await {
+                    error!(
+                        "Fail to flush proxy data to client because of error, target address:{:?}, error: {:#?}",
+                        target_address_t2a, e
+                    );
+                };
                 return;
             };
         }
