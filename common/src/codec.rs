@@ -136,6 +136,7 @@ where
         };
         debug!("Decode input message (after decrypt): {:?}", message);
         self.status = DecodeStatus::Head;
+        src.reserve(header_length);
         Ok(Some(message))
     }
 }
