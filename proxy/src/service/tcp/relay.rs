@@ -6,7 +6,7 @@ use std::{
 use std::{net::SocketAddr, time::Duration};
 
 use bytes::{Bytes, BytesMut};
-use futures::future::BoxFuture;
+use futures::{future::BoxFuture, SinkExt};
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::net::TcpStream;
 use tokio::{
@@ -169,7 +169,11 @@ where
                             "Fail to flush from agent to target because of error, agent address:{:?}, error: {:#?}",
                            agent_address, e
                         );
-                        let _ = target_stream_write.shutdown().await;
+                        if let Err(e) = target_stream_write.shutdown().await {
+                            error!("Fail to shutdown target because of error, agent address:{:?}, error: {:#?}",
+                           agent_address, e
+                        );
+                        };
                     };
                     return;
                 },
@@ -186,10 +190,32 @@ where
                 )) => v,
                 Ok(_) => {
                     error!("Invalid payload type from agent: {:#?}", agent_address);
+                    if let Err(e) = target_stream_write.flush().await {
+                        error!(
+                            "Fail to flush from agent to target because of error, agent address:{:?}, error: {:#?}",
+                           agent_address, e
+                        );
+                        if let Err(e) = target_stream_write.shutdown().await {
+                            error!("Fail to shutdown target because of error, agent address:{:?}, error: {:#?}",
+                           agent_address, e
+                        );
+                        };
+                    };
                     return;
                 },
                 Err(e) => {
                     debug!("Fail to read from agent because of error: {:#?}", e);
+                    if let Err(e) = target_stream_write.flush().await {
+                        error!(
+                            "Fail to flush from agent to target because of error, agent address:{:?}, error: {:#?}",
+                           agent_address, e
+                        );
+                        if let Err(e) = target_stream_write.shutdown().await {
+                            error!("Fail to shutdown target because of error, agent address:{:?}, error: {:#?}",
+                           agent_address, e
+                        );
+                        };
+                    };
                     return;
                 },
             };
@@ -210,11 +236,14 @@ where
             }
             if let Err(e) = target_stream_write.flush().await {
                 error!(
-                    "Fail to flush from agent to target because of error: {:#?}",
-                    e
-                );
-                let _ = target_stream_write.shutdown().await;
-                return;
+                            "Fail to flush from agent to target because of error, agent address:{:?}, error: {:#?}",
+                           agent_address, e
+                        );
+                if let Err(e) = target_stream_write.shutdown().await {
+                    error!("Fail to shutdown target because of error, agent address:{:?}, error: {:#?}",
+                           agent_address, e
+                        );
+                };
             };
             message_framed_read = message_framed_read_from_read_agent_result;
         }
@@ -247,10 +276,23 @@ where
             {
                 Err(_e) => {
                     error!("Fail to read data from target because of timeout, agent source address: {:?}, target address:{:?}, timeout: {:#?}",source_address, target_address,timeout_seconds);
+                    if let Err(e) = message_framed_write.flush().await {
+                        error!("Fail to flush data to agent because of error, agent source address: {:?}, target address:{:?}, error: {:#?}",source_address, target_address,e);
+                        if let Err(e) = message_framed_write.close().await {
+                            error!("Fail to flush data to agent because of error, agent source address: {:?}, target address:{:?}, error: {:#?}",source_address, target_address,e);
+                        };
+                    }
+
                     return;
                 },
                 Ok(Err(e)) => {
                     error!("Fail to read data from target because of error, agent source address: {:?}, target address:{:?}, error: {:#?}",source_address, target_address, e);
+                    if let Err(e) = message_framed_write.flush().await {
+                        error!("Fail to flush data to agent because of error, agent source address: {:?}, target address:{:?}, error: {:#?}",source_address, target_address,e);
+                        if let Err(e) = message_framed_write.close().await {
+                            error!("Fail to flush data to agent because of error, agent source address: {:?}, target address:{:?}, error: {:#?}",source_address, target_address,e);
+                        };
+                    }
                     return;
                 },
                 Ok(Ok(0)) => {
@@ -258,6 +300,12 @@ where
                         "Nothing to read from target, source address:{:?}, target address:{:?}.",
                         source_address, target_address
                     );
+                    if let Err(e) = message_framed_write.flush().await {
+                        error!("Fail to flush data to agent because of error, agent source address: {:?}, target address:{:?}, error: {:#?}",source_address, target_address,e);
+                        if let Err(e) = message_framed_write.close().await {
+                            error!("Fail to flush data to agent because of error, agent source address: {:?}, target address:{:?}, error: {:#?}",source_address, target_address,e);
+                        };
+                    }
                     return;
                 },
                 Ok(Ok(size)) => {
@@ -292,10 +340,13 @@ where
                 .await
                 {
                     Err(e) => {
-                        error!(
-                        "Fail to select payload encryption type because of error, source address:{:?}, target address:{:?}, error: {:#?}",source_address, target_address,
-                        e
-                    );
+                        error!( "Fail to select payload encryption type because of error, source address:{:?}, target address:{:?}, error: {:#?}",source_address, target_address, e);
+                        if let Err(e) = message_framed_write.flush().await {
+                            error!("Fail to flush data to agent because of error, agent source address: {:?}, target address:{:?}, error: {:#?}",source_address, target_address,e);
+                            if let Err(e) = message_framed_write.close().await {
+                                error!("Fail to flush data to agent because of error, agent source address: {:?}, target address:{:?}, error: {:#?}",source_address, target_address,e);
+                            };
+                        }
                         return;
                     },
                     Ok(v) => v,
