@@ -1,15 +1,14 @@
+use std::io::Error as StdIoError;
 /// The general error happen in ppaass project.
 #[derive(thiserror::Error, Debug)]
 pub enum PpaassError {
     #[error("Codec error happen.")]
     CodecError,
-    #[error("I/O error happen.")]
+    #[error("Error happen, original io error: {:?}", source)]
     IoError {
         #[from]
-        source: std::io::Error,
+        source: StdIoError,
     },
-    #[error("Unkown error happen.")]
-    UnknownError,
-    #[error("Timeout error happen.")]
-    TimeoutError,
+    #[error("Timeout error happen, expend: {expend}.")]
+    TimeoutError { expend: u64 },
 }

@@ -1,7 +1,10 @@
-use std::fmt::{Debug, Formatter};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::task::{Context, Poll};
+use std::{
+    fmt::{Debug, Formatter},
+    io::ErrorKind,
+};
 
 use bytecodec::bytes::BytesEncoder;
 use bytecodec::EncodeExt;
@@ -287,7 +290,12 @@ where
                 Ok(Some(v)) => v,
                 Ok(_) => {
                     Self::send_error_to_client(http_client_framed).await?;
-                    return Err(PpaassError::UnknownError);
+                    return Err(PpaassError::IoError {
+                        source: std::io::Error::new(
+                            ErrorKind::InvalidData,
+                            "Invalid payload type read from proxy.",
+                        ),
+                    });
                 },
             };
             if let ReadMessageServiceResult {
@@ -340,7 +348,12 @@ where
                 });
             };
             Self::send_error_to_client(http_client_framed).await?;
-            Err(PpaassError::UnknownError)
+            Err(PpaassError::IoError {
+                source: std::io::Error::new(
+                    ErrorKind::InvalidData,
+                    "Invalid payload type read from proxy.",
+                ),
+            })
         })
     }
 }

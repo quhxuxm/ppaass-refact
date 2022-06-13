@@ -1,6 +1,6 @@
-use std::net::SocketAddr;
 use std::sync::Arc;
 use std::task::{Context, Poll};
+use std::{io::ErrorKind, net::SocketAddr};
 
 use bytes::Bytes;
 use futures::future::BoxFuture;
@@ -193,11 +193,21 @@ where
                     ..
                 }) => {
                     error!("Fail connect to target from proxy.");
-                    Err(PpaassError::UnknownError)
+                    Err(PpaassError::IoError {
+                        source: std::io::Error::new(
+                            ErrorKind::ConnectionReset,
+                            "Fail connect to target from proxy",
+                        ),
+                    })
                 },
                 Some(_) => {
                     error!("Invalid payload type read from proxy.");
-                    Err(PpaassError::UnknownError)
+                    Err(PpaassError::IoError {
+                        source: std::io::Error::new(
+                            ErrorKind::InvalidData,
+                            "Invalid payload type read from proxy.",
+                        ),
+                    })
                 },
             }
         })

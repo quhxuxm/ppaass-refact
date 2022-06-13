@@ -31,7 +31,7 @@ use common::{
     WriteMessageService, WriteMessageServiceRequest, WriteMessageServiceResult,
 };
 
-use crate::codec::common::{Protocol, SwitchProtocolDecoder};
+use crate::codec::{Protocol, SwitchClientProtocolDecoder};
 use crate::config::SERVER_CONFIG;
 use crate::service::http::{HttpFlowRequest, HttpFlowService};
 use crate::service::socks5::{Socks5FlowRequest, Socks5FlowService};
@@ -114,7 +114,7 @@ where
                 ServiceBuilder::new().service(HttpFlowService::new(rsa_crypto_fetcher));
             let mut framed = Framed::with_capacity(
                 &mut req.client_stream,
-                SwitchProtocolDecoder,
+                SwitchClientProtocolDecoder,
                 SERVER_CONFIG
                     .message_framed_buffer_size()
                     .unwrap_or(DEFAULT_BUFFER_SIZE),
@@ -232,7 +232,9 @@ impl ConnectToProxyService {
                             "The connect to proxy timeout: {} seconds.",
                             connect_timeout_seconds
                         );
-                        return Err(PpaassError::TimeoutError);
+                        return Err(PpaassError::TimeoutError {
+                            expend: connect_timeout_seconds,
+                        });
                     },
                     Ok(Err(e)) => {
                         error!("Fail connect to proxy because of error: {:#?}", e);

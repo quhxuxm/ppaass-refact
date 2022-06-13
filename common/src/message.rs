@@ -533,6 +533,15 @@ impl Message {
     }
 }
 
+impl TryFrom<Vec<u8>> for Message {
+    type Error = PpaassError;
+
+    fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
+        let value_bytes = Bytes::from(value);
+        value_bytes.try_into()
+    }
+}
+
 impl TryFrom<Bytes> for Message {
     type Error = PpaassError;
 

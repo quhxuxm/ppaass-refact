@@ -10,7 +10,7 @@ use crate::message::socks5::{
     Socks5UdpDataCommandContent, Socks5UdpDataCommandResultContent,
 };
 
-use super::common::SOCKS5_FLAG;
+use super::SOCKS5_FLAG;
 
 pub(crate) struct Socks5AuthCommandContentCodec;
 

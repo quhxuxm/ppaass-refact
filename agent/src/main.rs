@@ -10,13 +10,8 @@ pub(crate) mod message {
     pub(crate) mod socks5;
 }
 
+pub(crate) mod codec;
 pub(crate) mod server;
-
-pub(crate) mod codec {
-    pub(crate) mod common;
-    pub(crate) mod http;
-    pub(crate) mod socks5;
-}
 
 pub(crate) mod service;
 

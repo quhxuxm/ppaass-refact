@@ -232,12 +232,6 @@ async fn send_socks5_init_failure(
         );
         return Err(e);
     };
-    if let Err(e) = socks5_client_framed.flush().await {
-        error!(
-            "Fail to flush socks5 connect fail result to client because of error: {:#?}",
-            e
-        );
-        return Err(PpaassError::UnknownError);
-    }
+    socks5_client_framed.flush().await?;
     Ok(())
 }

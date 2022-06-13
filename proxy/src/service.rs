@@ -270,7 +270,9 @@ impl ConnectToTargetService {
                             "The connect to target timeout, duration: {}.",
                             connect_timeout_seconds
                         );
-                        return Err(PpaassError::TimeoutError);
+                        return Err(PpaassError::TimeoutError {
+                            expend: connect_timeout_seconds,
+                        });
                     },
                     Ok(Ok(v)) => v,
                     Ok(Err(e)) => {
