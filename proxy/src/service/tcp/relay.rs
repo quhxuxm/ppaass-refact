@@ -117,7 +117,7 @@ where
                 target_stream_write,
             ));
             tokio::spawn(async move {
-                if let Err(message_framed_write) = Self::relay_target_to_proxy(
+                if let Err(mut message_framed_write) = Self::relay_target_to_proxy(
                     message_framed_write,
                     agent_tcp_connect_message_id,
                     user_token,

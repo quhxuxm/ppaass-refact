@@ -14,7 +14,7 @@ use common::{
     PayloadEncryptionTypeSelectServiceRequest, PayloadEncryptionTypeSelectServiceResult,
     PayloadType, PpaassError, ProxyMessagePayloadTypeValue, ReadMessageService,
     ReadMessageServiceRequest, ReadMessageServiceResult, RsaCryptoFetcher, WriteMessageService,
-    WriteMessageServiceRequest, WriteMessageServiceResult,
+    WriteMessageServiceError, WriteMessageServiceRequest, WriteMessageServiceResult,
 };
 
 use crate::service::common::{
@@ -74,9 +74,7 @@ where
         Box::pin(async move {
             let mut connect_to_proxy_service =
                 ServiceBuilder::new().service(ConnectToProxyService::new(
-                    SERVER_CONFIG
-                        .proxy_connection_retry()
-                        .unwrap_or(DEFAULT_RETRY_TIMES),
+                    SERVER_CONFIG.proxy_connection_retry().unwrap_or(DEFAULT_RETRY_TIMES),
                     SERVER_CONFIG
                         .connect_proxy_timeout_seconds()
                         .unwrap_or(DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS),
@@ -128,8 +126,8 @@ where
             )
             .await
             {
-                Err(e) => {
-                    return Err(e);
+                Err(WriteMessageServiceError { source, .. }) => {
+                    return Err(source);
                 },
                 Ok(WriteMessageServiceResult {
                     mut message_framed_write,

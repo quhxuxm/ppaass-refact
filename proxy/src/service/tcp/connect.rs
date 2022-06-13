@@ -17,7 +17,7 @@ use common::{
     PayloadEncryptionTypeSelectServiceRequest, PayloadEncryptionTypeSelectServiceResult,
     PayloadType, PpaassError, ProxyMessagePayloadTypeValue, ReadMessageService,
     ReadMessageServiceRequest, ReadMessageServiceResult, RsaCryptoFetcher, WriteMessageService,
-    WriteMessageServiceRequest, WriteMessageServiceResult,
+    WriteMessageServiceError, WriteMessageServiceRequest, WriteMessageServiceResult,
 };
 
 use crate::config::{
@@ -43,11 +43,7 @@ where
     T: RsaCryptoFetcher,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        writeln!(
-            f,
-            "TcpConnectServiceRequest: agent_address={}",
-            self.agent_address
-        )
+        writeln!(f, "TcpConnectServiceRequest: agent_address={}", self.agent_address)
     }
 }
 
@@ -91,9 +87,7 @@ where
                 ServiceBuilder::new().service(WriteMessageService::default());
             let mut connect_to_target_service =
                 ServiceBuilder::new().service(ConnectToTargetService::new(
-                    SERVER_CONFIG
-                        .target_connection_retry()
-                        .unwrap_or(DEFAULT_CONNECT_TARGET_RETRY),
+                    SERVER_CONFIG.target_connection_retry().unwrap_or(DEFAULT_CONNECT_TARGET_RETRY),
                     SERVER_CONFIG
                         .connect_target_timeout_seconds()
                         .unwrap_or(DEFAULT_CONNECT_TARGET_TIMEOUT_SECONDS),
@@ -166,8 +160,11 @@ where
                         )
                         .await
                         {
-                            Err(e) => {
-                                return Err(e);
+                            Err(WriteMessageServiceError {
+                                message_framed_write,
+                                source,
+                            }) => {
+                                return Err(source);
                             },
                             Ok(WriteMessageServiceResult {
                                 mut message_framed_write,
@@ -203,7 +200,10 @@ where
                 )
                 .await
                 {
-                    Err(e) => return Err(e),
+                    Err(WriteMessageServiceError {
+                        message_framed_write,
+                        source,
+                    }) => return Err(source),
                     Ok(WriteMessageServiceResult {
                         mut message_framed_write,
                     }) => {
