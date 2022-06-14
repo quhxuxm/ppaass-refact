@@ -7,7 +7,7 @@ use futures::future::BoxFuture;
 use tokio::net::TcpStream;
 use tower::{Service, ServiceBuilder};
 
-use common::{ready_and_call_service, PpaassError, RsaCryptoFetcher};
+use common::{ready_and_call_service, RsaCryptoFetcher};
 
 use crate::service::common::{TcpRelayService, TcpRelayServiceRequest};
 use crate::service::http::connect::{HttpConnectService, HttpConnectServiceRequest};
@@ -49,7 +49,7 @@ where
     T: RsaCryptoFetcher + Send + Sync + 'static,
 {
     type Response = HttpFlowResult;
-    type Error = PpaassError;
+    type Error = anyhow::Error;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {

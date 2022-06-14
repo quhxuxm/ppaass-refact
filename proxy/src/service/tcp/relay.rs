@@ -5,7 +5,7 @@ use std::{
 };
 use std::{net::SocketAddr, time::Duration};
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use bytes::{Bytes, BytesMut};
 
 use futures::{future::BoxFuture, SinkExt};
@@ -114,7 +114,7 @@ where
             let target_address_for_return = agent_connect_message_target_address.clone();
             let (target_stream_read, target_stream_write) = target_stream.into_split();
             tokio::spawn(async move {
-                if let Err((_message_framed_read, mut target_stream_write)) =
+                if let Err((_, mut target_stream_write, original_error)) =
                     Self::relay_proxy_to_target(
                         req.agent_address,
                         message_framed_read,
@@ -122,7 +122,10 @@ where
                     )
                     .await
                 {
-                    error!("Error happen when relay data from proxy to target");
+                    error!(
+                        "Error happen when relay data from proxy to target, error: {:#?}",
+                        original_error
+                    );
                     if let Err(e) = target_stream_write.flush().await {
                         error!("Fail to flush target stream writer when relay data from proxy to target have error:{:#?}", e);
                     };
@@ -132,17 +135,21 @@ where
                 }
             });
             tokio::spawn(async move {
-                if let Err(mut message_framed_write) = Self::relay_target_to_proxy(
-                    message_framed_write,
-                    agent_tcp_connect_message_id,
-                    user_token,
-                    agent_connect_message_source_address,
-                    agent_connect_message_target_address,
-                    target_stream_read,
-                )
-                .await
+                if let Err((mut message_framed_write, _, original_error)) =
+                    Self::relay_target_to_proxy(
+                        message_framed_write,
+                        agent_tcp_connect_message_id,
+                        user_token,
+                        agent_connect_message_source_address,
+                        agent_connect_message_target_address,
+                        target_stream_read,
+                    )
+                    .await
                 {
-                    error!("Error happen when relay data from target to proxy");
+                    error!(
+                        "Error happen when relay data from target to proxy, error: {:#?}",
+                        original_error
+                    );
                     if let Err(e) = message_framed_write.flush().await {
                         error!("Fail to flush proxy writer when relay data from target to proxy have error:{:#?}", e);
                     };
@@ -166,7 +173,7 @@ where
     async fn relay_proxy_to_target(
         agent_address: SocketAddr, mut message_framed_read: MessageFramedRead<T>,
         mut target_stream_write: OwnedWriteHalf,
-    ) -> Result<(), (MessageFramedRead<T>, OwnedWriteHalf)> {
+    ) -> Result<(), (MessageFramedRead<T>, OwnedWriteHalf, anyhow::Error)> {
         loop {
             let read_timeout_seconds = SERVER_CONFIG
                 .read_agent_timeout_seconds()
@@ -184,16 +191,16 @@ where
             let (message_framed_read_move_back, agent_data) = match read_agent_message_result {
                 Err(ReadMessageServiceError {
                     message_framed_read,
-                    ..
+                    source,
                 }) => {
-                    return Err((message_framed_read, target_stream_write));
+                    return Err((message_framed_read, target_stream_write, anyhow!(source)));
                 },
                 Ok(ReadMessageServiceResult {
                     message_framed_read,
                     content,
                 }) => match content {
                     None => {
-                        return Err((message_framed_read, target_stream_write));
+                        return Ok(());
                     },
                     Some(ReadMessageServiceResultContent {
                         message_payload:
@@ -206,7 +213,11 @@ where
                         ..
                     }) => (message_framed_read, data),
                     Some(ReadMessageServiceResultContent { .. }) => {
-                        return Err((message_framed_read, target_stream_write))
+                        return Err((
+                            message_framed_read,
+                            target_stream_write,
+                            anyhow!(PpaassError::CodecError),
+                        ))
                     },
                 },
             };
@@ -214,12 +225,12 @@ where
             let agent_data_chunks = agent_data
                 .chunks(SERVER_CONFIG.target_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE) as usize);
             for (_, chunk) in agent_data_chunks.enumerate() {
-                if let Err(_e) = target_stream_write.write(chunk).await {
-                    return Err((message_framed_read, target_stream_write));
+                if let Err(e) = target_stream_write.write(chunk).await {
+                    return Err((message_framed_read, target_stream_write, anyhow!(e)));
                 };
             }
-            if let Err(_e) = target_stream_write.flush().await {
-                return Err((message_framed_read, target_stream_write));
+            if let Err(e) = target_stream_write.flush().await {
+                return Err((message_framed_read, target_stream_write, anyhow!(e)));
             }
         }
     }
@@ -228,7 +239,7 @@ where
         mut message_framed_write: MessageFramedWrite<T>, agent_tcp_connect_message_id: String,
         user_token: String, agent_connect_message_source_address: NetAddress,
         agent_connect_message_target_address: NetAddress, mut target_stream_read: OwnedReadHalf,
-    ) -> Result<(), MessageFramedWrite<T>> {
+    ) -> Result<(), (MessageFramedWrite<T>, OwnedReadHalf, anyhow::Error)> {
         loop {
             let mut write_proxy_message_service: WriteMessageService = Default::default();
             let mut payload_encryption_type_select_service: PayloadEncryptionTypeSelectService =
@@ -247,14 +258,17 @@ where
             )
             .await
             {
-                Err(_e) => {
-                    return Err(message_framed_write);
+                Err(e) => {
+                    return Err((message_framed_write, target_stream_read, anyhow!(e)));
                 },
-                Ok(Err(_e)) => {
-                    return Err(message_framed_write);
+                Ok(Err(e)) => {
+                    return Err((message_framed_write, target_stream_read, anyhow!(e)));
                 },
                 Ok(Ok(0)) => {
-                    message_framed_write.flush().await.map_err(|_e| message_framed_write)?;
+                    message_framed_write
+                        .flush()
+                        .await
+                        .map_err(|e| (message_framed_write, target_stream_read, anyhow!(e)))?;
                     return Ok(());
                 },
                 Ok(Ok(size)) => size,
@@ -279,7 +293,7 @@ where
                 )
                 .await
                 {
-                    Err(_e) => return Err(message_framed_write),
+                    Err(e) => return Err((message_framed_write, target_stream_read, anyhow!(e))),
                     Ok(PayloadEncryptionTypeSelectServiceResult {
                         payload_encryption_type,
                         ..
@@ -299,8 +313,8 @@ where
                 {
                     Err(WriteMessageServiceError {
                         message_framed_write,
-                        ..
-                    }) => return Err(message_framed_write),
+                        source,
+                    }) => return Err((message_framed_write, target_stream_read, anyhow!(source))),
                     Ok(WriteMessageServiceResult {
                         message_framed_write,
                         ..

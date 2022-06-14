@@ -3,20 +3,20 @@ use std::sync::Arc;
 use std::task::Poll;
 use std::{fmt::Debug, net::SocketAddr};
 
+use anyhow::anyhow;
 use bytes::BytesMut;
+use common::{
+    ready_and_call_service, MessageFramedRead, MessageFramedWrite, NetAddress, PpaassError,
+    RsaCryptoFetcher,
+};
 use futures::future::BoxFuture;
 use futures::{SinkExt, StreamExt};
+use tcp_connect::Socks5TcpConnectService;
 use tokio::net::TcpStream;
 use tokio_util::codec::{Framed, FramedParts};
 use tower::Service;
 use tower::ServiceBuilder;
 use tracing::log::{debug, error};
-
-use common::{
-    ready_and_call_service, MessageFramedRead, MessageFramedWrite, NetAddress, PpaassError,
-    RsaCryptoFetcher,
-};
-use tcp_connect::Socks5TcpConnectService;
 
 use crate::message::socks5::{
     Socks5InitCommandResultContent, Socks5InitCommandResultStatus, Socks5InitCommandType,
@@ -85,7 +85,7 @@ where
     T: RsaCryptoFetcher + Send + Sync + 'static,
 {
     type Response = Socks5InitCommandServiceResult<T>;
-    type Error = PpaassError;
+    type Error = anyhow::Error;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, _cx: &mut std::task::Context) -> Poll<Result<(), Self::Error>> {
@@ -105,13 +105,10 @@ where
                 Some(Ok(v)) => v,
                 _ => {
                     send_socks5_init_failure(&mut socks5_init_framed).await?;
-                    return Err(PpaassError::CodecError);
+                    return Err(anyhow!(PpaassError::CodecError));
                 },
             };
-            debug!(
-                "Client {} send socks 5 connect command: {:#?}",
-                client_address, init_command
-            );
+            debug!("Client {} send socks 5 connect command: {:#?}", client_address, init_command);
             let dest_address = init_command.dest_address;
             match init_command.request_type {
                 Socks5InitCommandType::Connect => {
@@ -185,7 +182,7 @@ where
                                 e
                             );
                             send_socks5_init_failure(&mut socks5_init_framed).await?;
-                            Err(e)
+                            Err(anyhow!(e))
                         },
                         Ok(Socks5UdpAssociateServiceResponse {
                             message_framed_read,
@@ -226,10 +223,7 @@ async fn send_socks5_init_failure(
     let connect_result =
         Socks5InitCommandResultContent::new(Socks5InitCommandResultStatus::Failure, None);
     if let Err(e) = socks5_client_framed.send(connect_result).await {
-        error!(
-            "Fail to write socks5 connect fail result to client because of error: {:#?}",
-            e
-        );
+        error!("Fail to write socks5 connect fail result to client because of error: {:#?}", e);
         return Err(e);
     };
     socks5_client_framed.flush().await?;

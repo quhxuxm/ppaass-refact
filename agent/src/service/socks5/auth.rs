@@ -3,15 +3,15 @@ use std::io::ErrorKind;
 use std::net::SocketAddr;
 use std::task::{Context, Poll};
 
+use anyhow::anyhow;
 use bytes::BytesMut;
+use common::PpaassError;
 use futures::future::BoxFuture;
 use futures::{SinkExt, StreamExt};
 use tokio::net::TcpStream;
 use tokio_util::codec::{Framed, FramedParts};
 use tower::Service;
 use tracing::debug;
-
-use common::PpaassError;
 
 use crate::codec::socks5::Socks5AuthCommandContentCodec;
 use crate::message::socks5::{Socks5AuthCommandResultContent, Socks5AuthMethod};
@@ -25,11 +25,7 @@ pub(crate) struct Socks5AuthenticateFlowRequest {
 
 impl Debug for Socks5AuthenticateFlowRequest {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Socks5AuthenticateFlowRequest: client_address={}",
-            self.client_address
-        )
+        write!(f, "Socks5AuthenticateFlowRequest: client_address={}", self.client_address)
     }
 }
 
@@ -52,7 +48,7 @@ impl Debug for Socks5AuthCommandService {
 
 impl Service<Socks5AuthenticateFlowRequest> for Socks5AuthCommandService {
     type Response = Socks5AuthenticateFlowResult;
-    type Error = PpaassError;
+    type Error = anyhow::Error;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, _: &mut Context) -> Poll<Result<(), Self::Error>> {
@@ -71,12 +67,12 @@ impl Service<Socks5AuthenticateFlowRequest> for Socks5AuthCommandService {
                         Socks5AuthCommandResultContent::new(Socks5AuthMethod::NoAcceptableMethods);
                     framed.send(authentication_result).await?;
                     framed.flush().await?;
-                    return Err(PpaassError::IoError {
+                    return Err(anyhow!(PpaassError::IoError {
                         source: std::io::Error::new(
                             ErrorKind::InvalidData,
                             "No authenticate frame.",
                         ),
-                    });
+                    }));
                 },
                 Some(v) => match v {
                     Ok(v) => v,
@@ -86,7 +82,7 @@ impl Service<Socks5AuthenticateFlowRequest> for Socks5AuthCommandService {
                         );
                         framed.send(authentication_result).await?;
                         framed.flush().await?;
-                        return Err(e);
+                        return Err(anyhow!(e));
                     },
                 },
             };

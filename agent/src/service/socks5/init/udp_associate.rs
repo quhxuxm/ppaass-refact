@@ -9,6 +9,7 @@ use tower::Service;
 use common::{MessageFramedRead, MessageFramedWrite, NetAddress, PpaassError, RsaCryptoFetcher};
 
 #[derive(Debug)]
+#[allow(unused)]
 pub(crate) struct Socks5UdpAssociateServiceRequest {
     pub proxy_addresses: Arc<Vec<SocketAddr>>,
     pub client_address: SocketAddr,
@@ -26,6 +27,8 @@ where
     pub connect_response_message_id: String,
     pub proxy_address: Option<SocketAddr>,
 }
+
+#[allow(unused)]
 pub(crate) struct Socks5UdpAssociateService<T>
 where
     T: RsaCryptoFetcher,
@@ -54,7 +57,7 @@ where
         Poll::Ready(Ok(()))
     }
 
-    fn call(&mut self, request: Socks5UdpAssociateServiceRequest) -> Self::Future {
+    fn call(&mut self, _request: Socks5UdpAssociateServiceRequest) -> Self::Future {
         todo!()
     }
 }

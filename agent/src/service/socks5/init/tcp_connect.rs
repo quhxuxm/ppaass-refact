@@ -5,6 +5,7 @@ use std::{
 use std::{io::ErrorKind, sync::Arc};
 use std::{net::SocketAddr, task::Poll};
 
+use anyhow::anyhow;
 use bytes::Bytes;
 use futures::future::BoxFuture;
 use futures::SinkExt;
@@ -16,9 +17,9 @@ use common::{
     MessageFramedWrite, MessagePayload, NetAddress, PayloadEncryptionTypeSelectService,
     PayloadEncryptionTypeSelectServiceRequest, PayloadEncryptionTypeSelectServiceResult,
     PayloadType, PpaassError, ProxyMessagePayloadTypeValue, ReadMessageService,
-    ReadMessageServiceRequest, ReadMessageServiceResult, ReadMessageServiceResultContent,
-    RsaCryptoFetcher, WriteMessageService, WriteMessageServiceError, WriteMessageServiceRequest,
-    WriteMessageServiceResult,
+    ReadMessageServiceError, ReadMessageServiceRequest, ReadMessageServiceResult,
+    ReadMessageServiceResultContent, RsaCryptoFetcher, WriteMessageService,
+    WriteMessageServiceError, WriteMessageServiceRequest, WriteMessageServiceResult,
 };
 
 use crate::{
@@ -79,7 +80,7 @@ where
 {
     type Response = Socks5TcpConnectServiceResponse<T>;
 
-    type Error = PpaassError;
+    type Error = anyhow::Error;
 
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
@@ -149,13 +150,13 @@ where
             .await
             {
                 Err(WriteMessageServiceError { source, .. }) => {
-                    return Err(source);
+                    return Err(anyhow!(source));
                 },
                 Ok(WriteMessageServiceResult {
                     mut message_framed_write,
                 }) => {
                     if let Err(e) = message_framed_write.flush().await {
-                        return Err(e);
+                        return Err(anyhow!(e));
                     }
                     message_framed_write
                 },
@@ -170,21 +171,9 @@ where
             )
             .await
             {
-                Err(e) => {
-                    error!("Invalid payload type read from proxy.");
-                    Err(PpaassError::IoError {
-                        source: std::io::Error::new(
-                            ErrorKind::InvalidData,
-                            "Invalid payload type read from proxy.",
-                        ),
-                    })
-                },
-                Ok(ReadMessageServiceResult {
-                    message_framed_read,
-                    content: None,
-                }) => {
-                    error!("Nothing read from proxy.");
-                    Err(PpaassError::CodecError)
+                Err(ReadMessageServiceError { source, .. }) => Err(anyhow!(source)),
+                Ok(ReadMessageServiceResult { content: None, .. }) => {
+                    Err(anyhow!(PpaassError::CodecError))
                 },
                 Ok(ReadMessageServiceResult {
                     message_framed_read,
@@ -213,7 +202,6 @@ where
                     proxy_address: framed_result.framed_address,
                 }),
                 Ok(ReadMessageServiceResult {
-                    message_framed_read,
                     content:
                         Some(ReadMessageServiceResultContent {
                             message_payload:
@@ -222,29 +210,25 @@ where
                                         PayloadType::ProxyPayload(
                                             ProxyMessagePayloadTypeValue::TcpConnectFail,
                                         ),
-                                    source_address,
-                                    target_address,
                                     ..
                                 }),
                             ..
                         }),
-                }) => {
-                    error!("Fail connect to target from proxy.");
-                    Err(PpaassError::IoError {
-                        source: std::io::Error::new(
-                            ErrorKind::ConnectionReset,
-                            "Fail connect to target from proxy",
-                        ),
-                    })
-                },
+                    ..
+                }) => Err(anyhow!(PpaassError::IoError {
+                    source: std::io::Error::new(
+                        ErrorKind::ConnectionReset,
+                        "Fail connect to target from proxy",
+                    ),
+                })),
                 Ok(ReadMessageServiceResult { .. }) => {
                     error!("Invalid payload type read from proxy.");
-                    Err(PpaassError::IoError {
+                    Err(anyhow!(PpaassError::IoError {
                         source: std::io::Error::new(
                             ErrorKind::InvalidData,
                             "Invalid payload type read from proxy.",
                         ),
-                    })
+                    }))
                 },
             }
         })

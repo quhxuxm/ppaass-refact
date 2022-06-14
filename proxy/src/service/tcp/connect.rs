@@ -2,15 +2,8 @@ use std::fmt::{Debug, Formatter};
 use std::net::SocketAddr;
 use std::task::{Context, Poll};
 
+use anyhow::anyhow;
 use bytes::Bytes;
-use futures::future::BoxFuture;
-use futures::SinkExt;
-use tokio::net::TcpStream;
-use tower::Service;
-use tower::ServiceBuilder;
-use tracing::error;
-use tracing::log::debug;
-
 use common::{
     generate_uuid, ready_and_call_service, AgentMessagePayloadTypeValue, MessageFramedRead,
     MessageFramedWrite, MessagePayload, NetAddress, PayloadEncryptionTypeSelectService,
@@ -20,6 +13,13 @@ use common::{
     RsaCryptoFetcher, WriteMessageService, WriteMessageServiceError, WriteMessageServiceRequest,
     WriteMessageServiceResult,
 };
+use futures::future::BoxFuture;
+use futures::SinkExt;
+use tokio::net::TcpStream;
+use tower::Service;
+use tower::ServiceBuilder;
+use tracing::error;
+use tracing::log::debug;
 
 use crate::config::{
     DEFAULT_CONNECT_TARGET_RETRY, DEFAULT_CONNECT_TARGET_TIMEOUT_SECONDS,
@@ -69,7 +69,7 @@ where
     T: RsaCryptoFetcher + Send + Sync + 'static,
 {
     type Response = TcpConnectServiceResult<T>;
-    type Error = PpaassError;
+    type Error = anyhow::Error;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
@@ -165,17 +165,17 @@ where
                         .await
                         {
                             Err(WriteMessageServiceError { source, .. }) => {
-                                return Err(source);
+                                return Err(anyhow!(source));
                             },
                             Ok(WriteMessageServiceResult {
                                 mut message_framed_write,
                             }) => {
                                 if let Err(e) = message_framed_write.flush().await {
-                                    return Err(e);
+                                    return Err(anyhow!(e));
                                 }
                             },
                         };
-                        return Err(e);
+                        return Err(anyhow!(e));
                     },
                     Ok(v) => v,
                 };
@@ -201,12 +201,12 @@ where
                 )
                 .await
                 {
-                    Err(WriteMessageServiceError { source, .. }) => return Err(source),
+                    Err(WriteMessageServiceError { source, .. }) => return Err(anyhow!(source)),
                     Ok(WriteMessageServiceResult {
                         mut message_framed_write,
                     }) => {
                         if let Err(e) = message_framed_write.flush().await {
-                            return Err(e);
+                            return Err(anyhow!(e));
                         }
                         message_framed_write
                     },
@@ -221,7 +221,7 @@ where
                     user_token,
                 });
             };
-            Err(PpaassError::CodecError)
+            Err(anyhow!(PpaassError::CodecError))
         })
     }
 }

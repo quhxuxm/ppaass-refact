@@ -6,19 +6,11 @@ use std::{
     io::ErrorKind,
 };
 
+use anyhow::anyhow;
+use anyhow::Result;
 use bytecodec::bytes::BytesEncoder;
 use bytecodec::EncodeExt;
 use bytes::{Bytes, BytesMut};
-use futures::future::BoxFuture;
-use futures::{SinkExt, StreamExt};
-use httpcodec::{BodyEncoder, HttpVersion, ReasonPhrase, RequestEncoder, Response, StatusCode};
-use tokio::net::TcpStream;
-use tokio_util::codec::{Framed, FramedParts};
-use tower::Service;
-use tower::ServiceBuilder;
-use tracing::error;
-use url::Url;
-
 use common::{
     generate_uuid, ready_and_call_service, AgentMessagePayloadTypeValue, MessageFramedRead,
     MessageFramedWrite, MessagePayload, NetAddress, PayloadEncryptionTypeSelectService,
@@ -28,6 +20,15 @@ use common::{
     ReadMessageServiceResultContent, RsaCryptoFetcher, WriteMessageService,
     WriteMessageServiceError, WriteMessageServiceRequest, WriteMessageServiceResult,
 };
+use futures::future::BoxFuture;
+use futures::{SinkExt, StreamExt};
+use httpcodec::{BodyEncoder, HttpVersion, ReasonPhrase, RequestEncoder, Response, StatusCode};
+use tokio::net::TcpStream;
+use tokio_util::codec::{Framed, FramedParts};
+use tower::Service;
+use tower::ServiceBuilder;
+use tracing::error;
+use url::Url;
 
 use crate::codec::http::HttpCodec;
 use crate::service::common::{
@@ -98,9 +99,7 @@ where
         Self { rsa_crypto_fetcher }
     }
 
-    async fn send_error_to_client(
-        mut client_http_framed: HttpFramed<'_>,
-    ) -> Result<(), PpaassError> {
+    async fn send_error_to_client(mut client_http_framed: HttpFramed<'_>) -> Result<()> {
         let bad_request_status_code = StatusCode::new(ERROR_CODE).unwrap();
         let error_response_reason = ReasonPhrase::new(ERROR_REASON).unwrap();
         let connect_error_response = Response::new(
@@ -120,7 +119,7 @@ where
     T: RsaCryptoFetcher + Send + Sync + 'static,
 {
     type Response = HttpConnectServiceResult<T>;
-    type Error = PpaassError;
+    type Error = anyhow::Error;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
@@ -157,7 +156,7 @@ where
                 _ => {
                     return {
                         Self::send_error_to_client(http_client_framed).await?;
-                        Err(PpaassError::CodecError)
+                        Err(anyhow!(PpaassError::CodecError))
                     }
                 },
             };
@@ -180,7 +179,7 @@ where
                     Err(e) => {
                         error!("Fail to encode http data because of error: {:#?} ", e);
                         Self::send_error_to_client(http_client_framed).await?;
-                        return Err(PpaassError::CodecError);
+                        return Err(anyhow!(e));
                     },
                     Ok(v) => v,
                 };
@@ -188,7 +187,7 @@ where
             };
             let parsed_request_url = Url::parse(request_url.as_str()).map_err(|e| {
                 error!("Fail to parse request url because of error: {:#?}", e);
-                PpaassError::CodecError
+                e
             })?;
             let target_port = match parsed_request_url.port() {
                 None => match parsed_request_url.scheme() {
@@ -200,7 +199,7 @@ where
             let target_host = match parsed_request_url.host() {
                 None => {
                     Self::send_error_to_client(http_client_framed).await?;
-                    return Err(PpaassError::CodecError);
+                    return Err(anyhow!(PpaassError::CodecError));
                 },
                 Some(v) => v.to_string(),
             };
@@ -216,7 +215,7 @@ where
             {
                 Err(e) => {
                     Self::send_error_to_client(http_client_framed).await?;
-                    return Err(e);
+                    return Err(anyhow!(e));
                 },
                 Ok(v) => v,
             };
@@ -226,7 +225,7 @@ where
                 {
                     Err(e) => {
                         Self::send_error_to_client(http_client_framed).await?;
-                        return Err(e);
+                        return Err(anyhow!(e));
                     },
                     Ok(v) => v,
                 };
@@ -260,14 +259,14 @@ where
             {
                 Err(WriteMessageServiceError { source, .. }) => {
                     Self::send_error_to_client(http_client_framed).await?;
-                    return Err(source);
+                    return Err(anyhow!(source));
                 },
                 Ok(WriteMessageServiceResult {
                     mut message_framed_write,
                 }) => {
                     if let Err(e) = message_framed_write.flush().await {
                         Self::send_error_to_client(http_client_framed).await?;
-                        return Err(e);
+                        return Err(anyhow!(e));
                     }
                     message_framed_write
                 },
@@ -284,16 +283,16 @@ where
             {
                 Err(ReadMessageServiceError { source, .. }) => {
                     Self::send_error_to_client(http_client_framed).await?;
-                    return Err(source);
+                    return Err(anyhow!(source));
                 },
                 Ok(ReadMessageServiceResult { content: None, .. }) => {
                     Self::send_error_to_client(http_client_framed).await?;
-                    return Err(PpaassError::IoError {
+                    return Err(anyhow!(PpaassError::IoError {
                         source: std::io::Error::new(
                             ErrorKind::InvalidData,
                             "Invalid payload type read from proxy.",
                         ),
-                    });
+                    }));
                 },
                 Ok(ReadMessageServiceResult {
                     message_framed_read,
@@ -348,12 +347,12 @@ where
                 },
                 Ok(ReadMessageServiceResult { .. }) => {
                     Self::send_error_to_client(http_client_framed).await?;
-                    return Err(PpaassError::IoError {
+                    return Err(anyhow!(PpaassError::IoError {
                         source: std::io::Error::new(
                             ErrorKind::InvalidData,
                             "Invalid payload type read from proxy.",
                         ),
-                    });
+                    }));
                 },
             };
         })

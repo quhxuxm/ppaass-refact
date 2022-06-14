@@ -29,7 +29,7 @@ use common::{
 use crate::service::tcp::connect::{TcpConnectService, TcpConnectServiceRequest};
 use crate::service::tcp::relay::{TcpRelayService, TcpRelayServiceRequest};
 use crate::SERVER_CONFIG;
-
+use anyhow::{anyhow, Result};
 mod tcp;
 mod udp;
 const DEFAULT_BUFFER_SIZE: usize = 1024 * 64;
@@ -41,22 +41,17 @@ pub(crate) struct ProxyRsaCryptoFetcher {
 }
 
 impl ProxyRsaCryptoFetcher {
-    pub fn new() -> Result<Self, PpaassError> {
+    pub fn new() -> Result<Self> {
         let mut result = Self {
             cache: HashMap::new(),
         };
-        let rsa_dir_path = SERVER_CONFIG
-            .rsa_root_dir()
-            .as_ref()
-            .expect("Fail to read rsa root directory.");
+        let rsa_dir_path =
+            SERVER_CONFIG.rsa_root_dir().as_ref().expect("Fail to read rsa root directory.");
         let rsa_dir = fs::read_dir(rsa_dir_path)?;
         rsa_dir.for_each(|entry| {
             let entry = match entry {
                 Err(e) => {
-                    error!(
-                        "Fail to read {} directory because of error: {:#?}",
-                        rsa_dir_path, e
-                    );
+                    error!("Fail to read {} directory because of error: {:#?}", rsa_dir_path, e);
                     return;
                 },
                 Ok(v) => v,
@@ -130,11 +125,7 @@ pub(crate) struct AgentConnectionInfo {
 
 impl Debug for AgentConnectionInfo {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "AgentConnectionInfo: agent_address={}",
-            self.agent_address
-        )
+        write!(f, "AgentConnectionInfo: agent_address={}", self.agent_address)
     }
 }
 
@@ -159,7 +150,7 @@ where
     T: RsaCryptoFetcher + Send + Sync + 'static,
 {
     type Response = ();
-    type Error = PpaassError;
+    type Error = anyhow::Error;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
@@ -169,9 +160,8 @@ where
     fn call(&mut self, req: AgentConnectionInfo) -> Self::Future {
         let rsa_crypto_fetch = self.rsa_crypto_fetch.clone();
         Box::pin(async move {
-            let framed_buffer_size = SERVER_CONFIG
-                .message_framed_buffer_size()
-                .unwrap_or(DEFAULT_BUFFER_SIZE);
+            let framed_buffer_size =
+                SERVER_CONFIG.message_framed_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE);
             let mut prepare_message_frame_service =
                 ServiceBuilder::new().service(PrepareMessageFramedService::new(
                     framed_buffer_size,
@@ -249,7 +239,7 @@ struct ConnectToTargetAttempts {
 #[derive(Clone)]
 pub(crate) struct ConnectToTargetService {
     concrete_service:
-        BoxCloneService<ConnectToTargetServiceRequest, ConnectToTargetServiceResult, PpaassError>,
+        BoxCloneService<ConnectToTargetServiceRequest, ConnectToTargetServiceResult, anyhow::Error>,
 }
 
 impl ConnectToTargetService {
@@ -270,9 +260,9 @@ impl ConnectToTargetService {
                             "The connect to target timeout, duration: {}.",
                             connect_timeout_seconds
                         );
-                        return Err(PpaassError::TimeoutError {
+                        return Err(anyhow!(PpaassError::TimeoutError {
                             elapsed: connect_timeout_seconds,
-                        });
+                        }));
                     },
                     Ok(Ok(v)) => v,
                     Ok(Err(e)) => {
@@ -280,17 +270,13 @@ impl ConnectToTargetService {
                             "Fail connect to target {} because of error: {:#?}",
                             &request.target_address, e
                         );
-                        return Err(PpaassError::IoError { source: e });
+                        return Err(anyhow!(e));
                     },
                 };
 
-                target_stream
-                    .set_nodelay(true)
-                    .map_err(|e| PpaassError::IoError { source: e })?;
+                target_stream.set_nodelay(true)?;
                 if let Some(so_linger) = SERVER_CONFIG.target_stream_so_linger() {
-                    target_stream
-                        .set_linger(Some(Duration::from_secs(so_linger)))
-                        .map_err(|e| PpaassError::IoError { source: e })?;
+                    target_stream.set_linger(Some(Duration::from_secs(so_linger)))?;
                 }
 
                 debug!("Success connect to target: {}", request.target_address);
@@ -303,14 +289,14 @@ impl ConnectToTargetService {
     }
 }
 
-impl Policy<ConnectToTargetServiceRequest, ConnectToTargetServiceResult, PpaassError>
+impl Policy<ConnectToTargetServiceRequest, ConnectToTargetServiceResult, anyhow::Error>
     for ConnectToTargetAttempts
 {
     type Future = future::Ready<Self>;
 
     fn retry(
         &self, _req: &ConnectToTargetServiceRequest,
-        result: Result<&ConnectToTargetServiceResult, &PpaassError>,
+        result: Result<&ConnectToTargetServiceResult, &anyhow::Error>,
     ) -> Option<Self::Future> {
         match result {
             Ok(_) => {
@@ -342,7 +328,7 @@ impl Policy<ConnectToTargetServiceRequest, ConnectToTargetServiceResult, PpaassE
 
 impl Service<ConnectToTargetServiceRequest> for ConnectToTargetService {
     type Response = ConnectToTargetServiceResult;
-    type Error = PpaassError;
+    type Error = anyhow::Error;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
@@ -352,18 +338,7 @@ impl Service<ConnectToTargetServiceRequest> for ConnectToTargetService {
     fn call(&mut self, request: ConnectToTargetServiceRequest) -> Self::Future {
         let mut concrete_connect_service = self.concrete_service.clone();
         Box::pin(async move {
-            let concrete_connect_result =
-                ready_and_call_service(&mut concrete_connect_service, request.clone()).await;
-            match concrete_connect_result {
-                Ok(r) => Ok(r),
-                Err(e) => {
-                    error!(
-                        "Agent {} fail to connect target: {} because of error: {:#?}",
-                        request.agent_address, request.target_address, e
-                    );
-                    Err(e)
-                },
-            }
+            ready_and_call_service(&mut concrete_connect_service, request.clone()).await
         })
     }
 }

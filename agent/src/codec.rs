@@ -5,6 +5,7 @@ use pretty_hex::*;
 use tokio_util::codec::Decoder;
 use tracing::{debug, error};
 
+use anyhow::anyhow;
 use common::PpaassError;
 
 pub(crate) mod http;
@@ -27,7 +28,7 @@ pub(crate) struct SwitchClientProtocolDecoder;
 impl Decoder for SwitchClientProtocolDecoder {
     type Item = Protocol;
 
-    type Error = PpaassError;
+    type Error = anyhow::Error;
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
         // Use the first byte to decide what protocol the client side is using.
@@ -48,7 +49,7 @@ impl Decoder for SwitchClientProtocolDecoder {
             SOCKS4_FLAG => {
                 error!("Incoming agent client protocol is socks4, which is unsupported, input client packet: \n\n{}\n\n",
                 pretty_hex(src));
-                Err(PpaassError::CodecError)
+                Err(anyhow!(PpaassError::CodecError))
             },
             _ => {
                 debug!(

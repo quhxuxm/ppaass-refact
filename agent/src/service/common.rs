@@ -7,6 +7,7 @@ use std::{
     marker::PhantomData,
 };
 
+use anyhow::anyhow;
 use bytes::{Bytes, BytesMut};
 use futures::{future, StreamExt};
 use futures::{future::BoxFuture, SinkExt};
@@ -91,7 +92,7 @@ where
     T: RsaCryptoFetcher + Send + Sync + 'static,
 {
     type Response = ();
-    type Error = PpaassError;
+    type Error = anyhow::Error;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
@@ -118,7 +119,7 @@ where
                         "Can not parse protocol from client input stream because of error: {:#?}.",
                         e
                     );
-                    Err(PpaassError::CodecError)
+                    Err(anyhow!(e))
                 },
                 Some(Ok(Protocol::Http)) => {
                     let FramedParts {
@@ -201,7 +202,7 @@ struct ConnectToProxyAttempts {
 #[derive(Clone)]
 pub(crate) struct ConnectToProxyService {
     concrete_service:
-        BoxCloneService<ConcreteConnectToProxyRequest, ConnectToProxyServiceResult, PpaassError>,
+        BoxCloneService<ConcreteConnectToProxyRequest, ConnectToProxyServiceResult, anyhow::Error>,
 }
 
 impl ConnectToProxyService {
@@ -221,21 +222,19 @@ impl ConnectToProxyService {
                             "The connect to proxy timeout: {} seconds.",
                             connect_timeout_seconds
                         );
-                        return Err(PpaassError::TimeoutError {
+                        return Err(anyhow!(PpaassError::TimeoutError {
                             elapsed: connect_timeout_seconds,
-                        });
+                        }));
                     },
                     Ok(Err(e)) => {
                         error!("Fail connect to proxy because of error: {:#?}", e);
-                        return Err(PpaassError::IoError { source: e });
+                        return Err(anyhow!(e));
                     },
                     Ok(Ok(v)) => v,
                 };
-                proxy_stream.set_nodelay(true).map_err(|e| PpaassError::IoError { source: e })?;
+                proxy_stream.set_nodelay(true)?;
                 if let Some(so_linger) = SERVER_CONFIG.proxy_stream_so_linger() {
-                    proxy_stream
-                        .set_linger(Some(Duration::from_secs(so_linger)))
-                        .map_err(|e| PpaassError::IoError { source: e })?;
+                    proxy_stream.set_linger(Some(Duration::from_secs(so_linger)))?;
                 }
                 debug!("Client {}, success connect to proxy", request.client_address);
                 Ok(ConnectToProxyServiceResult { proxy_stream })
@@ -247,14 +246,14 @@ impl ConnectToProxyService {
     }
 }
 
-impl Policy<ConcreteConnectToProxyRequest, ConnectToProxyServiceResult, PpaassError>
+impl Policy<ConcreteConnectToProxyRequest, ConnectToProxyServiceResult, anyhow::Error>
     for ConnectToProxyAttempts
 {
     type Future = future::Ready<Self>;
 
     fn retry(
         &self, _req: &ConcreteConnectToProxyRequest,
-        result: Result<&ConnectToProxyServiceResult, &PpaassError>,
+        result: Result<&ConnectToProxyServiceResult, &anyhow::Error>,
     ) -> Option<Self::Future> {
         match result {
             Ok(_) => {
@@ -286,7 +285,7 @@ impl Policy<ConcreteConnectToProxyRequest, ConnectToProxyServiceResult, PpaassEr
 
 impl Service<ConnectToProxyServiceRequest> for ConnectToProxyService {
     type Response = ConnectToProxyServiceResult;
-    type Error = PpaassError;
+    type Error = anyhow::Error;
     type Future = BoxFuture<'static, Result<ConnectToProxyServiceResult, Self::Error>>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
@@ -393,7 +392,7 @@ where
     T: RsaCryptoFetcher + Send + Sync + 'static,
 {
     type Response = TcpRelayServiceResult;
-    type Error = PpaassError;
+    type Error = anyhow::Error;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, _cx: &mut Context) -> Poll<Result<(), Self::Error>> {
@@ -411,7 +410,7 @@ where
             let client_address = request.client_address;
             let (client_stream_read_half, client_stream_write_half) = client_stream.into_split();
             tokio::spawn(async move {
-                if let Err((mut message_framed_write, _client_stream_read_half)) =
+                if let Err((mut message_framed_write, _client_stream_read_half, original_error)) =
                     Self::relay_client_to_proxy(
                         request.init_data,
                         request.connect_response_message_id,
@@ -422,6 +421,10 @@ where
                     )
                     .await
                 {
+                    error!(
+                        "Error happen when relay data from client to proxy, error: {:#?}",
+                        original_error
+                    );
                     if let Err(e) = message_framed_write.flush().await {
                         error!("Fail to flush proxy message writer when relay data from client to proxy have error:{:#?}", e);
                     };
@@ -431,7 +434,7 @@ where
                 }
             });
             tokio::spawn(async move {
-                if let Err((_message_framed_read, mut client_stream_write_half)) =
+                if let Err((_message_framed_read, mut client_stream_write_half, original_error)) =
                     Self::relay_proxy_to_client(
                         request.proxy_address,
                         target_address_t2a,
@@ -440,6 +443,10 @@ where
                     )
                     .await
                 {
+                    error!(
+                        "Error happen when relay data from proxy to client, error: {:#?}",
+                        original_error
+                    );
                     if let Err(e) = client_stream_write_half.flush().await {
                         error!("Fail to flush client stream writer when relay data from proxy to client have error:{:#?}", e);
                     };
@@ -461,7 +468,7 @@ where
         init_data: Option<Vec<u8>>, connect_response_message_id: String,
         mut message_framed_write: MessageFramedWrite<T>, source_address_a2t: NetAddress,
         target_address_a2t: NetAddress, mut client_stream_read_half: OwnedReadHalf,
-    ) -> Result<(), (MessageFramedWrite<T>, OwnedReadHalf)> {
+    ) -> Result<(), (MessageFramedWrite<T>, OwnedReadHalf, anyhow::Error)> {
         let mut payload_encryption_type_select_service: PayloadEncryptionTypeSelectService =
             Default::default();
         let mut write_agent_message_service: WriteMessageService = Default::default();
@@ -478,7 +485,7 @@ where
             {
                 Err(e) => {
                     error!("Fail to select payload encryption type because of error: {:#?}", e);
-                    return Err((message_framed_write, client_stream_read_half));
+                    return Err((message_framed_write, client_stream_read_half, anyhow!(e)));
                 },
                 Ok(PayloadEncryptionTypeSelectServiceResult {
                     payload_encryption_type,
@@ -507,14 +514,14 @@ where
                     source,
                 }) => {
                     error!("Fail to write agent message to proxy because of error: {:#?}", source);
-                    return Err((message_framed_write, client_stream_read_half));
+                    return Err((message_framed_write, client_stream_read_half, anyhow!(source)));
                 },
                 Ok(WriteMessageServiceResult {
                     mut message_framed_write,
                 }) => {
                     if let Err(e) = message_framed_write.flush().await {
                         error!("Fail to flush agent message to proxy because of error: {:#?}", e);
-                        return Err((message_framed_write, client_stream_read_half));
+                        return Err((message_framed_write, client_stream_read_half, anyhow!(e)));
                     };
                     message_framed_write
                 },
@@ -533,17 +540,18 @@ where
             )
             .await
             {
-                Err(_e) => {
-                    return Err((message_framed_write, client_stream_read_half));
+                Err(e) => {
+                    return Err((message_framed_write, client_stream_read_half, anyhow!(e)));
                 },
-                Ok(Err(_e)) => {
-                    return Err((message_framed_write, client_stream_read_half));
+                Ok(Err(e)) => {
+                    return Err((message_framed_write, client_stream_read_half, anyhow!(e)));
                 },
                 Ok(Ok(0)) => {
                     debug!("Read all data from client, target address: {:?}", target_address_a2t);
-                    if let Err(_e) = message_framed_write.flush().await {
-                        return Err((message_framed_write, client_stream_read_half));
-                    }
+                    message_framed_write
+                        .flush()
+                        .await
+                        .map_err(|e| (message_framed_write, client_stream_read_half, anyhow!(e)))?;
                     return Ok(());
                 },
                 Ok(Ok(size)) => {
@@ -565,7 +573,7 @@ where
             {
                 Err(e) => {
                     error!("Fail to select payload encryption type because of error: {:#?}", e);
-                    return Err((message_framed_write, client_stream_read_half));
+                    return Err((message_framed_write, client_stream_read_half, anyhow!(e)));
                 },
                 Ok(PayloadEncryptionTypeSelectServiceResult {
                     payload_encryption_type,
@@ -602,24 +610,28 @@ where
                             "Fail to write agent message to proxy because of error: {:#?}",
                             source
                         );
-                        return Err((message_framed_write, client_stream_read_half));
+                        return Err((
+                            message_framed_write,
+                            client_stream_read_half,
+                            anyhow!(source),
+                        ));
                     },
                     Ok(WriteMessageServiceResult {
                         message_framed_write,
                     }) => message_framed_write,
                 };
             }
-            if let Err(_e) = message_framed_write.flush().await {
-                return Err((message_framed_write, client_stream_read_half));
+            if let Err(e) = message_framed_write.flush().await {
+                return Err((message_framed_write, client_stream_read_half, anyhow!(e)));
             };
         }
     }
 
     async fn relay_proxy_to_client(
-        read_from_address: Option<SocketAddr>, target_address_t2a: NetAddress,
+        read_from_address: Option<SocketAddr>, _target_address_t2a: NetAddress,
         mut message_framed_read: MessageFramedRead<T>,
         mut client_stream_write_half: OwnedWriteHalf,
-    ) -> Result<(), (MessageFramedRead<T>, OwnedWriteHalf)> {
+    ) -> Result<(), (MessageFramedRead<T>, OwnedWriteHalf, anyhow::Error)> {
         let read_proxy_timeout_seconds = SERVER_CONFIG
             .read_proxy_timeout_seconds()
             .unwrap_or(DEFAULT_READ_PROXY_TIMEOUT_SECONDS);
@@ -639,7 +651,7 @@ where
                     message_framed_read,
                     source,
                 }) => {
-                    return Err((message_framed_read, client_stream_write_half));
+                    return Err((message_framed_read, client_stream_write_half, anyhow!(source)));
                 },
                 Ok(ReadMessageServiceResult {
                     message_framed_read: message_framed_read_give_back,
@@ -663,19 +675,25 @@ where
                 Ok(ReadMessageServiceResult {
                     message_framed_read,
                     ..
-                }) => return Err((message_framed_read, client_stream_write_half)),
+                }) => {
+                    return Err((
+                        message_framed_read,
+                        client_stream_write_half,
+                        anyhow!(PpaassError::CodecError),
+                    ))
+                },
             };
 
             let client_buffer_size =
                 SERVER_CONFIG.client_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE);
             let proxy_raw_data_chunks = proxy_raw_data.chunks(client_buffer_size);
             for (_, chunk) in proxy_raw_data_chunks.enumerate() {
-                if let Err(_e) = client_stream_write_half.write(chunk).await {
-                    return Err((message_framed_read, client_stream_write_half));
+                if let Err(e) = client_stream_write_half.write(chunk).await {
+                    return Err((message_framed_read, client_stream_write_half, anyhow!(e)));
                 }
             }
-            if let Err(_e) = client_stream_write_half.flush().await {
-                return Err((message_framed_read, client_stream_write_half));
+            if let Err(e) = client_stream_write_half.flush().await {
+                return Err((message_framed_read, client_stream_write_half, anyhow!(e)));
             }
         }
     }
