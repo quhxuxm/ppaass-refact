@@ -409,9 +409,13 @@ where
             let target_address_t2a = request.target_address.clone();
             let client_address = request.client_address;
             let (client_stream_read_half, client_stream_write_half) = client_stream.into_split();
-            tokio::spawn(async move {
-                if let Err((mut message_framed_write, _client_stream_read_half, original_error)) =
-                    Self::relay_client_to_proxy(
+            tokio::join!(
+                async move {
+                    if let Err((
+                        mut message_framed_write,
+                        _client_stream_read_half,
+                        original_error,
+                    )) = Self::relay_client_to_proxy(
                         request.init_data,
                         request.connect_response_message_id,
                         message_framed_write,
@@ -420,41 +424,45 @@ where
                         client_stream_read_half,
                     )
                     .await
-                {
-                    error!(
-                        "Error happen when relay data from client to proxy, error: {:#?}",
-                        original_error
-                    );
-                    if let Err(e) = message_framed_write.flush().await {
-                        error!("Fail to flush proxy message writer when relay data from client to proxy have error:{:#?}", e);
-                    };
-                    if let Err(e) = message_framed_write.close().await {
-                        error!("Fail to close proxy message writer when relay data from client to proxy have error:{:#?}", e);
-                    };
-                }
-            });
-            tokio::spawn(async move {
-                if let Err((_message_framed_read, mut client_stream_write_half, original_error)) =
-                    Self::relay_proxy_to_client(
+                    {
+                        error!(
+                            "Error happen when relay data from client to proxy, error: {:#?}",
+                            original_error
+                        );
+                        if let Err(e) = message_framed_write.flush().await {
+                            error!("Fail to flush proxy message writer when relay data from client to proxy have error:{:#?}", e);
+                        };
+                        if let Err(e) = message_framed_write.close().await {
+                            error!("Fail to close proxy message writer when relay data from client to proxy have error:{:#?}", e);
+                        };
+                    }
+                },
+                async move {
+                    if let Err((
+                        _message_framed_read,
+                        mut client_stream_write_half,
+                        original_error,
+                    )) = Self::relay_proxy_to_client(
                         request.proxy_address,
                         target_address_t2a,
                         message_framed_read,
                         client_stream_write_half,
                     )
                     .await
-                {
-                    error!(
-                        "Error happen when relay data from proxy to client, error: {:#?}",
-                        original_error
-                    );
-                    if let Err(e) = client_stream_write_half.flush().await {
-                        error!("Fail to flush client stream writer when relay data from proxy to client have error:{:#?}", e);
-                    };
-                    if let Err(e) = client_stream_write_half.shutdown().await {
-                        error!("Fail to shutdown client stream writer when relay data from proxy to client have error:{:#?}", e);
-                    };
+                    {
+                        error!(
+                            "Error happen when relay data from proxy to client, error: {:#?}",
+                            original_error
+                        );
+                        if let Err(e) = client_stream_write_half.flush().await {
+                            error!("Fail to flush client stream writer when relay data from proxy to client have error:{:#?}", e);
+                        };
+                        if let Err(e) = client_stream_write_half.shutdown().await {
+                            error!("Fail to shutdown client stream writer when relay data from proxy to client have error:{:#?}", e);
+                        };
+                    }
                 }
-            });
+            );
             Ok(TcpRelayServiceResult { client_address })
         })
     }
