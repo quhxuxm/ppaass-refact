@@ -60,7 +60,7 @@ where
     type Error = PpaassError;
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
-        let header_length=PPAASS_FLAG.len() + size_of::<u8>() + size_of::<u64>();
+        let header_length = PPAASS_FLAG.len() + size_of::<u8>() + size_of::<u64>();
         let (body_is_compressed, body_length) = match self.status {
             DecodeStatus::Head => {
                 if src.len() < header_length {
@@ -80,24 +80,23 @@ where
                 self.status = DecodeStatus::Data(compressed, body_length);
                 (compressed, body_length)
             },
-            DecodeStatus::Data(body_is_compressed, body_length) => (body_is_compressed, body_length),
+            DecodeStatus::Data(body_is_compressed, body_length) => {
+                (body_is_compressed, body_length)
+            },
         };
-        if src.remaining() <body_length as usize {
+        if src.remaining() < body_length as usize {
             debug!("Input message is not enough to decode body, buffer remaining: {}, body length: {}.", src.remaining(), body_length);
             return Ok(None);
         }
         debug!(
             "Input message has enough bytes to decode body, buffer remaining: {}, body length: {}, remaining bytes:\n\n{}\n\n",
             src.remaining(),
-            body_length, 
+            body_length,
             pretty_hex(src)
         );
         self.status = DecodeStatus::Data(body_is_compressed, body_length);
         let body_bytes = src.copy_to_bytes(body_length as usize);
-        debug!(
-            "Input message body bytes:\n\n{}\n\n",
-            pretty_hex(&body_bytes)
-        );
+        debug!("Input message body bytes:\n\n{}\n\n", pretty_hex(&body_bytes));
         let mut message: Message = if body_is_compressed {
             debug!("Input message body is compressed.");
             let decompress_result = decompress(body_bytes.chunk(), None)?;
@@ -105,10 +104,14 @@ where
         } else {
             body_bytes.try_into()?
         };
-        let rsa_crypto =  self.rsa_crypto_fetcher.fetch(message.user_token.as_str())?.ok_or_else(||{
-            error!("Fail to get user rsa crypto because of not exist, user token: {}", message.user_token);
-            PpaassError::CodecError
-        })?;
+        let rsa_crypto =
+            self.rsa_crypto_fetcher.fetch(message.user_token.as_str())?.ok_or_else(|| {
+                error!(
+                    "Fail to get user rsa crypto because of not exist, user token: {}",
+                    message.user_token
+                );
+                PpaassError::CodecError
+            })?;
         debug!("Decode input message (before decrypt): {:?}", message);
         match message.payload_encryption_type {
             PayloadEncryptionType::Blowfish(ref encryption_token) => match message.payload {
@@ -141,7 +144,7 @@ where
     }
 }
 
-/// Encode the ppaass message to bytes buffer 
+/// Encode the ppaass message to bytes buffer
 impl<T> Encoder<Message> for MessageCodec<T>
 where
     T: RsaCryptoFetcher,
@@ -149,10 +152,7 @@ where
     type Error = PpaassError;
 
     fn encode(&mut self, original_message: Message, dst: &mut BytesMut) -> Result<(), Self::Error> {
-        debug!(
-            "Encode message to output(decrypted): {:?}",
-            original_message
-        );
+        debug!("Encode message to output(decrypted): {:?}", original_message);
         dst.put(PPAASS_FLAG);
         if self.compress {
             dst.put_u8(1);
@@ -178,7 +178,8 @@ where
             payload_encryption_type,
             payload,
         } = original_message;
-        let rsa_crypto =  self.rsa_crypto_fetcher.fetch(user_token.as_str())?.ok_or(PpaassError::CodecError)?;
+        let rsa_crypto =
+            self.rsa_crypto_fetcher.fetch(user_token.as_str())?.ok_or(PpaassError::CodecError)?;
         let (encrypted_payload, encrypted_payload_encryption_type) = match payload_encryption_type {
             PayloadEncryptionType::Plain => (payload, PayloadEncryptionType::Plain),
             PayloadEncryptionType::Blowfish(ref original_token) => {

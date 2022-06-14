@@ -64,10 +64,7 @@ impl Decoder for Socks5InitCommandContentCodec {
         }
         let request_type: Socks5InitCommandType = match src.get_u8().try_into() {
             Err(e) => {
-                error!(
-                    "Fail to parse socks5 connect request type because of error: {:#?}",
-                    e
-                );
+                error!("Fail to parse socks5 connect request type because of error: {:#?}", e);
                 return Err(PpaassError::CodecError);
             },
             Ok(v) => v,
@@ -83,10 +80,7 @@ impl Decoder for Socks5InitCommandContentCodec {
             },
             Ok(v) => v,
         };
-        Ok(Some(Socks5InitCommandContent::new(
-            request_type,
-            dest_address,
-        )))
+        Ok(Some(Socks5InitCommandContent::new(request_type, dest_address)))
     }
 }
 
@@ -128,10 +122,7 @@ impl Decoder for Socks5UdpDataCommandContentCodec {
         let frag = src.get_u8();
         let address: Socks5Addr = match src.try_into() {
             Err(e) => {
-                error!(
-                    "Fail to decode socks5 udp data request because of error: {:#?}",
-                    e
-                );
+                error!("Fail to decode socks5 udp data request because of error: {:#?}", e);
                 return Err(PpaassError::CodecError);
             },
             Ok(v) => v,

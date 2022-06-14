@@ -61,19 +61,10 @@ where
         service_name = service_type_name,
         request = format!("{:#?}", request).as_str()
     );
-    match service
-        .ready()
-        .and_then(|v| v.call(request))
-        .instrument(service_call_span)
-        .await
-    {
+    match service.ready().and_then(|v| v.call(request)).instrument(service_call_span).await {
         Ok(v) => Ok(v),
         Err(e) => {
-            trace!(
-                "Fail to invoke service [{}] because of errors: {:#?}",
-                service_type_name,
-                e
-            );
+            trace!("Fail to invoke service [{}] because of errors: {:#?}", service_type_name, e);
             Err(e)
         },
     }

@@ -59,10 +59,7 @@ impl TryFrom<u8> for Socks5InitCommandType {
             2 => Ok(Socks5InitCommandType::Bind),
             3 => Ok(Socks5InitCommandType::UdpAssociate),
             unknown_type => {
-                error!(
-                    "Fail to decode socks 5 connect request type: {}",
-                    unknown_type
-                );
+                error!("Fail to decode socks 5 connect request type: {}", unknown_type);
                 Err(PpaassError::CodecError)
             },
         }
@@ -97,10 +94,7 @@ impl From<u8> for Socks5InitCommandResultStatus {
             8 => Socks5InitCommandResultStatus::AddressTypeNotSupported,
             9 => Socks5InitCommandResultStatus::Unassigned,
             unknown_status => {
-                error!(
-                    "Fail to decode socks 5 connect response status: {}",
-                    unknown_status
-                );
+                error!("Fail to decode socks 5 connect response status: {}", unknown_status);
                 Socks5InitCommandResultStatus::Failure
             },
         }
@@ -209,10 +203,7 @@ impl TryFrom<&mut Bytes> for Socks5Addr {
                 let domain_name = match String::from_utf8(domain_name_bytes.to_vec()) {
                     Ok(v) => v,
                     Err(e) => {
-                        error!(
-                            "Fail to parse socks5 address(Domain) because of error: {:#?}.",
-                            e
-                        );
+                        error!("Fail to parse socks5 address(Domain) because of error: {:#?}.", e);
                         return Err(PpaassError::CodecError);
                     },
                 };

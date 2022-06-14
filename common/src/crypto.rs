@@ -188,9 +188,8 @@ fn generate_rsa_key_pairs(
 ) -> Result<(), PpaassError> {
     let private_key = RsaPrivateKey::new(&mut OsRng, 2048).expect("Fail to generate private key");
     let public_key = RsaPublicKey::from(&private_key);
-    let private_key_pem = private_key
-        .to_pkcs8_pem(LineEnding::CRLF)
-        .expect("Fail to generate pem for private key.");
+    let private_key_pem =
+        private_key.to_pkcs8_pem(LineEnding::CRLF).expect("Fail to generate pem for private key.");
     let public_key_pem = public_key
         .to_public_key_pem(LineEnding::CRLF)
         .expect("Fail to generate pem for public key.");

@@ -32,21 +32,13 @@ impl AgentServer {
         let mut runtime_builder = TokioRuntimeBuilder::new_multi_thread();
         runtime_builder
             .enable_all()
-            .thread_keep_alive(Duration::from_secs(
-                SERVER_CONFIG.thread_timeout().unwrap_or(2),
-            ))
+            .thread_keep_alive(Duration::from_secs(SERVER_CONFIG.thread_timeout().unwrap_or(2)))
             .max_blocking_threads(SERVER_CONFIG.max_blocking_threads().unwrap_or(32))
             .worker_threads(SERVER_CONFIG.thread_number().unwrap_or(1024));
         let runtime = match runtime_builder.build() {
             Err(e) => {
-                error!(
-                    "Fail to create agent server runtime because of error: {:#?}",
-                    e
-                );
-                panic!(
-                    "Fail to create agent server runtime because of error: {:#?}",
-                    e
-                );
+                error!("Fail to create agent server runtime because of error: {:#?}", e);
+                panic!("Fail to create agent server runtime because of error: {:#?}", e);
             },
             Ok(r) => r,
         };
@@ -108,10 +100,7 @@ impl AgentServer {
             };
             let agent_rsa_crypto_fetcher = match AgentRsaCryptoFetcher::new() {
                 Err(e) => {
-                    panic!(
-                        "Fail to generate agent rsa crypto because of error: {:#?}",
-                        e
-                    );
+                    panic!("Fail to generate agent rsa crypto because of error: {:#?}", e);
                 },
                 Ok(v) => v,
             };
@@ -120,27 +109,18 @@ impl AgentServer {
                 let agent_rsa_crypto_fetcher = agent_rsa_crypto_fetcher.clone();
                 let (client_stream, client_address) = match listener.accept().await {
                     Err(e) => {
-                        error!(
-                            "Fail to accept client connection because of error: {:#?}",
-                            e
-                        );
+                        error!("Fail to accept client connection because of error: {:#?}", e);
                         continue;
                     },
                     Ok((client_stream, client_address)) => (client_stream, client_address),
                 };
                 if let Err(e) = client_stream.set_nodelay(true) {
-                    error!(
-                        "Fail to set client connection no delay because of error: {:#?}",
-                        e
-                    );
+                    error!("Fail to set client connection no delay because of error: {:#?}", e);
                     continue;
                 }
                 if let Some(so_linger) = SERVER_CONFIG.client_stream_so_linger() {
                     if let Err(e) = client_stream.set_linger(Some(Duration::from_secs(so_linger))) {
-                        error!(
-                            "Fail to set client connection linger because of error: {:#?}",
-                            e
-                        );
+                        error!("Fail to set client connection linger because of error: {:#?}", e);
                     }
                 }
                 let proxy_addresses = proxy_addresses.clone();

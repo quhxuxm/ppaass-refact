@@ -32,9 +32,7 @@ impl ProxyServer {
         let mut runtime_builder = TokioRuntimeBuilder::new_multi_thread();
         runtime_builder
             .enable_all()
-            .thread_keep_alive(Duration::from_secs(
-                SERVER_CONFIG.thread_timeout().unwrap_or(2),
-            ))
+            .thread_keep_alive(Duration::from_secs(SERVER_CONFIG.thread_timeout().unwrap_or(2)))
             .max_blocking_threads(SERVER_CONFIG.max_blocking_threads().unwrap_or(32))
             .worker_threads(SERVER_CONFIG.thread_number().unwrap_or(1024));
         let runtime = match runtime_builder.build() {

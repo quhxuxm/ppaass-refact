@@ -119,10 +119,7 @@ impl TryFrom<&mut Bytes> for NetAddress {
                 let host = match String::from_utf8(host_bytes.to_vec()) {
                     Ok(v) => v,
                     Err(e) => {
-                        error!(
-                            "Fail to parse NetAddress(Domain) because of error: {:#?}.",
-                            e
-                        );
+                        error!("Fail to parse NetAddress(Domain) because of error: {:#?}.", e);
                         return Err(PpaassError::CodecError);
                     },
                 };
@@ -256,40 +253,18 @@ impl TryFrom<u8> for PayloadType {
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
-            210 => Ok(PayloadType::ProxyPayload(
-                ProxyMessagePayloadTypeValue::TcpConnectSuccess,
-            )),
-            211 => Ok(PayloadType::ProxyPayload(
-                ProxyMessagePayloadTypeValue::TcpConnectFail,
-            )),
-            212 => Ok(PayloadType::ProxyPayload(
-                ProxyMessagePayloadTypeValue::TcpData,
-            )),
-            221 => Ok(PayloadType::ProxyPayload(
-                ProxyMessagePayloadTypeValue::UdpAssociateSuccess,
-            )),
-            222 => Ok(PayloadType::ProxyPayload(
-                ProxyMessagePayloadTypeValue::UdpAssociateFail,
-            )),
-            223 => Ok(PayloadType::ProxyPayload(
-                ProxyMessagePayloadTypeValue::UdpDataRelayFail,
-            )),
-            224 => Ok(PayloadType::ProxyPayload(
-                ProxyMessagePayloadTypeValue::UdpData,
-            )),
+            210 => Ok(PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::TcpConnectSuccess)),
+            211 => Ok(PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::TcpConnectFail)),
+            212 => Ok(PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::TcpData)),
+            221 => Ok(PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::UdpAssociateSuccess)),
+            222 => Ok(PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::UdpAssociateFail)),
+            223 => Ok(PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::UdpDataRelayFail)),
+            224 => Ok(PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::UdpData)),
 
-            110 => Ok(PayloadType::AgentPayload(
-                AgentMessagePayloadTypeValue::TcpConnect,
-            )),
-            111 => Ok(PayloadType::AgentPayload(
-                AgentMessagePayloadTypeValue::TcpData,
-            )),
-            120 => Ok(PayloadType::AgentPayload(
-                AgentMessagePayloadTypeValue::UdpAssociate,
-            )),
-            121 => Ok(PayloadType::AgentPayload(
-                AgentMessagePayloadTypeValue::UdpData,
-            )),
+            110 => Ok(PayloadType::AgentPayload(AgentMessagePayloadTypeValue::TcpConnect)),
+            111 => Ok(PayloadType::AgentPayload(AgentMessagePayloadTypeValue::TcpData)),
+            120 => Ok(PayloadType::AgentPayload(AgentMessagePayloadTypeValue::UdpAssociate)),
+            121 => Ok(PayloadType::AgentPayload(AgentMessagePayloadTypeValue::UdpData)),
 
             invalid_type => {
                 error!("Fail to parse payload type: {}", invalid_type);
