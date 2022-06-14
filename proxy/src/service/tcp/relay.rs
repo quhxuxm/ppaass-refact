@@ -5,9 +5,10 @@ use std::{
 };
 use std::{net::SocketAddr, time::Duration};
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use bytes::{Bytes, BytesMut};
-use futures::{future::BoxFuture, SinkExt, TryFutureExt};
+
+use futures::{future::BoxFuture, SinkExt};
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::net::TcpStream;
 use tokio::{
@@ -16,15 +17,16 @@ use tokio::{
 };
 
 use tower::Service;
-use tower::ServiceBuilder;
-use tracing::{debug, error};
+
+use tracing::error;
 
 use common::{
     generate_uuid, ready_and_call_service, AgentMessagePayloadTypeValue, MessageFramedRead,
     MessageFramedWrite, MessagePayload, NetAddress, PayloadEncryptionTypeSelectService,
     PayloadEncryptionTypeSelectServiceRequest, PayloadEncryptionTypeSelectServiceResult,
     PayloadType, PpaassError, ProxyMessagePayloadTypeValue, ReadMessageService,
-    ReadMessageServiceRequest, ReadMessageServiceResult, RsaCryptoFetcher, WriteMessageService,
+    ReadMessageServiceError, ReadMessageServiceRequest, ReadMessageServiceResult,
+    ReadMessageServiceResultContent, RsaCryptoFetcher, WriteMessageService,
     WriteMessageServiceError, WriteMessageServiceRequest, WriteMessageServiceResult,
 };
 
@@ -111,11 +113,24 @@ where
             let agent_connect_message_target_address = req.target_address.clone();
             let target_address_for_return = agent_connect_message_target_address.clone();
             let (target_stream_read, target_stream_write) = target_stream.into_split();
-            tokio::spawn(Self::generate_proxy_to_target_relay(
-                req.agent_address,
-                message_framed_read,
-                target_stream_write,
-            ));
+            tokio::spawn(async move {
+                if let Err((_message_framed_read, mut target_stream_write)) =
+                    Self::relay_proxy_to_target(
+                        req.agent_address,
+                        message_framed_read,
+                        target_stream_write,
+                    )
+                    .await
+                {
+                    error!("Error happen when relay data from proxy to target");
+                    if let Err(e) = target_stream_write.flush().await {
+                        error!("Fail to flush target stream writer when relay data from proxy to target have error:{:#?}", e);
+                    };
+                    if let Err(e) = target_stream_write.shutdown().await {
+                        error!("Fail to shutdown target stream writer when relay data from proxy to target have error:{:#?}", e);
+                    };
+                }
+            });
             tokio::spawn(async move {
                 if let Err(mut message_framed_write) = Self::relay_target_to_proxy(
                     message_framed_write,
@@ -127,6 +142,7 @@ where
                 )
                 .await
                 {
+                    error!("Error happen when relay data from target to proxy");
                     if let Err(e) = message_framed_write.flush().await {
                         error!("Fail to flush proxy writer when relay data from target to proxy have error:{:#?}", e);
                     };
@@ -147,111 +163,64 @@ impl<T> TcpRelayService<T>
 where
     T: RsaCryptoFetcher + Send + Sync + 'static,
 {
-    async fn generate_proxy_to_target_relay(
+    async fn relay_proxy_to_target(
         agent_address: SocketAddr, mut message_framed_read: MessageFramedRead<T>,
         mut target_stream_write: OwnedWriteHalf,
-    ) {
-        let mut read_agent_message_service =
-            ServiceBuilder::new().service(ReadMessageService::new(
-                SERVER_CONFIG
-                    .read_agent_timeout_seconds()
-                    .unwrap_or(DEFAULT_READ_AGENT_TIMEOUT_SECONDS),
-            ));
+    ) -> Result<(), (MessageFramedRead<T>, OwnedWriteHalf)> {
         loop {
+            let read_timeout_seconds = SERVER_CONFIG
+                .read_agent_timeout_seconds()
+                .unwrap_or(DEFAULT_READ_AGENT_TIMEOUT_SECONDS);
+            let mut read_agent_message_service: ReadMessageService = Default::default();
             let read_agent_message_result = ready_and_call_service(
                 &mut read_agent_message_service,
                 ReadMessageServiceRequest {
+                    read_timeout_seconds,
                     message_framed_read,
                     read_from_address: Some(agent_address),
                 },
             )
             .await;
-            let ReadMessageServiceResult {
-                message_payload:
-                    MessagePayload {
-                        data: agent_data, ..
-                    },
-                message_framed_read: message_framed_read_from_read_agent_result,
-                ..
-            } = match read_agent_message_result {
-                Ok(None) => {
-                    debug!("Read all data from agent: {:#?}", agent_address);
-                    if let Err(e) = target_stream_write.flush().await {
-                        error!(
-                            "Fail to flush from agent to target because of error, agent address:{:?}, error: {:#?}",
-                           agent_address, e
-                        );
-                    };
-                    if let Err(e) = target_stream_write.shutdown().await {
-                        error!("Fail to shutdown target because of error, agent address:{:?}, error: {:#?}",
-                           agent_address, e
-                        );
-                    };
-                    return;
+            let (message_framed_read_move_back, agent_data) = match read_agent_message_result {
+                Err(ReadMessageServiceError {
+                    message_framed_read,
+                    ..
+                }) => {
+                    return Err((message_framed_read, target_stream_write));
                 },
-                Ok(Some(
-                    v @ ReadMessageServiceResult {
+                Ok(ReadMessageServiceResult {
+                    message_framed_read,
+                    content,
+                }) => match content {
+                    None => {
+                        return Err((message_framed_read, target_stream_write));
+                    },
+                    Some(ReadMessageServiceResultContent {
                         message_payload:
-                            MessagePayload {
+                            Some(MessagePayload {
                                 payload_type:
                                     PayloadType::AgentPayload(AgentMessagePayloadTypeValue::TcpData),
+                                data,
                                 ..
-                            },
+                            }),
                         ..
+                    }) => (message_framed_read, data),
+                    Some(ReadMessageServiceResultContent { .. }) => {
+                        return Err((message_framed_read, target_stream_write))
                     },
-                )) => v,
-                Ok(_) => {
-                    error!("Invalid payload type from agent: {:#?}", agent_address);
-                    if let Err(e) = target_stream_write.flush().await {
-                        error!(
-                            "Fail to flush from agent to target because of error, agent address:{:?}, error: {:#?}",
-                           agent_address, e
-                        );
-                    };
-                    if let Err(e) = target_stream_write.shutdown().await {
-                        error!("Fail to shutdown target because of error, agent address:{:?}, error: {:#?}",
-                           agent_address, e
-                        );
-                    };
-                    return;
-                },
-                Err(e) => {
-                    debug!("Fail to read from agent because of error: {:#?}", e);
-                    if let Err(e) = target_stream_write.flush().await {
-                        error!(
-                            "Fail to flush from agent to target because of error, agent address:{:?}, error: {:#?}",
-                           agent_address, e
-                        );
-                    };
-                    if let Err(e) = target_stream_write.shutdown().await {
-                        error!("Fail to shutdown target because of error, agent address:{:?}, error: {:#?}",
-                           agent_address, e
-                        );
-                    };
-                    return;
                 },
             };
+            message_framed_read = message_framed_read_move_back;
             let agent_data_chunks = agent_data
                 .chunks(SERVER_CONFIG.target_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE) as usize);
             for (_, chunk) in agent_data_chunks.enumerate() {
-                if let Err(e) = target_stream_write.write(chunk).await {
-                    error!("Fail to write from agent to target because of error: {:#?}", e);
-                    if let Err(e) = target_stream_write.shutdown().await {
-                        error!("Fail to shutdown target stream because of error: {:#?}", e);
-                    };
-                    return;
+                if let Err(_e) = target_stream_write.write(chunk).await {
+                    return Err((message_framed_read, target_stream_write));
                 };
             }
-            if let Err(e) = target_stream_write.flush().await {
-                error!(
-                            "Fail to flush from agent to target because of error, agent address:{:?}, error: {:#?}",
-                           agent_address, e
-                        );
-                if let Err(e) = target_stream_write.shutdown().await {
-                    error!("Fail to shutdown target stream because of error: {:#?}", e);
-                };
-            };
-            message_framed_read = message_framed_read_from_read_agent_result;
+            if let Err(_e) = target_stream_write.flush().await {
+                return Err((message_framed_read, target_stream_write));
+            }
         }
     }
 
@@ -310,7 +279,7 @@ where
                 )
                 .await
                 {
-                    Err(e) => return Err(message_framed_write),
+                    Err(_e) => return Err(message_framed_write),
                     Ok(PayloadEncryptionTypeSelectServiceResult {
                         payload_encryption_type,
                         ..

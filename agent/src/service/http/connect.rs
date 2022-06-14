@@ -24,7 +24,8 @@ use common::{
     MessageFramedWrite, MessagePayload, NetAddress, PayloadEncryptionTypeSelectService,
     PayloadEncryptionTypeSelectServiceRequest, PayloadEncryptionTypeSelectServiceResult,
     PayloadType, PpaassError, ProxyMessagePayloadTypeValue, ReadMessageService,
-    ReadMessageServiceRequest, ReadMessageServiceResult, RsaCryptoFetcher, WriteMessageService,
+    ReadMessageServiceError, ReadMessageServiceRequest, ReadMessageServiceResult,
+    ReadMessageServiceResultContent, RsaCryptoFetcher, WriteMessageService,
     WriteMessageServiceError, WriteMessageServiceRequest, WriteMessageServiceResult,
 };
 
@@ -129,16 +130,15 @@ where
     fn call(&mut self, mut request: HttpConnectServiceRequest) -> Self::Future {
         let rsa_crypto_fetcher = self.rsa_crypto_fetcher.clone();
         Box::pin(async move {
+            let read_proxy_timeout_seconds = SERVER_CONFIG
+                .read_proxy_timeout_seconds()
+                .unwrap_or(DEFAULT_READ_PROXY_TIMEOUT_SECONDS);
             let mut prepare_message_framed_service =
                 generate_prepare_message_framed_service(rsa_crypto_fetcher);
-            let mut write_agent_message_service =
-                ServiceBuilder::new().service(WriteMessageService::default());
-            let mut read_proxy_message_service =
-                ServiceBuilder::new().service(ReadMessageService::new(
-                    SERVER_CONFIG
-                        .read_proxy_timeout_seconds()
-                        .unwrap_or(DEFAULT_READ_PROXY_TIMEOUT_SECONDS),
-                ));
+            let mut write_agent_message_service: WriteMessageService = Default::default();
+
+            let mut read_proxy_message_service: ReadMessageService = Default::default();
+
             let mut connect_to_proxy_service =
                 ServiceBuilder::new().service(ConnectToProxyService::new(
                     SERVER_CONFIG.proxy_connection_retry().unwrap_or(DEFAULT_RETRY_TIMES),
@@ -258,10 +258,7 @@ where
             )
             .await
             {
-                Err(WriteMessageServiceError {
-                    message_framed_write,
-                    source,
-                }) => {
+                Err(WriteMessageServiceError { source, .. }) => {
                     Self::send_error_to_client(http_client_framed).await?;
                     return Err(source);
                 },
@@ -275,21 +272,81 @@ where
                     message_framed_write
                 },
             };
-            let read_tcp_connect_response_result = match ready_and_call_service(
+            match ready_and_call_service(
                 &mut read_proxy_message_service,
                 ReadMessageServiceRequest {
                     message_framed_read: framed_result.message_framed_read,
                     read_from_address: framed_result.framed_address,
+                    read_timeout_seconds: read_proxy_timeout_seconds,
                 },
             )
             .await
             {
-                Err(e) => {
+                Err(ReadMessageServiceError { source, .. }) => {
                     Self::send_error_to_client(http_client_framed).await?;
-                    return Err(e);
+                    return Err(source);
                 },
-                Ok(Some(v)) => v,
-                Ok(_) => {
+                Ok(ReadMessageServiceResult { content: None, .. }) => {
+                    Self::send_error_to_client(http_client_framed).await?;
+                    return Err(PpaassError::IoError {
+                        source: std::io::Error::new(
+                            ErrorKind::InvalidData,
+                            "Invalid payload type read from proxy.",
+                        ),
+                    });
+                },
+                Ok(ReadMessageServiceResult {
+                    message_framed_read,
+                    content:
+                        Some(ReadMessageServiceResultContent {
+                            message_id,
+                            message_payload:
+                                Some(MessagePayload {
+                                    target_address,
+                                    source_address,
+                                    payload_type:
+                                        PayloadType::ProxyPayload(
+                                            ProxyMessagePayloadTypeValue::TcpConnectSuccess,
+                                        ),
+                                    ..
+                                }),
+                            ..
+                        }),
+                }) => {
+                    if let None = init_data {
+                        let http_connect_success_response = Response::new(
+                            HttpVersion::V1_1,
+                            StatusCode::new(OK_CODE).unwrap(),
+                            ReasonPhrase::new(CONNECTION_ESTABLISHED).unwrap(),
+                            vec![],
+                        );
+                        http_client_framed.send(http_connect_success_response).await?;
+                        http_client_framed.flush().await?;
+                        return Ok(HttpConnectServiceResult {
+                            client_stream: request.client_stream,
+                            client_address: request.client_address,
+                            proxy_address: framed_result.framed_address,
+                            init_data: None,
+                            message_framed_read,
+                            message_framed_write,
+                            message_id,
+                            target_address,
+                            source_address,
+                        });
+                    }
+                    return Ok(HttpConnectServiceResult {
+                        client_stream: request.client_stream,
+                        client_address: request.client_address,
+                        proxy_address: framed_result.framed_address,
+                        init_data,
+                        message_framed_read,
+                        message_framed_write,
+                        message_id,
+                        target_address,
+                        source_address,
+                    });
+                },
+                Ok(ReadMessageServiceResult { .. }) => {
                     Self::send_error_to_client(http_client_framed).await?;
                     return Err(PpaassError::IoError {
                         source: std::io::Error::new(
@@ -299,60 +356,6 @@ where
                     });
                 },
             };
-            if let ReadMessageServiceResult {
-                message_payload:
-                    MessagePayload {
-                        target_address,
-                        source_address,
-                        payload_type:
-                            PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::TcpConnectSuccess),
-                        ..
-                    },
-                message_framed_read,
-                message_id,
-                ..
-            } = read_tcp_connect_response_result
-            {
-                if let None = init_data {
-                    let http_connect_success_response = Response::new(
-                        HttpVersion::V1_1,
-                        StatusCode::new(OK_CODE).unwrap(),
-                        ReasonPhrase::new(CONNECTION_ESTABLISHED).unwrap(),
-                        vec![],
-                    );
-                    http_client_framed.send(http_connect_success_response).await?;
-                    http_client_framed.flush().await?;
-                    return Ok(HttpConnectServiceResult {
-                        client_stream: request.client_stream,
-                        client_address: request.client_address,
-                        proxy_address: framed_result.framed_address,
-                        init_data: None,
-                        message_framed_read,
-                        message_framed_write,
-                        message_id,
-                        target_address,
-                        source_address,
-                    });
-                }
-                return Ok(HttpConnectServiceResult {
-                    client_stream: request.client_stream,
-                    client_address: request.client_address,
-                    proxy_address: framed_result.framed_address,
-                    init_data,
-                    message_framed_read,
-                    message_framed_write,
-                    message_id,
-                    target_address,
-                    source_address,
-                });
-            };
-            Self::send_error_to_client(http_client_framed).await?;
-            Err(PpaassError::IoError {
-                source: std::io::Error::new(
-                    ErrorKind::InvalidData,
-                    "Invalid payload type read from proxy.",
-                ),
-            })
         })
     }
 }

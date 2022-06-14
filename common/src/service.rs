@@ -136,11 +136,10 @@ where
     T: RsaCryptoFetcher,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "WriteMessageServiceError: message_framed_write: {:?}, error:{:?}",
-            self.message_framed_write, self.source
-        )
+        f.debug_struct("WriteMessageServiceError")
+            .field("message_framed_write", &self.message_framed_write)
+            .field("source", &self.source)
+            .finish()
     }
 }
 
@@ -207,6 +206,7 @@ pub struct ReadMessageServiceRequest<T>
 where
     T: RsaCryptoFetcher,
 {
+    pub read_timeout_seconds: u64,
     pub message_framed_read: MessageFramedRead<T>,
     pub read_from_address: Option<SocketAddr>,
 }
@@ -220,35 +220,49 @@ where
     }
 }
 
+pub struct ReadMessageServiceResultContent {
+    pub message_id: String,
+    pub message_payload: Option<MessagePayload>,
+    pub user_token: String,
+}
+
 pub struct ReadMessageServiceResult<T>
 where
     T: RsaCryptoFetcher,
 {
-    pub message_payload: MessagePayload,
     pub message_framed_read: MessageFramedRead<T>,
-    pub user_token: String,
-    pub message_id: String,
+    pub content: Option<ReadMessageServiceResultContent>,
 }
 
-#[derive(Clone)]
-pub struct ReadMessageService {
-    pub read_timeout_seconds: u64,
+pub struct ReadMessageServiceError<T>
+where
+    T: RsaCryptoFetcher,
+{
+    pub message_framed_read: MessageFramedRead<T>,
+    pub source: PpaassError,
 }
 
-impl ReadMessageService {
-    pub fn new(read_timeout_seconds: u64) -> Self {
-        Self {
-            read_timeout_seconds,
-        }
+impl<T> Debug for ReadMessageServiceError<T>
+where
+    T: RsaCryptoFetcher,
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ReadMessageServiceError")
+            .field("message_framed_read", &self.message_framed_read)
+            .field("source", &self.source)
+            .finish()
     }
 }
+
+#[derive(Clone, Default)]
+pub struct ReadMessageService;
 
 impl<T> Service<ReadMessageServiceRequest<T>> for ReadMessageService
 where
     T: RsaCryptoFetcher + Send + Sync + 'static,
 {
-    type Response = Option<ReadMessageServiceResult<T>>;
-    type Error = PpaassError;
+    type Response = ReadMessageServiceResult<T>;
+    type Error = ReadMessageServiceError<T>;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
@@ -256,9 +270,9 @@ where
     }
 
     fn call(&mut self, mut req: ReadMessageServiceRequest<T>) -> Self::Future {
-        let read_timeout_seconds = self.read_timeout_seconds;
+        let read_timeout_seconds = req.read_timeout_seconds;
         Box::pin(async move {
-            let message = match timeout(
+            let result = match timeout(
                 Duration::from_secs(read_timeout_seconds),
                 req.message_framed_read.next(),
             )
@@ -269,46 +283,60 @@ where
                         "The read timeout in {} seconds, read from: {:?}.",
                         read_timeout_seconds, req.read_from_address
                     );
-                    return Err(PpaassError::TimeoutError {
-                        elapsed: read_timeout_seconds,
+                    return Err(ReadMessageServiceError {
+                        message_framed_read: req.message_framed_read,
+                        source: PpaassError::TimeoutError {
+                            elapsed: read_timeout_seconds,
+                        },
                     });
                 },
                 Ok(None) => {
-                    debug!("No message any more.");
-                    return Ok(None);
+                    return Ok(ReadMessageServiceResult {
+                        content: None,
+                        message_framed_read: req.message_framed_read,
+                    });
                 },
-                Ok(Some(Ok(v))) => v,
+                Ok(Some(Ok(message))) => ReadMessageServiceResult {
+                    content: Some(ReadMessageServiceResultContent {
+                        message_id: message.id,
+                        user_token: message.user_token,
+                        message_payload: match message.payload {
+                            None => {
+                                info!(
+                                    "No payload in the message, read from: {:?}.",
+                                    req.read_from_address
+                                );
+                                None
+                            },
+                            Some(payload_bytes) => match payload_bytes.try_into() {
+                                Ok(v) => {
+                                    trace!("Read message payload from remote:\n\n{:#?}\n\n", v);
+                                    Some(v)
+                                },
+                                Err(e) => {
+                                    error!("Fail to decode message payload because of error, read from:{:?}, error: {:#?}", req.read_from_address,e);
+                                    return Err(ReadMessageServiceError {
+                                        message_framed_read: req.message_framed_read,
+                                        source: e,
+                                    });
+                                },
+                            },
+                        },
+                    }),
+                    message_framed_read: req.message_framed_read,
+                },
                 Ok(Some(Err(e))) => {
                     error!(
                         "Fail to decode message because of error, read from {:?}, error: {:#?}",
                         req.read_from_address, e
                     );
-                    return Err(e);
+                    return Err(ReadMessageServiceError {
+                        message_framed_read: req.message_framed_read,
+                        source: e,
+                    });
                 },
             };
-            debug!("Read message from remote:\n\n{:?}\n\n", message);
-            let payload: MessagePayload = match message.payload {
-                None => {
-                    info!("No payload in the message, read from: {:?}.", req.read_from_address);
-                    return Ok(None);
-                },
-                Some(payload_bytes) => match payload_bytes.try_into() {
-                    Ok(v) => {
-                        trace!("Read message payload from remote:\n\n{:#?}\n\n", v);
-                        v
-                    },
-                    Err(e) => {
-                        error!("Fail to decode message payload because of error, read from:{:?}, error: {:#?}", req.read_from_address,e);
-                        return Err(e);
-                    },
-                },
-            };
-            Ok(Some(ReadMessageServiceResult {
-                message_payload: payload,
-                message_framed_read: req.message_framed_read,
-                user_token: message.user_token,
-                message_id: message.id,
-            }))
+            Ok(result)
         })
     }
 }
