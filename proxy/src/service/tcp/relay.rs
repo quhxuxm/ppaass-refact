@@ -114,7 +114,7 @@ where
             let target_address_for_return = agent_connect_message_target_address.clone();
             let (target_stream_read, target_stream_write) = target_stream.into_split();
             tokio::spawn(async move {
-                if let Err((_, mut target_stream_write, original_error)) =
+                if let Err((_message_framed_read, mut target_stream_write, original_error)) =
                     Self::relay_proxy_to_target(
                         req.agent_address,
                         message_framed_read,
@@ -135,7 +135,7 @@ where
                 }
             });
             tokio::spawn(async move {
-                if let Err((mut message_framed_write, _, original_error)) =
+                if let Err((mut message_framed_write, _target_stream_read, original_error)) =
                     Self::relay_target_to_proxy(
                         message_framed_write,
                         agent_tcp_connect_message_id,
