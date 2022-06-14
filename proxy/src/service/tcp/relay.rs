@@ -18,7 +18,7 @@ use tokio::{
 
 use tower::Service;
 
-use tracing::{debug, error};
+use tracing::{debug, error, info};
 
 use common::{
     generate_uuid, ready_and_call_service, AgentMessagePayloadTypeValue, MessageFramedRead,
@@ -193,12 +193,20 @@ where
                     message_framed_read,
                     source,
                 }) => {
+                    error!(
+                        "Error happen when relay data from proxy to target,  agent address={:?}, target address={:?}, error: {:#?}", 
+                    agent_address,target_stream_write.peer_addr(), source);
                     return Err((message_framed_read, target_stream_write, anyhow!(source)));
                 },
                 Ok(ReadMessageServiceResult {
                     message_framed_read,
                     content: None,
                 }) => {
+                    debug!(
+                        "Read all data from agent, agent address={:?}, target address = {:?}.",
+                        agent_address,
+                        target_stream_write.peer_addr()
+                    );
                     target_stream_write
                         .flush()
                         .await
@@ -223,11 +231,14 @@ where
                     message_framed_read,
                     ..
                 }) => {
+                    error!(
+                        "Receive invalid data from agent when relay data from proxy to target,  agent address={:?}, target address={:?}", 
+                    agent_address,target_stream_write.peer_addr());
                     return Err((
                         message_framed_read,
                         target_stream_write,
                         anyhow!(PpaassError::CodecError),
-                    ))
+                    ));
                 },
             };
             message_framed_read = message_framed_read_move_back;
@@ -277,9 +288,14 @@ where
                     ));
                 },
                 Ok(Err(e)) => {
+                    error!("Error happen when relay data from target to proxy, target address={:?}, source address={:?}, error: {:#?}", target_address, source_address, e);
                     return Err((message_framed_write, target_stream_read, anyhow!(e)));
                 },
                 Ok(Ok(0)) => {
+                    debug!(
+                        "Read all data from target, target address={:?}, source address={:?}.",
+                        target_address, source_address
+                    );
                     message_framed_write
                         .flush()
                         .await
@@ -287,7 +303,8 @@ where
                     return Ok(());
                 },
                 Ok(Ok(size)) => {
-                    debug!("Read {} bytes from target to proxy.", size);
+                    debug!("Read {} bytes from target to proxy, target address={:?}, source address={:?}.", 
+                    size, target_address, source_address);
                     size
                 },
             };
