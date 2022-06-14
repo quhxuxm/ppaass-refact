@@ -2,7 +2,7 @@
 port = 10081
 user_token = "user1"
 client_buffer_size = 131072
-message_framed_buffer_size = 1048576
+message_framed_buffer_size = 524288
 buffered_connection_number = 2048
 concurrent_connection_number = 2048
 connect_proxy_timeout_seconds = 20
