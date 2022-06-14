@@ -113,53 +113,51 @@ where
             let agent_connect_message_target_address = req.target_address.clone();
             let target_address_for_return = agent_connect_message_target_address.clone();
             let (target_stream_read, target_stream_write) = target_stream.into_split();
-            tokio::join!(
-                async move {
-                    if let Err((_message_framed_read, mut target_stream_write, original_error)) =
-                        Self::relay_proxy_to_target(
-                            req.agent_address,
-                            message_framed_read,
-                            target_stream_write,
-                        )
-                        .await
-                    {
-                        error!(
-                            "Error happen when relay data from proxy to target, error: {:#?}",
-                            original_error
-                        );
-                        if let Err(e) = target_stream_write.flush().await {
-                            error!("Fail to flush target stream writer when relay data from proxy to target have error:{:#?}", e);
-                        };
-                        if let Err(e) = target_stream_write.shutdown().await {
-                            error!("Fail to shutdown target stream writer when relay data from proxy to target have error:{:#?}", e);
-                        };
-                    }
-                },
-                async move {
-                    if let Err((mut message_framed_write, _target_stream_read, original_error)) =
-                        Self::relay_target_to_proxy(
-                            message_framed_write,
-                            agent_tcp_connect_message_id,
-                            user_token,
-                            agent_connect_message_source_address,
-                            agent_connect_message_target_address,
-                            target_stream_read,
-                        )
-                        .await
-                    {
-                        error!(
-                            "Error happen when relay data from target to proxy, error: {:#?}",
-                            original_error
-                        );
-                        if let Err(e) = message_framed_write.flush().await {
-                            error!("Fail to flush proxy writer when relay data from target to proxy have error:{:#?}", e);
-                        };
-                        if let Err(e) = message_framed_write.close().await {
-                            error!("Fail to close proxy writer when relay data from target to proxy have error:{:#?}", e);
-                        };
-                    }
+            tokio::spawn(async move {
+                if let Err((_message_framed_read, mut target_stream_write, original_error)) =
+                    Self::relay_proxy_to_target(
+                        req.agent_address,
+                        message_framed_read,
+                        target_stream_write,
+                    )
+                    .await
+                {
+                    error!(
+                        "Error happen when relay data from proxy to target, error: {:#?}",
+                        original_error
+                    );
+                    if let Err(e) = target_stream_write.flush().await {
+                        error!("Fail to flush target stream writer when relay data from proxy to target have error:{:#?}", e);
+                    };
+                    if let Err(e) = target_stream_write.shutdown().await {
+                        error!("Fail to shutdown target stream writer when relay data from proxy to target have error:{:#?}", e);
+                    };
                 }
-            );
+            });
+            tokio::spawn(async move {
+                if let Err((mut message_framed_write, _target_stream_read, original_error)) =
+                    Self::relay_target_to_proxy(
+                        message_framed_write,
+                        agent_tcp_connect_message_id,
+                        user_token,
+                        agent_connect_message_source_address,
+                        agent_connect_message_target_address,
+                        target_stream_read,
+                    )
+                    .await
+                {
+                    error!(
+                        "Error happen when relay data from target to proxy, error: {:#?}",
+                        original_error
+                    );
+                    if let Err(e) = message_framed_write.flush().await {
+                        error!("Fail to flush proxy writer when relay data from target to proxy have error:{:#?}", e);
+                    };
+                    if let Err(e) = message_framed_write.close().await {
+                        error!("Fail to close proxy writer when relay data from target to proxy have error:{:#?}", e);
+                    };
+                }
+            });
             Ok(TcpRelayServiceResult {
                 target_address: target_address_for_return,
                 agent_address: req.agent_address,
