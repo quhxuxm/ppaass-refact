@@ -12,13 +12,10 @@ use bytecodec::bytes::BytesEncoder;
 use bytecodec::EncodeExt;
 use bytes::{Bytes, BytesMut};
 use common::{
-    generate_uuid, ready_and_call_service, AgentMessagePayloadTypeValue, MessageFramedRead,
-    MessageFramedWrite, MessagePayload, NetAddress, PayloadEncryptionTypeSelectService,
-    PayloadEncryptionTypeSelectServiceRequest, PayloadEncryptionTypeSelectServiceResult,
-    PayloadType, PpaassError, ProxyMessagePayloadTypeValue, ReadMessageService,
-    ReadMessageServiceError, ReadMessageServiceRequest, ReadMessageServiceResult,
-    ReadMessageServiceResultContent, RsaCryptoFetcher, WriteMessageService,
-    WriteMessageServiceError, WriteMessageServiceRequest, WriteMessageServiceResult,
+    generate_uuid, ready_and_call_service, AgentMessagePayloadTypeValue, MessageFramedRead, MessageFramedWrite, MessagePayload, NetAddress,
+    PayloadEncryptionTypeSelectService, PayloadEncryptionTypeSelectServiceRequest, PayloadEncryptionTypeSelectServiceResult, PayloadType, PpaassError,
+    ProxyMessagePayloadTypeValue, ReadMessageService, ReadMessageServiceError, ReadMessageServiceRequest, ReadMessageServiceResult,
+    ReadMessageServiceResultContent, RsaCryptoFetcher, WriteMessageService, WriteMessageServiceError, WriteMessageServiceRequest, WriteMessageServiceResult,
 };
 use futures::future::BoxFuture;
 use futures::{SinkExt, StreamExt};
@@ -32,9 +29,8 @@ use url::Url;
 
 use crate::codec::http::HttpCodec;
 use crate::service::common::{
-    generate_prepare_message_framed_service, ConnectToProxyService, ConnectToProxyServiceRequest,
-    ConnectToProxyServiceResult, DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS,
-    DEFAULT_READ_PROXY_TIMEOUT_SECONDS, DEFAULT_RETRY_TIMES,
+    generate_prepare_message_framed_service, ConnectToProxyService, ConnectToProxyServiceRequest, ConnectToProxyServiceResult,
+    DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS, DEFAULT_READ_PROXY_TIMEOUT_SECONDS, DEFAULT_RETRY_TIMES,
 };
 use crate::SERVER_CONFIG;
 
@@ -102,12 +98,7 @@ where
     async fn send_error_to_client(mut client_http_framed: HttpFramed<'_>) -> Result<()> {
         let bad_request_status_code = StatusCode::new(ERROR_CODE).unwrap();
         let error_response_reason = ReasonPhrase::new(ERROR_REASON).unwrap();
-        let connect_error_response = Response::new(
-            HttpVersion::V1_1,
-            bad_request_status_code,
-            error_response_reason,
-            vec![],
-        );
+        let connect_error_response = Response::new(HttpVersion::V1_1, bad_request_status_code, error_response_reason, vec![]);
         client_http_framed.send(connect_error_response).await?;
         client_http_framed.flush().await?;
         Ok(())
@@ -129,26 +120,18 @@ where
     fn call(&mut self, mut request: HttpConnectServiceRequest) -> Self::Future {
         let rsa_crypto_fetcher = self.rsa_crypto_fetcher.clone();
         Box::pin(async move {
-            let read_proxy_timeout_seconds = SERVER_CONFIG
-                .read_proxy_timeout_seconds()
-                .unwrap_or(DEFAULT_READ_PROXY_TIMEOUT_SECONDS);
-            let mut prepare_message_framed_service =
-                generate_prepare_message_framed_service(rsa_crypto_fetcher);
+            let read_proxy_timeout_seconds = SERVER_CONFIG.read_proxy_timeout_seconds().unwrap_or(DEFAULT_READ_PROXY_TIMEOUT_SECONDS);
+            let mut prepare_message_framed_service = generate_prepare_message_framed_service(rsa_crypto_fetcher);
             let mut write_agent_message_service: WriteMessageService = Default::default();
 
             let mut read_proxy_message_service: ReadMessageService = Default::default();
 
-            let mut connect_to_proxy_service =
-                ServiceBuilder::new().service(ConnectToProxyService::new(
-                    SERVER_CONFIG.proxy_connection_retry().unwrap_or(DEFAULT_RETRY_TIMES),
-                    SERVER_CONFIG
-                        .connect_proxy_timeout_seconds()
-                        .unwrap_or(DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS),
-                ));
-            let mut payload_encryption_type_select_service =
-                ServiceBuilder::new().service(PayloadEncryptionTypeSelectService);
-            let mut framed_parts =
-                FramedParts::new(&mut request.client_stream, HttpCodec::default());
+            let mut connect_to_proxy_service = ServiceBuilder::new().service(ConnectToProxyService::new(
+                SERVER_CONFIG.proxy_connection_retry().unwrap_or(DEFAULT_RETRY_TIMES),
+                SERVER_CONFIG.connect_proxy_timeout_seconds().unwrap_or(DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS),
+            ));
+            let mut payload_encryption_type_select_service = ServiceBuilder::new().service(PayloadEncryptionTypeSelectService);
+            let mut framed_parts = FramedParts::new(&mut request.client_stream, HttpCodec::default());
             framed_parts.read_buf = request.initial_buf;
             let mut http_client_framed = Framed::from_parts(framed_parts);
             let http_message = match http_client_framed.next().await {
@@ -160,18 +143,8 @@ where
                     }
                 },
             };
-            let (request_url, init_data) = if http_message.method().to_string().to_lowercase()
-                == CONNECT_METHOD
-            {
-                (
-                    format!(
-                        "{}{}{}",
-                        HTTPS_SCHEMA,
-                        SCHEMA_SEP,
-                        http_message.request_target().to_string()
-                    ),
-                    None,
-                )
+            let (request_url, init_data) = if http_message.method().to_string().to_lowercase() == CONNECT_METHOD {
+                (format!("{}{}{}", HTTPS_SCHEMA, SCHEMA_SEP, http_message.request_target().to_string()), None)
             } else {
                 let request_url = http_message.request_target().to_string();
                 let mut http_data_encoder = RequestEncoder::<BodyEncoder<BytesEncoder>>::default();
@@ -219,20 +192,14 @@ where
                 },
                 Ok(v) => v,
             };
-            let framed_result =
-                match ready_and_call_service(&mut prepare_message_framed_service, proxy_stream)
-                    .await
-                {
-                    Err(e) => {
-                        Self::send_error_to_client(http_client_framed).await?;
-                        return Err(anyhow!(e));
-                    },
-                    Ok(v) => v,
-                };
-            let PayloadEncryptionTypeSelectServiceResult {
-                payload_encryption_type,
-                ..
-            } = ready_and_call_service(
+            let framed_result = match ready_and_call_service(&mut prepare_message_framed_service, proxy_stream).await {
+                Err(e) => {
+                    Self::send_error_to_client(http_client_framed).await?;
+                    return Err(anyhow!(e));
+                },
+                Ok(v) => v,
+            };
+            let PayloadEncryptionTypeSelectServiceResult { payload_encryption_type, .. } = ready_and_call_service(
                 &mut payload_encryption_type_select_service,
                 PayloadEncryptionTypeSelectServiceRequest {
                     encryption_token: generate_uuid().into(),
@@ -261,9 +228,7 @@ where
                     Self::send_error_to_client(http_client_framed).await?;
                     return Err(anyhow!(source));
                 },
-                Ok(WriteMessageServiceResult {
-                    mut message_framed_write,
-                }) => {
+                Ok(WriteMessageServiceResult { mut message_framed_write }) => {
                     if let Err(e) = message_framed_write.flush().await {
                         Self::send_error_to_client(http_client_framed).await?;
                         return Err(anyhow!(e));
@@ -288,10 +253,7 @@ where
                 Ok(ReadMessageServiceResult { content: None, .. }) => {
                     Self::send_error_to_client(http_client_framed).await?;
                     return Err(anyhow!(PpaassError::IoError {
-                        source: std::io::Error::new(
-                            ErrorKind::InvalidData,
-                            "Invalid payload type read from proxy.",
-                        ),
+                        source: std::io::Error::new(ErrorKind::InvalidData, "Invalid payload type read from proxy.",),
                     }));
                 },
                 Ok(ReadMessageServiceResult {
@@ -303,10 +265,7 @@ where
                                 Some(MessagePayload {
                                     target_address,
                                     source_address,
-                                    payload_type:
-                                        PayloadType::ProxyPayload(
-                                            ProxyMessagePayloadTypeValue::TcpConnectSuccess,
-                                        ),
+                                    payload_type: PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::TcpConnectSuccess),
                                     ..
                                 }),
                             ..
@@ -348,10 +307,7 @@ where
                 Ok(ReadMessageServiceResult { .. }) => {
                     Self::send_error_to_client(http_client_framed).await?;
                     return Err(anyhow!(PpaassError::IoError {
-                        source: std::io::Error::new(
-                            ErrorKind::InvalidData,
-                            "Invalid payload type read from proxy.",
-                        ),
+                        source: std::io::Error::new(ErrorKind::InvalidData, "Invalid payload type read from proxy.",),
                     }));
                 },
             };

@@ -59,8 +59,7 @@ where
     fn call(&mut self, req: HttpFlowRequest) -> Self::Future {
         let rsa_crypto_fetcher = self.rsa_crypto_fetcher.clone();
         Box::pin(async move {
-            let mut connect_service =
-                ServiceBuilder::new().service(HttpConnectService::new(rsa_crypto_fetcher.clone()));
+            let mut connect_service = ServiceBuilder::new().service(HttpConnectService::new(rsa_crypto_fetcher.clone()));
             let mut relay_service = ServiceBuilder::new().service(TcpRelayService::new());
             let connect_result = ready_and_call_service(
                 &mut connect_service,

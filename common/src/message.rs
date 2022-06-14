@@ -40,10 +40,7 @@ impl ToString for NetAddress {
     fn to_string(&self) -> String {
         match self {
             Self::IpV4(ip_content, port) => {
-                format!(
-                    "{}.{}.{}.{}:{}",
-                    ip_content[0], ip_content[1], ip_content[2], ip_content[3], port
-                )
+                format!("{}.{}.{}.{}:{}", ip_content[0], ip_content[1], ip_content[2], ip_content[3], port)
             },
             Self::IpV6(ip_content, port) => {
                 let mut ip_content_bytes = Bytes::from(ip_content.to_vec());
@@ -112,7 +109,10 @@ impl TryFrom<&mut Bytes> for NetAddress {
                 }
                 let host_name_length = value.get_u32() as usize;
                 if value.remaining() < host_name_length + 2 {
-                    error!("Fail to parse NetAddress(Domain) because of not enough remaining in bytes buffer, require: {}.", host_name_length + 2);
+                    error!(
+                        "Fail to parse NetAddress(Domain) because of not enough remaining in bytes buffer, require: {}.",
+                        host_name_length + 2
+                    );
                     return Err(PpaassError::CodecError);
                 }
                 let host_bytes = value.copy_to_bytes(host_name_length);
@@ -127,10 +127,7 @@ impl TryFrom<&mut Bytes> for NetAddress {
                 NetAddress::Domain(host, port)
             },
             invalid_address_type => {
-                error!(
-                    "Fail to parse NetAddress because of invalide address type {}.",
-                    invalid_address_type
-                );
+                error!("Fail to parse NetAddress because of invalide address type {}.", invalid_address_type);
                 return Err(PpaassError::CodecError);
             },
         };
@@ -294,10 +291,7 @@ impl TryFrom<&mut Bytes> for PayloadEncryptionType {
             ENCRYPTION_TYPE_BLOWFISH => Ok(PayloadEncryptionType::Blowfish(enc_token)),
             ENCRYPTION_TYPE_AES => Ok(PayloadEncryptionType::Aes(enc_token)),
             invalid_type => {
-                error!(
-                    "Fail to parse PayloadEncryptionType because of invalid type: {}.",
-                    invalid_type
-                );
+                error!("Fail to parse PayloadEncryptionType because of invalid type: {}.", invalid_type);
                 Err(PpaassError::CodecError)
             },
         }
@@ -359,10 +353,7 @@ impl Debug for MessagePayload {
 }
 
 impl MessagePayload {
-    pub fn new(
-        source_address: NetAddress, target_address: NetAddress, payload_type: PayloadType,
-        data: Bytes,
-    ) -> Self {
+    pub fn new(source_address: NetAddress, target_address: NetAddress, payload_type: PayloadType, data: Bytes) -> Self {
         Self {
             source_address,
             target_address,
@@ -459,9 +450,7 @@ impl Debug for Message {
 }
 
 impl Message {
-    pub fn new_random_id<R, U, PE, P>(
-        ref_id: Option<R>, user_token: U, payload_encryption_type: PE, payload: Option<P>,
-    ) -> Self
+    pub fn new_random_id<R, U, PE, P>(ref_id: Option<R>, user_token: U, payload_encryption_type: PE, payload: Option<P>) -> Self
     where
         R: Into<String>,
         U: Into<String>,
@@ -482,9 +471,7 @@ impl Message {
             },
         }
     }
-    pub fn new<I, R, U, PE, P>(
-        id: I, ref_id: Option<R>, user_token: U, payload_encryption_type: PE, payload: Option<P>,
-    ) -> Self
+    pub fn new<I, R, U, PE, P>(id: I, ref_id: Option<R>, user_token: U, payload_encryption_type: PE, payload: Option<P>) -> Self
     where
         I: Into<String>,
         R: Into<String>,

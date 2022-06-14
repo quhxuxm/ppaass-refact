@@ -10,17 +10,11 @@ use tracing::error;
 
 lazy_static! {
     pub(crate) static ref SERVER_CONFIG: Config = {
-        let config_file_content = std::fs::read_to_string("ppaass-agent.toml")
-            .expect("Fail to read agent configuration file.");
-        toml::from_str::<Config>(&config_file_content)
-            .expect("Fail to parse agent configuration file")
+        let config_file_content = std::fs::read_to_string("ppaass-agent.toml").expect("Fail to read agent configuration file.");
+        toml::from_str::<Config>(&config_file_content).expect("Fail to parse agent configuration file")
     };
-    pub(crate) static ref AGENT_PRIVATE_KEY: String =
-        std::fs::read_to_string(Path::new("AgentPrivateKey.pem"))
-            .expect("Fail to read agent private key.");
-    pub(crate) static ref PROXY_PUBLIC_KEY: String =
-        std::fs::read_to_string(Path::new("ProxyPublicKey.pem"))
-            .expect("Fail to read proxy public key.");
+    pub(crate) static ref AGENT_PRIVATE_KEY: String = std::fs::read_to_string(Path::new("AgentPrivateKey.pem")).expect("Fail to read agent private key.");
+    pub(crate) static ref PROXY_PUBLIC_KEY: String = std::fs::read_to_string(Path::new("ProxyPublicKey.pem")).expect("Fail to read proxy public key.");
 }
 
 #[derive(Serialize, Deserialize)]

@@ -13,21 +13,17 @@ use tower::{Service, ServiceBuilder};
 use tracing::error;
 
 use common::{
-    generate_uuid, ready_and_call_service, AgentMessagePayloadTypeValue, MessageFramedRead,
-    MessageFramedWrite, MessagePayload, NetAddress, PayloadEncryptionTypeSelectService,
-    PayloadEncryptionTypeSelectServiceRequest, PayloadEncryptionTypeSelectServiceResult,
-    PayloadType, PpaassError, ProxyMessagePayloadTypeValue, ReadMessageService,
-    ReadMessageServiceError, ReadMessageServiceRequest, ReadMessageServiceResult,
-    ReadMessageServiceResultContent, RsaCryptoFetcher, WriteMessageService,
-    WriteMessageServiceError, WriteMessageServiceRequest, WriteMessageServiceResult,
+    generate_uuid, ready_and_call_service, AgentMessagePayloadTypeValue, MessageFramedRead, MessageFramedWrite, MessagePayload, NetAddress,
+    PayloadEncryptionTypeSelectService, PayloadEncryptionTypeSelectServiceRequest, PayloadEncryptionTypeSelectServiceResult, PayloadType, PpaassError,
+    ProxyMessagePayloadTypeValue, ReadMessageService, ReadMessageServiceError, ReadMessageServiceRequest, ReadMessageServiceResult,
+    ReadMessageServiceResultContent, RsaCryptoFetcher, WriteMessageService, WriteMessageServiceError, WriteMessageServiceRequest, WriteMessageServiceResult,
 };
 
 use crate::{
     config::SERVER_CONFIG,
     message::socks5::Socks5Addr,
     service::common::{
-        generate_prepare_message_framed_service, ConnectToProxyService,
-        ConnectToProxyServiceRequest, DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS,
+        generate_prepare_message_framed_service, ConnectToProxyService, ConnectToProxyServiceRequest, DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS,
         DEFAULT_READ_PROXY_TIMEOUT_SECONDS, DEFAULT_RETRY_TIMES,
     },
 };
@@ -47,8 +43,13 @@ pub(crate) struct Socks5TcpConnectServiceRequest {
 
 impl Debug for Socks5TcpConnectServiceRequest {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Socks5TcpConnectServiceRequest: proxy_addresses={:#?}, client_address={}, dest_address={}",
-            self.proxy_addresses, self.client_address, self.dest_address.to_string())
+        write!(
+            f,
+            "Socks5TcpConnectServiceRequest: proxy_addresses={:#?}, client_address={}, dest_address={}",
+            self.proxy_addresses,
+            self.client_address,
+            self.dest_address.to_string()
+        )
     }
 }
 
@@ -91,23 +92,16 @@ where
     fn call(&mut self, request: Socks5TcpConnectServiceRequest) -> Self::Future {
         let rsa_crypto_fetcher = self.rsa_crypto_fetcher.clone();
         Box::pin(async move {
-            let read_message_timeout = SERVER_CONFIG
-                .read_proxy_timeout_seconds()
-                .unwrap_or(DEFAULT_READ_PROXY_TIMEOUT_SECONDS);
+            let read_message_timeout = SERVER_CONFIG.read_proxy_timeout_seconds().unwrap_or(DEFAULT_READ_PROXY_TIMEOUT_SECONDS);
             let client_address = request.client_address;
             let mut write_agent_message_service: WriteMessageService = Default::default();
             let mut read_proxy_message_service: ReadMessageService = Default::default();
-            let mut connect_to_proxy_service =
-                ServiceBuilder::new().service(ConnectToProxyService::new(
-                    SERVER_CONFIG.proxy_connection_retry().unwrap_or(DEFAULT_RETRY_TIMES),
-                    SERVER_CONFIG
-                        .connect_proxy_timeout_seconds()
-                        .unwrap_or(DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS),
-                ));
-            let mut payload_encryption_type_select_service =
-                ServiceBuilder::new().service(PayloadEncryptionTypeSelectService);
-            let mut prepare_message_framed_service =
-                generate_prepare_message_framed_service(rsa_crypto_fetcher);
+            let mut connect_to_proxy_service = ServiceBuilder::new().service(ConnectToProxyService::new(
+                SERVER_CONFIG.proxy_connection_retry().unwrap_or(DEFAULT_RETRY_TIMES),
+                SERVER_CONFIG.connect_proxy_timeout_seconds().unwrap_or(DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS),
+            ));
+            let mut payload_encryption_type_select_service = ServiceBuilder::new().service(PayloadEncryptionTypeSelectService);
+            let mut prepare_message_framed_service = generate_prepare_message_framed_service(rsa_crypto_fetcher);
             let connect_to_proxy_service_result = ready_and_call_service(
                 &mut connect_to_proxy_service,
                 ConnectToProxyServiceRequest {
@@ -116,15 +110,8 @@ where
                 },
             )
             .await?;
-            let framed_result = ready_and_call_service(
-                &mut prepare_message_framed_service,
-                connect_to_proxy_service_result.proxy_stream,
-            )
-            .await?;
-            let PayloadEncryptionTypeSelectServiceResult {
-                payload_encryption_type,
-                ..
-            } = ready_and_call_service(
+            let framed_result = ready_and_call_service(&mut prepare_message_framed_service, connect_to_proxy_service_result.proxy_stream).await?;
+            let PayloadEncryptionTypeSelectServiceResult { payload_encryption_type, .. } = ready_and_call_service(
                 &mut payload_encryption_type_select_service,
                 PayloadEncryptionTypeSelectServiceRequest {
                     encryption_token: generate_uuid().into(),
@@ -152,9 +139,7 @@ where
                 Err(WriteMessageServiceError { source, .. }) => {
                     return Err(anyhow!(source));
                 },
-                Ok(WriteMessageServiceResult {
-                    mut message_framed_write,
-                }) => {
+                Ok(WriteMessageServiceResult { mut message_framed_write }) => {
                     if let Err(e) = message_framed_write.flush().await {
                         return Err(anyhow!(e));
                     }
@@ -172,9 +157,7 @@ where
             .await
             {
                 Err(ReadMessageServiceError { source, .. }) => Err(anyhow!(source)),
-                Ok(ReadMessageServiceResult { content: None, .. }) => {
-                    Err(anyhow!(PpaassError::CodecError))
-                },
+                Ok(ReadMessageServiceResult { content: None, .. }) => Err(anyhow!(PpaassError::CodecError)),
                 Ok(ReadMessageServiceResult {
                     message_framed_read,
                     content:
@@ -182,10 +165,7 @@ where
                             message_id,
                             message_payload:
                                 Some(MessagePayload {
-                                    payload_type:
-                                        PayloadType::ProxyPayload(
-                                            ProxyMessagePayloadTypeValue::TcpConnectSuccess,
-                                        ),
+                                    payload_type: PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::TcpConnectSuccess),
                                     source_address,
                                     target_address,
                                     ..
@@ -206,28 +186,19 @@ where
                         Some(ReadMessageServiceResultContent {
                             message_payload:
                                 Some(MessagePayload {
-                                    payload_type:
-                                        PayloadType::ProxyPayload(
-                                            ProxyMessagePayloadTypeValue::TcpConnectFail,
-                                        ),
+                                    payload_type: PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::TcpConnectFail),
                                     ..
                                 }),
                             ..
                         }),
                     ..
                 }) => Err(anyhow!(PpaassError::IoError {
-                    source: std::io::Error::new(
-                        ErrorKind::ConnectionReset,
-                        "Fail connect to target from proxy",
-                    ),
+                    source: std::io::Error::new(ErrorKind::ConnectionReset, "Fail connect to target from proxy",),
                 })),
                 Ok(ReadMessageServiceResult { .. }) => {
                     error!("Invalid payload type read from proxy.");
                     Err(anyhow!(PpaassError::IoError {
-                        source: std::io::Error::new(
-                            ErrorKind::InvalidData,
-                            "Invalid payload type read from proxy.",
-                        ),
+                        source: std::io::Error::new(ErrorKind::InvalidData, "Invalid payload type read from proxy.",),
                     }))
                 },
             }

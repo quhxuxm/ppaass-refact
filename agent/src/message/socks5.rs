@@ -129,10 +129,7 @@ impl ToString for Socks5Addr {
     fn to_string(&self) -> String {
         match self {
             Self::IpV4(ip_content, port) => {
-                format!(
-                    "{}.{}.{}.{}:{}",
-                    ip_content[0], ip_content[1], ip_content[2], ip_content[3], port
-                )
+                format!("{}.{}.{}.{}:{}", ip_content[0], ip_content[1], ip_content[2], ip_content[3], port)
             },
             Self::IpV6(ip_content, port) => {
                 let mut ip_content_bytes = Bytes::from(ip_content.to_vec());
@@ -196,7 +193,10 @@ impl TryFrom<&mut Bytes> for Socks5Addr {
                 }
                 let domain_name_length = value.get_u8() as usize;
                 if value.remaining() < domain_name_length + 2 {
-                    error!("Fail to parse socks5 address(Domain) because of not enough remaining in bytes buffer, require: {}.", domain_name_length+2);
+                    error!(
+                        "Fail to parse socks5 address(Domain) because of not enough remaining in bytes buffer, require: {}.",
+                        domain_name_length + 2
+                    );
                     return Err(PpaassError::CodecError);
                 }
                 let domain_name_bytes = value.copy_to_bytes(domain_name_length);
@@ -293,10 +293,7 @@ pub(crate) struct Socks5AuthCommandResultContent {
 
 impl Socks5AuthCommandResultContent {
     pub fn new(method: Socks5AuthMethod) -> Self {
-        Socks5AuthCommandResultContent {
-            version: 5u8,
-            method,
-        }
+        Socks5AuthCommandResultContent { version: 5u8, method }
     }
 }
 
@@ -351,11 +348,7 @@ pub(crate) struct Socks5UdpDataCommandResultContent {
 
 impl Socks5UdpDataCommandResultContent {
     pub fn new(frag: u8, dest_address: Socks5Addr, data: Bytes) -> Self {
-        Self {
-            frag,
-            dest_address,
-            data,
-        }
+        Self { frag, dest_address, data }
     }
 }
 

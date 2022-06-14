@@ -3,11 +3,6 @@ match_arm_leading_pipes = "Preserve"
 match_block_trailing_comma = true
 tab_spaces = 4
 use_field_init_shorthand = true
-fn_call_width = 90
-attr_fn_like_width = 90
-struct_lit_width = 18
-struct_variant_width = 35
-array_width = 90
-chain_width = 90
-single_line_if_else_max_width = 50
+max_width=160
+single_line_if_else_max_width = 30
 

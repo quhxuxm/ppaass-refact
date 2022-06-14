@@ -47,20 +47,14 @@ pub fn generate_uuid() -> String {
     uuid_str.replace('-', "")
 }
 
-pub async fn ready_and_call_service<T, S>(
-    service: &mut S, request: T,
-) -> Result<S::Response, S::Error>
+pub async fn ready_and_call_service<T, S>(service: &mut S, request: T) -> Result<S::Response, S::Error>
 where
     S: Service<T>,
     S::Error: Debug,
     T: Debug,
 {
     let service_type_name = type_name::<S>();
-    let service_call_span = tracing::trace_span!(
-        "CALL_SERVICE=>",
-        service_name = service_type_name,
-        request = format!("{:#?}", request).as_str()
-    );
+    let service_call_span = tracing::trace_span!("CALL_SERVICE=>", service_name = service_type_name, request = format!("{:#?}", request).as_str());
     match service.ready().and_then(|v| v.call(request)).instrument(service_call_span).await {
         Ok(v) => Ok(v),
         Err(e) => {

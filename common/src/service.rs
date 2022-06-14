@@ -17,10 +17,7 @@ use tokio_util::codec::Framed;
 use tower::Service;
 use tracing::{debug, error, info, trace};
 
-use crate::{
-    crypto::RsaCryptoFetcher, generate_uuid, Message, MessageCodec, MessagePayload,
-    PayloadEncryptionType, PpaassError,
-};
+use crate::{crypto::RsaCryptoFetcher, generate_uuid, Message, MessageCodec, MessagePayload, PayloadEncryptionType, PpaassError};
 
 pub type MessageFramedRead<T> = SplitStream<Framed<TcpStream, MessageCodec<T>>>;
 pub type MessageFramedWrite<T> = SplitSink<Framed<TcpStream, MessageCodec<T>>, Message>;
@@ -75,11 +72,7 @@ where
         let buffer_size = self.buffer_size;
         Box::pin(async move {
             let framed_address = input_stream.peer_addr().ok();
-            let framed = Framed::with_capacity(
-                input_stream,
-                MessageCodec::<T>::new(compress, rsa_crypto_fetcher),
-                buffer_size,
-            );
+            let framed = Framed::with_capacity(input_stream, MessageCodec::<T>::new(compress, rsa_crypto_fetcher), buffer_size);
             let (message_framed_write, message_framed_read) = framed.split();
             Ok(PrepareMessageFramedResult {
                 message_framed_write,
@@ -161,21 +154,9 @@ where
     fn call(&mut self, req: WriteMessageServiceRequest<T>) -> Self::Future {
         Box::pin(async move {
             let message = match req.message_payload {
-                None => Message::new(
-                    generate_uuid(),
-                    req.ref_id,
-                    req.user_token,
-                    req.payload_encryption_type,
-                    None::<Bytes>,
-                ),
+                None => Message::new(generate_uuid(), req.ref_id, req.user_token, req.payload_encryption_type, None::<Bytes>),
                 Some(payload) => {
-                    let message = Message::new(
-                        generate_uuid(),
-                        req.ref_id,
-                        req.user_token,
-                        req.payload_encryption_type,
-                        Some(payload),
-                    );
+                    let message = Message::new(generate_uuid(), req.ref_id, req.user_token, req.payload_encryption_type, Some(payload));
                     debug!("Write message to remote:\n\n{:?}\n\n", message);
                     trace!("Write message payload to remote:\n\n{:#?}\n\n", message.payload);
                     message
@@ -195,9 +176,7 @@ where
                     source: e,
                 });
             }
-            Ok(WriteMessageServiceResult {
-                message_framed_write,
-            })
+            Ok(WriteMessageServiceResult { message_framed_write })
         })
     }
 }
@@ -272,22 +251,12 @@ where
     fn call(&mut self, mut req: ReadMessageServiceRequest<T>) -> Self::Future {
         let read_timeout_seconds = req.read_timeout_seconds;
         Box::pin(async move {
-            let result = match timeout(
-                Duration::from_secs(read_timeout_seconds),
-                req.message_framed_read.next(),
-            )
-            .await
-            {
+            let result = match timeout(Duration::from_secs(read_timeout_seconds), req.message_framed_read.next()).await {
                 Err(_e) => {
-                    error!(
-                        "The read timeout in {} seconds, read from: {:?}.",
-                        read_timeout_seconds, req.read_from_address
-                    );
+                    error!("The read timeout in {} seconds, read from: {:?}.", read_timeout_seconds, req.read_from_address);
                     return Err(ReadMessageServiceError {
                         message_framed_read: req.message_framed_read,
-                        source: PpaassError::TimeoutError {
-                            elapsed: read_timeout_seconds,
-                        },
+                        source: PpaassError::TimeoutError { elapsed: read_timeout_seconds },
                     });
                 },
                 Ok(None) => {
@@ -302,10 +271,7 @@ where
                         user_token: message.user_token,
                         message_payload: match message.payload {
                             None => {
-                                info!(
-                                    "No payload in the message, read from: {:?}.",
-                                    req.read_from_address
-                                );
+                                info!("No payload in the message, read from: {:?}.", req.read_from_address);
                                 None
                             },
                             Some(payload_bytes) => match payload_bytes.try_into() {
@@ -314,7 +280,10 @@ where
                                     Some(v)
                                 },
                                 Err(e) => {
-                                    error!("Fail to decode message payload because of error, read from:{:?}, error: {:#?}", req.read_from_address,e);
+                                    error!(
+                                        "Fail to decode message payload because of error, read from:{:?}, error: {:#?}",
+                                        req.read_from_address, e
+                                    );
                                     return Err(ReadMessageServiceError {
                                         message_framed_read: req.message_framed_read,
                                         source: e,

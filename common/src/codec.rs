@@ -10,10 +10,7 @@ use pretty_hex::*;
 use tokio_util::codec::{Decoder, Encoder};
 use tracing::{debug, error};
 
-use crate::crypto::{
-    decrypt_with_aes, decrypt_with_blowfish, encrypt_with_aes, encrypt_with_blowfish,
-    RsaCryptoFetcher,
-};
+use crate::crypto::{decrypt_with_aes, decrypt_with_blowfish, encrypt_with_aes, encrypt_with_blowfish, RsaCryptoFetcher};
 use crate::{Message, PayloadEncryptionType, PpaassError};
 
 const PPAASS_FLAG: &[u8] = "__PPAASS__".as_bytes();
@@ -70,7 +67,10 @@ where
                 }
                 let ppaass_flag = src.copy_to_bytes(PPAASS_FLAG.len());
                 if !PPAASS_FLAG.eq(&ppaass_flag) {
-                    error!( "Fail to decode input message because of it dose not begin with ppaass flag, hex data:\n\n{}\n\n", pretty_hex(src));
+                    error!(
+                        "Fail to decode input message because of it dose not begin with ppaass flag, hex data:\n\n{}\n\n",
+                        pretty_hex(src)
+                    );
                     return Err(PpaassError::CodecError);
                 }
                 let compressed = src.get_u8() == 1;
@@ -80,12 +80,14 @@ where
                 self.status = DecodeStatus::Data(compressed, body_length);
                 (compressed, body_length)
             },
-            DecodeStatus::Data(body_is_compressed, body_length) => {
-                (body_is_compressed, body_length)
-            },
+            DecodeStatus::Data(body_is_compressed, body_length) => (body_is_compressed, body_length),
         };
         if src.remaining() < body_length as usize {
-            debug!("Input message is not enough to decode body, buffer remaining: {}, body length: {}.", src.remaining(), body_length);
+            debug!(
+                "Input message is not enough to decode body, buffer remaining: {}, body length: {}.",
+                src.remaining(),
+                body_length
+            );
             return Ok(None);
         }
         debug!(
@@ -104,14 +106,10 @@ where
         } else {
             body_bytes.try_into()?
         };
-        let rsa_crypto =
-            self.rsa_crypto_fetcher.fetch(message.user_token.as_str())?.ok_or_else(|| {
-                error!(
-                    "Fail to get user rsa crypto because of not exist, user token: {}",
-                    message.user_token
-                );
-                PpaassError::CodecError
-            })?;
+        let rsa_crypto = self.rsa_crypto_fetcher.fetch(message.user_token.as_str())?.ok_or_else(|| {
+            error!("Fail to get user rsa crypto because of not exist, user token: {}", message.user_token);
+            PpaassError::CodecError
+        })?;
         debug!("Decode input message (before decrypt): {:?}", message);
         match message.payload_encryption_type {
             PayloadEncryptionType::Blowfish(ref encryption_token) => match message.payload {
@@ -120,8 +118,7 @@ where
                 },
                 Some(ref content) => {
                     let original_encryption_token = rsa_crypto.decrypt(encryption_token)?;
-                    let decrypt_payload =
-                        decrypt_with_blowfish(&original_encryption_token, content);
+                    let decrypt_payload = decrypt_with_blowfish(&original_encryption_token, content);
                     message.payload = Some(decrypt_payload);
                 },
             },
@@ -178,8 +175,7 @@ where
             payload_encryption_type,
             payload,
         } = original_message;
-        let rsa_crypto =
-            self.rsa_crypto_fetcher.fetch(user_token.as_str())?.ok_or(PpaassError::CodecError)?;
+        let rsa_crypto = self.rsa_crypto_fetcher.fetch(user_token.as_str())?.ok_or(PpaassError::CodecError)?;
         let (encrypted_payload, encrypted_payload_encryption_type) = match payload_encryption_type {
             PayloadEncryptionType::Plain => (payload, PayloadEncryptionType::Plain),
             PayloadEncryptionType::Blowfish(ref original_token) => {
@@ -197,13 +193,7 @@ where
                 )
             },
         };
-        let message_to_encode = Message::new(
-            id,
-            ref_id,
-            user_token,
-            encrypted_payload_encryption_type,
-            encrypted_payload,
-        );
+        let message_to_encode = Message::new(id, ref_id, user_token, encrypted_payload_encryption_type, encrypted_payload);
         let result_bytes: Bytes = message_to_encode.into();
         let result_bytes = if self.compress {
             Bytes::from(compress(result_bytes.chunk(), None, true)?)

@@ -22,9 +22,7 @@ use tower::{
 use tower::{service_fn, Service};
 use tracing::{debug, error};
 
-use common::{
-    ready_and_call_service, PpaassError, PrepareMessageFramedService, RsaCrypto, RsaCryptoFetcher,
-};
+use common::{ready_and_call_service, PpaassError, PrepareMessageFramedService, RsaCrypto, RsaCryptoFetcher};
 
 use crate::service::tcp::connect::{TcpConnectService, TcpConnectServiceRequest};
 use crate::service::tcp::relay::{TcpRelayService, TcpRelayServiceRequest};
@@ -42,11 +40,8 @@ pub(crate) struct ProxyRsaCryptoFetcher {
 
 impl ProxyRsaCryptoFetcher {
     pub fn new() -> Result<Self> {
-        let mut result = Self {
-            cache: HashMap::new(),
-        };
-        let rsa_dir_path =
-            SERVER_CONFIG.rsa_root_dir().as_ref().expect("Fail to read rsa root directory.");
+        let mut result = Self { cache: HashMap::new() };
+        let rsa_dir_path = SERVER_CONFIG.rsa_root_dir().as_ref().expect("Fail to read rsa root directory.");
         let rsa_dir = fs::read_dir(rsa_dir_path)?;
         rsa_dir.for_each(|entry| {
             let entry = match entry {
@@ -60,45 +55,28 @@ impl ProxyRsaCryptoFetcher {
             let user_token = user_token.to_str();
             let user_token = match user_token {
                 None => {
-                    error!(
-                        "Fail to read {}{:?} directory because of user token not exist",
-                        rsa_dir_path,
-                        entry.file_name()
-                    );
+                    error!("Fail to read {}{:?} directory because of user token not exist", rsa_dir_path, entry.file_name());
                     return;
                 },
                 Some(v) => v,
             };
-            let public_key = match fs::read_to_string(Path::new(
-                format!("{}{}/AgentPublicKey.pem", rsa_dir_path, user_token).as_str(),
-            )) {
+            let public_key = match fs::read_to_string(Path::new(format!("{}{}/AgentPublicKey.pem", rsa_dir_path, user_token).as_str())) {
                 Err(e) => {
-                    error!(
-                        "Fail to read {}{}/AgentPublicKey.pem because of error: {:#?}",
-                        rsa_dir_path, user_token, e
-                    );
+                    error!("Fail to read {}{}/AgentPublicKey.pem because of error: {:#?}", rsa_dir_path, user_token, e);
                     return;
                 },
                 Ok(v) => v,
             };
-            let private_key = match fs::read_to_string(Path::new(
-                format!("{}{}/ProxyPrivateKey.pem", rsa_dir_path, user_token).as_str(),
-            )) {
+            let private_key = match fs::read_to_string(Path::new(format!("{}{}/ProxyPrivateKey.pem", rsa_dir_path, user_token).as_str())) {
                 Err(e) => {
-                    error!(
-                        "Fail to read {}{}/ProxyPrivateKey.pem because of error: {:#?}",
-                        rsa_dir_path, user_token, e
-                    );
+                    error!("Fail to read {}{}/ProxyPrivateKey.pem because of error: {:#?}", rsa_dir_path, user_token, e);
                     return;
                 },
                 Ok(v) => v,
             };
             let rsa_crypto = match RsaCrypto::new(public_key, private_key) {
                 Err(e) => {
-                    error!(
-                        "Fail to create rsa crypto for user: {} because of error: {:#?}",
-                        user_token, e
-                    );
+                    error!("Fail to create rsa crypto for user: {} because of error: {:#?}", user_token, e);
                     return;
                 },
                 Ok(v) => v,
@@ -160,21 +138,15 @@ where
     fn call(&mut self, req: AgentConnectionInfo) -> Self::Future {
         let rsa_crypto_fetch = self.rsa_crypto_fetch.clone();
         Box::pin(async move {
-            let framed_buffer_size =
-                SERVER_CONFIG.message_framed_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE);
-            let mut prepare_message_frame_service =
-                ServiceBuilder::new().service(PrepareMessageFramedService::new(
-                    framed_buffer_size,
-                    SERVER_CONFIG.compress().unwrap_or(true),
-                    rsa_crypto_fetch.clone(),
-                ));
-            let mut tcp_connect_service =
-                ServiceBuilder::new().service(TcpConnectService::default());
-            let mut tcp_relay_service =
-                ServiceBuilder::new().service(TcpRelayService::<T>::default());
-            let framed_result =
-                ready_and_call_service(&mut prepare_message_frame_service, req.agent_stream)
-                    .await?;
+            let framed_buffer_size = SERVER_CONFIG.message_framed_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE);
+            let mut prepare_message_frame_service = ServiceBuilder::new().service(PrepareMessageFramedService::new(
+                framed_buffer_size,
+                SERVER_CONFIG.compress().unwrap_or(true),
+                rsa_crypto_fetch.clone(),
+            ));
+            let mut tcp_connect_service: TcpConnectService = Default::default();
+            let mut tcp_relay_service: TcpRelayService<T> = Default::default();
+            let framed_result = ready_and_call_service(&mut prepare_message_frame_service, req.agent_stream).await?;
             let tcp_connect_result = ready_and_call_service(
                 &mut tcp_connect_service,
                 TcpConnectServiceRequest {
@@ -184,7 +156,7 @@ where
                 },
             )
             .await?;
-            let relay_result = ready_and_call_service(
+            ready_and_call_service(
                 &mut tcp_relay_service,
                 TcpRelayServiceRequest {
                     message_framed_read: tcp_connect_result.message_framed_read,
@@ -197,15 +169,7 @@ where
                     agent_tcp_connect_message_id: tcp_connect_result.agent_tcp_connect_message_id,
                 },
             )
-            .await;
-            match relay_result {
-                Err(e) => {
-                    error!("Error happen when relay agent connection, error: {:#?}", e);
-                },
-                Ok(r) => {
-                    debug!("Relay process started for agent: {:#?}", r.agent_address);
-                },
-            }
+            .await?;
             Ok(())
         })
     }
@@ -238,8 +202,7 @@ struct ConnectToTargetAttempts {
 
 #[derive(Clone)]
 pub(crate) struct ConnectToTargetService {
-    concrete_service:
-        BoxCloneService<ConnectToTargetServiceRequest, ConnectToTargetServiceResult, anyhow::Error>,
+    concrete_service: BoxCloneService<ConnectToTargetServiceRequest, ConnectToTargetServiceResult, anyhow::Error>,
 }
 
 impl ConnectToTargetService {
@@ -249,27 +212,16 @@ impl ConnectToTargetService {
             ConnectToTargetAttempts { retry },
             service_fn(move |request: ConnectToTargetServiceRequest| async move {
                 debug!("Begin connect to target: {}", request.target_address);
-                let target_stream = match timeout(
-                    Duration::from_secs(connect_timeout_seconds),
-                    TcpStream::connect(&request.target_address),
-                )
-                .await
-                {
+                let target_stream = match timeout(Duration::from_secs(connect_timeout_seconds), TcpStream::connect(&request.target_address)).await {
                     Err(_e) => {
-                        error!(
-                            "The connect to target timeout, duration: {}.",
-                            connect_timeout_seconds
-                        );
+                        error!("The connect to target timeout, duration: {}.", connect_timeout_seconds);
                         return Err(anyhow!(PpaassError::TimeoutError {
                             elapsed: connect_timeout_seconds,
                         }));
                     },
                     Ok(Ok(v)) => v,
                     Ok(Err(e)) => {
-                        error!(
-                            "Fail connect to target {} because of error: {:#?}",
-                            &request.target_address, e
-                        );
+                        error!("Fail connect to target {} because of error: {:#?}", &request.target_address, e);
                         return Err(anyhow!(e));
                     },
                 };
@@ -289,15 +241,10 @@ impl ConnectToTargetService {
     }
 }
 
-impl Policy<ConnectToTargetServiceRequest, ConnectToTargetServiceResult, anyhow::Error>
-    for ConnectToTargetAttempts
-{
+impl Policy<ConnectToTargetServiceRequest, ConnectToTargetServiceResult, anyhow::Error> for ConnectToTargetAttempts {
     type Future = future::Ready<Self>;
 
-    fn retry(
-        &self, _req: &ConnectToTargetServiceRequest,
-        result: Result<&ConnectToTargetServiceResult, &anyhow::Error>,
-    ) -> Option<Self::Future> {
+    fn retry(&self, _req: &ConnectToTargetServiceRequest, result: Result<&ConnectToTargetServiceResult, &anyhow::Error>) -> Option<Self::Future> {
         match result {
             Ok(_) => {
                 // Treat all `Response`s as success,
@@ -309,9 +256,7 @@ impl Policy<ConnectToTargetServiceRequest, ConnectToTargetServiceResult, anyhow:
                 // But we limit the number of attempts...
                 if self.retry > 0 {
                     // Try again!
-                    return Some(future::ready(ConnectToTargetAttempts {
-                        retry: self.retry - 1,
-                    }));
+                    return Some(future::ready(ConnectToTargetAttempts { retry: self.retry - 1 }));
                 }
                 // Used all our attempts, no retry...
                 None
@@ -319,9 +264,7 @@ impl Policy<ConnectToTargetServiceRequest, ConnectToTargetServiceResult, anyhow:
         }
     }
 
-    fn clone_request(
-        &self, req: &ConnectToTargetServiceRequest,
-    ) -> Option<ConnectToTargetServiceRequest> {
+    fn clone_request(&self, req: &ConnectToTargetServiceRequest) -> Option<ConnectToTargetServiceRequest> {
         Some(req.clone())
     }
 }
@@ -337,8 +280,6 @@ impl Service<ConnectToTargetServiceRequest> for ConnectToTargetService {
 
     fn call(&mut self, request: ConnectToTargetServiceRequest) -> Self::Future {
         let mut concrete_connect_service = self.concrete_service.clone();
-        Box::pin(async move {
-            ready_and_call_service(&mut concrete_connect_service, request.clone()).await
-        })
+        Box::pin(async move { ready_and_call_service(&mut concrete_connect_service, request.clone()).await })
     }
 }

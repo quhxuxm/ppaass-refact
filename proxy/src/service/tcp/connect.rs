@@ -5,13 +5,10 @@ use std::task::{Context, Poll};
 use anyhow::anyhow;
 use bytes::Bytes;
 use common::{
-    generate_uuid, ready_and_call_service, AgentMessagePayloadTypeValue, MessageFramedRead,
-    MessageFramedWrite, MessagePayload, NetAddress, PayloadEncryptionTypeSelectService,
-    PayloadEncryptionTypeSelectServiceRequest, PayloadEncryptionTypeSelectServiceResult,
-    PayloadType, PpaassError, ProxyMessagePayloadTypeValue, ReadMessageService,
-    ReadMessageServiceRequest, ReadMessageServiceResult, ReadMessageServiceResultContent,
-    RsaCryptoFetcher, WriteMessageService, WriteMessageServiceError, WriteMessageServiceRequest,
-    WriteMessageServiceResult,
+    generate_uuid, ready_and_call_service, AgentMessagePayloadTypeValue, MessageFramedRead, MessageFramedWrite, MessagePayload, NetAddress,
+    PayloadEncryptionTypeSelectService, PayloadEncryptionTypeSelectServiceRequest, PayloadEncryptionTypeSelectServiceResult, PayloadType, PpaassError,
+    ProxyMessagePayloadTypeValue, ReadMessageService, ReadMessageServiceRequest, ReadMessageServiceResult, ReadMessageServiceResultContent, RsaCryptoFetcher,
+    WriteMessageService, WriteMessageServiceError, WriteMessageServiceRequest, WriteMessageServiceResult,
 };
 use futures::future::BoxFuture;
 use futures::SinkExt;
@@ -21,13 +18,8 @@ use tower::ServiceBuilder;
 use tracing::error;
 use tracing::log::debug;
 
-use crate::config::{
-    DEFAULT_CONNECT_TARGET_RETRY, DEFAULT_CONNECT_TARGET_TIMEOUT_SECONDS,
-    DEFAULT_READ_AGENT_TIMEOUT_SECONDS,
-};
-use crate::service::{
-    ConnectToTargetService, ConnectToTargetServiceRequest, ConnectToTargetServiceResult,
-};
+use crate::config::{DEFAULT_CONNECT_TARGET_RETRY, DEFAULT_CONNECT_TARGET_TIMEOUT_SECONDS, DEFAULT_READ_AGENT_TIMEOUT_SECONDS};
+use crate::service::{ConnectToTargetService, ConnectToTargetServiceRequest, ConnectToTargetServiceResult};
 use crate::SERVER_CONFIG;
 
 pub(crate) struct TcpConnectServiceRequest<T>
@@ -80,18 +72,12 @@ where
         Box::pin(async move {
             let mut read_agent_message_service: ReadMessageService = Default::default();
             let mut write_proxy_message_service = WriteMessageService::default();
-            let mut connect_to_target_service =
-                ServiceBuilder::new().service(ConnectToTargetService::new(
-                    SERVER_CONFIG.target_connection_retry().unwrap_or(DEFAULT_CONNECT_TARGET_RETRY),
-                    SERVER_CONFIG
-                        .connect_target_timeout_seconds()
-                        .unwrap_or(DEFAULT_CONNECT_TARGET_TIMEOUT_SECONDS),
-                ));
-            let read_timeout_seconds = SERVER_CONFIG
-                .read_agent_timeout_seconds()
-                .unwrap_or(DEFAULT_READ_AGENT_TIMEOUT_SECONDS);
-            let mut payload_encryption_type_select_service: PayloadEncryptionTypeSelectService =
-                Default::default();
+            let mut connect_to_target_service = ServiceBuilder::new().service(ConnectToTargetService::new(
+                SERVER_CONFIG.target_connection_retry().unwrap_or(DEFAULT_CONNECT_TARGET_RETRY),
+                SERVER_CONFIG.connect_target_timeout_seconds().unwrap_or(DEFAULT_CONNECT_TARGET_TIMEOUT_SECONDS),
+            ));
+            let read_timeout_seconds = SERVER_CONFIG.read_agent_timeout_seconds().unwrap_or(DEFAULT_READ_AGENT_TIMEOUT_SECONDS);
+            let mut payload_encryption_type_select_service: PayloadEncryptionTypeSelectService = Default::default();
             let read_agent_message_result = ready_and_call_service(
                 &mut read_agent_message_service,
                 ReadMessageServiceRequest {
@@ -109,8 +95,7 @@ where
                         user_token,
                         message_payload:
                             Some(MessagePayload {
-                                payload_type:
-                                    PayloadType::AgentPayload(AgentMessagePayloadTypeValue::TcpConnect),
+                                payload_type: PayloadType::AgentPayload(AgentMessagePayloadTypeValue::TcpConnect),
                                 target_address,
                                 source_address,
                                 ..
@@ -120,10 +105,7 @@ where
                 ..
             }) = read_agent_message_result
             {
-                let PayloadEncryptionTypeSelectServiceResult {
-                    payload_encryption_type,
-                    ..
-                } = ready_and_call_service(
+                let PayloadEncryptionTypeSelectServiceResult { payload_encryption_type, .. } = ready_and_call_service(
                     &mut payload_encryption_type_select_service,
                     PayloadEncryptionTypeSelectServiceRequest {
                         encryption_token: generate_uuid().into(),
@@ -139,13 +121,9 @@ where
                     },
                 )
                 .await;
-                let ConnectToTargetServiceResult { target_stream } = match connect_to_target_result
-                {
+                let ConnectToTargetServiceResult { target_stream } = match connect_to_target_result {
                     Err(e) => {
-                        error!(
-                            "Fail connect to target {:#?} because of error: {:#?}",
-                            target_address, e
-                        );
+                        error!("Fail connect to target {:#?} because of error: {:#?}", target_address, e);
                         let connect_fail_payload = MessagePayload::new(
                             source_address,
                             target_address,
@@ -167,9 +145,7 @@ where
                             Err(WriteMessageServiceError { source, .. }) => {
                                 return Err(anyhow!(source));
                             },
-                            Ok(WriteMessageServiceResult {
-                                mut message_framed_write,
-                            }) => {
+                            Ok(WriteMessageServiceResult { mut message_framed_write }) => {
                                 if let Err(e) = message_framed_write.flush().await {
                                     return Err(anyhow!(e));
                                 }
@@ -179,10 +155,7 @@ where
                     },
                     Ok(v) => v,
                 };
-                debug!(
-                    "Agent {}, success connect to target {:#?}",
-                    req.agent_address, target_address
-                );
+                debug!("Agent {}, success connect to target {:#?}", req.agent_address, target_address);
                 let connect_success_payload = MessagePayload::new(
                     source_address.clone(),
                     target_address.clone(),
@@ -202,9 +175,7 @@ where
                 .await
                 {
                     Err(WriteMessageServiceError { source, .. }) => return Err(anyhow!(source)),
-                    Ok(WriteMessageServiceResult {
-                        mut message_framed_write,
-                    }) => {
+                    Ok(WriteMessageServiceResult { mut message_framed_write }) => {
                         if let Err(e) = message_framed_write.flush().await {
                             return Err(anyhow!(e));
                         }

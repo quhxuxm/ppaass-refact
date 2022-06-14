@@ -8,17 +8,11 @@ use serde_derive::Serialize;
 
 lazy_static! {
     pub(crate) static ref SERVER_CONFIG: Config = {
-        let config_file_content = std::fs::read_to_string("ppaass-proxy.toml")
-            .expect("Fail to read proxy configuration file.");
-        toml::from_str::<Config>(&config_file_content)
-            .expect("Fail to parse proxy configuration file")
+        let config_file_content = std::fs::read_to_string("ppaass-proxy.toml").expect("Fail to read proxy configuration file.");
+        toml::from_str::<Config>(&config_file_content).expect("Fail to parse proxy configuration file")
     };
-    pub(crate) static ref AGENT_PUBLIC_KEY: String =
-        std::fs::read_to_string(Path::new("AgentPublicKey.pem"))
-            .expect("Fail to read agent public key.");
-    pub(crate) static ref PROXY_PRIVATE_KEY: String =
-        std::fs::read_to_string(Path::new("ProxyPrivateKey.pem"))
-            .expect("Fail to read proxy private key.");
+    pub(crate) static ref AGENT_PUBLIC_KEY: String = std::fs::read_to_string(Path::new("AgentPublicKey.pem")).expect("Fail to read agent public key.");
+    pub(crate) static ref PROXY_PRIVATE_KEY: String = std::fs::read_to_string(Path::new("ProxyPrivateKey.pem")).expect("Fail to read proxy private key.");
 }
 
 pub const DEFAULT_READ_AGENT_TIMEOUT_SECONDS: u64 = 20;

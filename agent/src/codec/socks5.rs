@@ -5,9 +5,8 @@ use tracing::error;
 use common::PpaassError;
 
 use crate::message::socks5::{
-    Socks5Addr, Socks5AuthCommandContent, Socks5AuthCommandResultContent, Socks5AuthMethod,
-    Socks5InitCommandContent, Socks5InitCommandResultContent, Socks5InitCommandType,
-    Socks5UdpDataCommandContent, Socks5UdpDataCommandResultContent,
+    Socks5Addr, Socks5AuthCommandContent, Socks5AuthCommandResultContent, Socks5AuthMethod, Socks5InitCommandContent, Socks5InitCommandResultContent,
+    Socks5InitCommandType, Socks5UdpDataCommandContent, Socks5UdpDataCommandResultContent,
 };
 
 use super::SOCKS5_FLAG;
@@ -39,9 +38,7 @@ impl Decoder for Socks5AuthCommandContentCodec {
 impl Encoder<Socks5AuthCommandResultContent> for Socks5AuthCommandContentCodec {
     type Error = PpaassError;
 
-    fn encode(
-        &mut self, item: Socks5AuthCommandResultContent, dst: &mut BytesMut,
-    ) -> Result<(), Self::Error> {
+    fn encode(&mut self, item: Socks5AuthCommandResultContent, dst: &mut BytesMut) -> Result<(), Self::Error> {
         dst.put_u8(item.version);
         dst.put_u8(item.method.into());
         Ok(())
@@ -72,10 +69,7 @@ impl Decoder for Socks5InitCommandContentCodec {
         src.get_u8();
         let dest_address: Socks5Addr = match src.try_into() {
             Err(e) => {
-                error!(
-                    "Fail to parse socks5 connect request destination address because of error: {:#?}",
-                    e
-                );
+                error!("Fail to parse socks5 connect request destination address because of error: {:#?}", e);
                 return Err(PpaassError::CodecError);
             },
             Ok(v) => v,
@@ -87,9 +81,7 @@ impl Decoder for Socks5InitCommandContentCodec {
 impl Encoder<Socks5InitCommandResultContent> for Socks5InitCommandContentCodec {
     type Error = PpaassError;
 
-    fn encode(
-        &mut self, item: Socks5InitCommandResultContent, dst: &mut BytesMut,
-    ) -> Result<(), Self::Error> {
+    fn encode(&mut self, item: Socks5InitCommandResultContent, dst: &mut BytesMut) -> Result<(), Self::Error> {
         dst.put_u8(item.version);
         dst.put_u8(item.status.into());
         dst.put_u8(0);
@@ -128,20 +120,14 @@ impl Decoder for Socks5UdpDataCommandContentCodec {
             Ok(v) => v,
         };
         let data = src.copy_to_bytes(src.remaining());
-        Ok(Some(Socks5UdpDataCommandContent {
-            frag,
-            address,
-            data,
-        }))
+        Ok(Some(Socks5UdpDataCommandContent { frag, address, data }))
     }
 }
 
 impl Encoder<Socks5UdpDataCommandResultContent> for Socks5UdpDataCommandContentCodec {
     type Error = PpaassError;
 
-    fn encode(
-        &mut self, item: Socks5UdpDataCommandResultContent, dst: &mut BytesMut,
-    ) -> Result<(), Self::Error> {
+    fn encode(&mut self, item: Socks5UdpDataCommandResultContent, dst: &mut BytesMut) -> Result<(), Self::Error> {
         dst.put_u16(0);
         dst.put_u8(item.frag);
         dst.put::<Bytes>(item.dest_address.into());

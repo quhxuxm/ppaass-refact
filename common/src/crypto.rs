@@ -5,9 +5,7 @@ use bytes::{BufMut, Bytes, BytesMut};
 use crypto::symmetriccipher::{BlockDecryptor, BlockEncryptor};
 use crypto::{aessafe, blowfish};
 use rand::rngs::OsRng;
-use rsa::pkcs8::{
-    DecodePrivateKey, DecodePublicKey, EncodePrivateKey, EncodePublicKey, LineEnding,
-};
+use rsa::pkcs8::{DecodePrivateKey, DecodePublicKey, EncodePrivateKey, EncodePublicKey, LineEnding};
 use rsa::{PaddingScheme, PublicKey, RsaPrivateKey, RsaPublicKey};
 use tracing::error;
 
@@ -60,10 +58,7 @@ impl RsaCrypto {
                 return Err(PpaassError::CodecError);
             },
         };
-        Ok(Self {
-            public_key,
-            private_key,
-        })
+        Ok(Self { public_key, private_key })
     }
 
     pub(crate) fn encrypt(&self, target: &Bytes) -> Result<Bytes, PpaassError> {
@@ -183,16 +178,11 @@ pub fn generate_proxy_key_pairs(base_dir: &str, user_token: &str) -> Result<(), 
     generate_rsa_key_pairs(private_key_path, public_key_path)
 }
 
-fn generate_rsa_key_pairs(
-    private_key_path: &Path, public_key_path: &Path,
-) -> Result<(), PpaassError> {
+fn generate_rsa_key_pairs(private_key_path: &Path, public_key_path: &Path) -> Result<(), PpaassError> {
     let private_key = RsaPrivateKey::new(&mut OsRng, 2048).expect("Fail to generate private key");
     let public_key = RsaPublicKey::from(&private_key);
-    let private_key_pem =
-        private_key.to_pkcs8_pem(LineEnding::CRLF).expect("Fail to generate pem for private key.");
-    let public_key_pem = public_key
-        .to_public_key_pem(LineEnding::CRLF)
-        .expect("Fail to generate pem for public key.");
+    let private_key_pem = private_key.to_pkcs8_pem(LineEnding::CRLF).expect("Fail to generate pem for private key.");
+    let public_key_pem = public_key.to_public_key_pem(LineEnding::CRLF).expect("Fail to generate pem for public key.");
     match private_key_path.parent() {
         None => {
             println!("Write private key: {:?}", private_key_path.to_str());

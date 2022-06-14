@@ -57,41 +57,30 @@ impl Service<Socks5AuthenticateFlowRequest> for Socks5AuthCommandService {
 
     fn call(&mut self, mut request: Socks5AuthenticateFlowRequest) -> Self::Future {
         Box::pin(async move {
-            let mut framed_parts =
-                FramedParts::new(&mut request.client_stream, Socks5AuthCommandContentCodec);
+            let mut framed_parts = FramedParts::new(&mut request.client_stream, Socks5AuthCommandContentCodec);
             framed_parts.read_buf = request.buffer;
             let mut framed = Framed::from_parts(framed_parts);
             let authenticate_command = match framed.next().await {
                 None => {
-                    let authentication_result =
-                        Socks5AuthCommandResultContent::new(Socks5AuthMethod::NoAcceptableMethods);
+                    let authentication_result = Socks5AuthCommandResultContent::new(Socks5AuthMethod::NoAcceptableMethods);
                     framed.send(authentication_result).await?;
                     framed.flush().await?;
                     return Err(anyhow!(PpaassError::IoError {
-                        source: std::io::Error::new(
-                            ErrorKind::InvalidData,
-                            "No authenticate frame.",
-                        ),
+                        source: std::io::Error::new(ErrorKind::InvalidData, "No authenticate frame.",),
                     }));
                 },
                 Some(v) => match v {
                     Ok(v) => v,
                     Err(e) => {
-                        let authentication_result = Socks5AuthCommandResultContent::new(
-                            Socks5AuthMethod::NoAcceptableMethods,
-                        );
+                        let authentication_result = Socks5AuthCommandResultContent::new(Socks5AuthMethod::NoAcceptableMethods);
                         framed.send(authentication_result).await?;
                         framed.flush().await?;
                         return Err(anyhow!(e));
                     },
                 },
             };
-            debug!(
-                "Client {} start socks 5 authenticate: {:#?}",
-                request.client_address, authenticate_command
-            );
-            let authentication_result =
-                Socks5AuthCommandResultContent::new(Socks5AuthMethod::NoAuthenticationRequired);
+            debug!("Client {} start socks 5 authenticate: {:#?}", request.client_address, authenticate_command);
+            let authentication_result = Socks5AuthCommandResultContent::new(Socks5AuthMethod::NoAuthenticationRequired);
             framed.send(authentication_result).await?;
             framed.flush().await?;
             let FramedParts { read_buf, .. } = framed.into_parts();
