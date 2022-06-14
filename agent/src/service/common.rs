@@ -671,7 +671,17 @@ where
                     message_framed_read = message_framed_read_give_back;
                     data
                 },
-                Ok(ReadMessageServiceResult { content: None, .. }) => return Ok(()),
+                Ok(ReadMessageServiceResult {
+                    message_framed_read,
+                    content: None,
+                    ..
+                }) => {
+                    client_stream_write_half
+                        .flush()
+                        .await
+                        .map_err(|e| (message_framed_read, client_stream_write_half, anyhow!(e)))?;
+                    return Ok(());
+                },
                 Ok(ReadMessageServiceResult {
                     message_framed_read,
                     ..

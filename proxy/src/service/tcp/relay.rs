@@ -197,28 +197,37 @@ where
                 },
                 Ok(ReadMessageServiceResult {
                     message_framed_read,
-                    content,
-                }) => match content {
-                    None => {
-                        return Ok(());
-                    },
-                    Some(ReadMessageServiceResultContent {
-                        message_payload:
-                            Some(MessagePayload {
-                                payload_type:
-                                    PayloadType::AgentPayload(AgentMessagePayloadTypeValue::TcpData),
-                                data,
-                                ..
-                            }),
-                        ..
-                    }) => (message_framed_read, data),
-                    Some(ReadMessageServiceResultContent { .. }) => {
-                        return Err((
-                            message_framed_read,
-                            target_stream_write,
-                            anyhow!(PpaassError::CodecError),
-                        ))
-                    },
+                    content: None,
+                }) => {
+                    target_stream_write
+                        .flush()
+                        .await
+                        .map_err(|e| (message_framed_read, target_stream_write, anyhow!(e)))?;
+                    return Ok(());
+                },
+                Ok(ReadMessageServiceResult {
+                    message_framed_read,
+                    content:
+                        Some(ReadMessageServiceResultContent {
+                            message_payload:
+                                Some(MessagePayload {
+                                    payload_type:
+                                        PayloadType::AgentPayload(AgentMessagePayloadTypeValue::TcpData),
+                                    data,
+                                    ..
+                                }),
+                            ..
+                        }),
+                }) => (message_framed_read, data),
+                Ok(ReadMessageServiceResult {
+                    message_framed_read,
+                    ..
+                }) => {
+                    return Err((
+                        message_framed_read,
+                        target_stream_write,
+                        anyhow!(PpaassError::CodecError),
+                    ))
                 },
             };
             message_framed_read = message_framed_read_move_back;
