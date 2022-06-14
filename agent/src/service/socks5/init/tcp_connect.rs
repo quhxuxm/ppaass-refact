@@ -24,7 +24,7 @@ use crate::{
     message::socks5::Socks5Addr,
     service::common::{
         generate_prepare_message_framed_service, ConnectToProxyService, ConnectToProxyServiceRequest, DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS,
-        DEFAULT_READ_PROXY_TIMEOUT_SECONDS, DEFAULT_RETRY_TIMES,
+        DEFAULT_RETRY_TIMES,
     },
 };
 
@@ -92,7 +92,6 @@ where
     fn call(&mut self, request: Socks5TcpConnectServiceRequest) -> Self::Future {
         let rsa_crypto_fetcher = self.rsa_crypto_fetcher.clone();
         Box::pin(async move {
-            let read_message_timeout = SERVER_CONFIG.read_proxy_timeout_seconds().unwrap_or(DEFAULT_READ_PROXY_TIMEOUT_SECONDS);
             let client_address = request.client_address;
             let mut write_agent_message_service: WriteMessageService = Default::default();
             let mut read_proxy_message_service: ReadMessageService = Default::default();
@@ -151,7 +150,6 @@ where
                 ReadMessageServiceRequest {
                     message_framed_read: framed_result.message_framed_read,
                     read_from_address: framed_result.framed_address,
-                    read_timeout_seconds: read_message_timeout,
                 },
             )
             .await

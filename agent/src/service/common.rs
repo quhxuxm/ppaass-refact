@@ -38,9 +38,9 @@ use crate::service::socks5::{Socks5FlowRequest, Socks5FlowService};
 
 pub const DEFAULT_BUFFER_SIZE: usize = 1024 * 64;
 pub const DEFAULT_RETRY_TIMES: u16 = 3;
-pub const DEFAULT_READ_PROXY_TIMEOUT_SECONDS: u64 = 20;
+
 pub const DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS: u64 = 20;
-pub const DEFAULT_READ_CLIENT_TIMEOUT_SECONDS: u64 = 20;
+
 pub const DEFAULT_RATE_LIMIT: u64 = 1024;
 pub const DEFAULT_CONCURRENCY_LIMIT: usize = 1024;
 pub const DEFAULT_BUFFERED_CONNECTION_NUMBER: usize = 1024;
@@ -475,30 +475,16 @@ where
         loop {
             let client_buffer_size = SERVER_CONFIG.client_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE);
             let mut client_buffer = BytesMut::with_capacity(client_buffer_size);
-            let read_client_timeout_seconds = SERVER_CONFIG.read_client_timeout_seconds().unwrap_or(DEFAULT_READ_CLIENT_TIMEOUT_SECONDS);
-            match timeout(
-                Duration::from_secs(read_client_timeout_seconds),
-                client_stream_read_half.read_buf(&mut client_buffer),
-            )
-            .await
-            {
-                Err(_) => {
-                    return Err((
-                        message_framed_write,
-                        client_stream_read_half,
-                        anyhow!(PpaassError::TimeoutError {
-                            elapsed: read_client_timeout_seconds
-                        }),
-                    ));
-                },
-                Ok(Err(e)) => {
+
+            match client_stream_read_half.read_buf(&mut client_buffer).await {
+                Err(e) => {
                     error!(
                         "Error happen when relay data from client to proxy,  agent address={:?}, target address={:?}, error: {:#?}",
                         source_address_a2t, target_address_a2t, e
                     );
                     return Err((message_framed_write, client_stream_read_half, anyhow!(e)));
                 },
-                Ok(Ok(0)) => {
+                Ok(0) => {
                     debug!("Read all data from client, target address: {:?}", target_address_a2t);
                     if let Err(e) = message_framed_write.flush().await {
                         return Err((message_framed_write, client_stream_read_half, anyhow!(e)));
@@ -508,7 +494,7 @@ where
                     };
                     return Ok(());
                 },
-                Ok(Ok(size)) => {
+                Ok(size) => {
                     debug!("Read {} bytes from client, target address: {:?}", size, target_address_a2t);
                     size
                 },
@@ -566,7 +552,6 @@ where
         read_from_address: Option<SocketAddr>, _target_address_t2a: NetAddress, mut message_framed_read: MessageFramedRead<T>,
         mut client_stream_write_half: OwnedWriteHalf,
     ) -> Result<(), (MessageFramedRead<T>, OwnedWriteHalf, anyhow::Error)> {
-        let read_proxy_timeout_seconds = SERVER_CONFIG.read_proxy_timeout_seconds().unwrap_or(DEFAULT_READ_PROXY_TIMEOUT_SECONDS);
         let mut read_proxy_message_service: ReadMessageService = Default::default();
         loop {
             let read_proxy_message_result = ready_and_call_service(
@@ -574,7 +559,6 @@ where
                 ReadMessageServiceRequest {
                     message_framed_read,
                     read_from_address,
-                    read_timeout_seconds: read_proxy_timeout_seconds,
                 },
             )
             .await;

@@ -18,7 +18,7 @@ use tower::ServiceBuilder;
 use tracing::error;
 use tracing::log::debug;
 
-use crate::config::{DEFAULT_CONNECT_TARGET_RETRY, DEFAULT_CONNECT_TARGET_TIMEOUT_SECONDS, DEFAULT_READ_AGENT_TIMEOUT_SECONDS};
+use crate::config::{DEFAULT_CONNECT_TARGET_RETRY, DEFAULT_CONNECT_TARGET_TIMEOUT_SECONDS};
 use crate::service::{ConnectToTargetService, ConnectToTargetServiceRequest, ConnectToTargetServiceResult};
 use crate::SERVER_CONFIG;
 
@@ -76,14 +76,13 @@ where
                 SERVER_CONFIG.target_connection_retry().unwrap_or(DEFAULT_CONNECT_TARGET_RETRY),
                 SERVER_CONFIG.connect_target_timeout_seconds().unwrap_or(DEFAULT_CONNECT_TARGET_TIMEOUT_SECONDS),
             ));
-            let read_timeout_seconds = SERVER_CONFIG.read_agent_timeout_seconds().unwrap_or(DEFAULT_READ_AGENT_TIMEOUT_SECONDS);
+
             let mut payload_encryption_type_select_service: PayloadEncryptionTypeSelectService = Default::default();
             let read_agent_message_result = ready_and_call_service(
                 &mut read_agent_message_service,
                 ReadMessageServiceRequest {
                     message_framed_read: req.message_framed_read,
                     read_from_address: Some(req.agent_address),
-                    read_timeout_seconds,
                 },
             )
             .await;

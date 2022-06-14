@@ -30,7 +30,7 @@ use url::Url;
 use crate::codec::http::HttpCodec;
 use crate::service::common::{
     generate_prepare_message_framed_service, ConnectToProxyService, ConnectToProxyServiceRequest, ConnectToProxyServiceResult,
-    DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS, DEFAULT_READ_PROXY_TIMEOUT_SECONDS, DEFAULT_RETRY_TIMES,
+    DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS, DEFAULT_RETRY_TIMES,
 };
 use crate::SERVER_CONFIG;
 
@@ -120,7 +120,6 @@ where
     fn call(&mut self, mut request: HttpConnectServiceRequest) -> Self::Future {
         let rsa_crypto_fetcher = self.rsa_crypto_fetcher.clone();
         Box::pin(async move {
-            let read_proxy_timeout_seconds = SERVER_CONFIG.read_proxy_timeout_seconds().unwrap_or(DEFAULT_READ_PROXY_TIMEOUT_SECONDS);
             let mut prepare_message_framed_service = generate_prepare_message_framed_service(rsa_crypto_fetcher);
             let mut write_agent_message_service: WriteMessageService = Default::default();
 
@@ -241,7 +240,6 @@ where
                 ReadMessageServiceRequest {
                     message_framed_read: framed_result.message_framed_read,
                     read_from_address: framed_result.framed_address,
-                    read_timeout_seconds: read_proxy_timeout_seconds,
                 },
             )
             .await

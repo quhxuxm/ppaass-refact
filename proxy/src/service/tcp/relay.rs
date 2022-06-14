@@ -1,20 +1,17 @@
+use std::net::SocketAddr;
 use std::task::{Context, Poll};
 use std::{
     fmt::{Debug, Formatter},
     marker::PhantomData,
 };
-use std::{net::SocketAddr, time::Duration};
 
 use anyhow::{anyhow, Result};
 use bytes::{Bytes, BytesMut};
 
 use futures::{future::BoxFuture, SinkExt};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::net::TcpStream;
-use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
-    time::timeout,
-};
 
 use tower::Service;
 
@@ -27,11 +24,9 @@ use common::{
     ReadMessageServiceResultContent, RsaCryptoFetcher, WriteMessageService, WriteMessageServiceError, WriteMessageServiceRequest, WriteMessageServiceResult,
 };
 
-use crate::config::DEFAULT_READ_AGENT_TIMEOUT_SECONDS;
 use crate::SERVER_CONFIG;
 
 const DEFAULT_BUFFER_SIZE: usize = 64 * 1024;
-const DEFAULT_READ_TARGET_TIMEOUT_SECONDS: u64 = 20;
 
 #[allow(unused)]
 pub(crate) struct TcpRelayServiceRequest<T>
@@ -150,12 +145,10 @@ where
         agent_address: SocketAddr, mut message_framed_read: MessageFramedRead<T>, mut target_stream_write: OwnedWriteHalf,
     ) -> Result<(), (MessageFramedRead<T>, OwnedWriteHalf, anyhow::Error)> {
         loop {
-            let read_timeout_seconds = SERVER_CONFIG.read_agent_timeout_seconds().unwrap_or(DEFAULT_READ_AGENT_TIMEOUT_SECONDS);
             let mut read_agent_message_service: ReadMessageService = Default::default();
             let read_agent_message_result = ready_and_call_service(
                 &mut read_agent_message_service,
                 ReadMessageServiceRequest {
-                    read_timeout_seconds,
                     message_framed_read,
                     read_from_address: Some(agent_address),
                 },
@@ -232,30 +225,15 @@ where
             let mut target_buffer = BytesMut::with_capacity(target_buffer_size);
             let source_address = agent_connect_message_source_address.clone();
             let target_address = agent_connect_message_target_address.clone();
-            let read_target_timeout_seconds = SERVER_CONFIG.read_target_timeout_seconds().unwrap_or(DEFAULT_READ_TARGET_TIMEOUT_SECONDS);
-            match timeout(
-                Duration::from_secs(read_target_timeout_seconds),
-                target_stream_read.read_buf(&mut target_buffer),
-            )
-            .await
-            {
-                Err(_e) => {
-                    return Err((
-                        message_framed_write,
-                        target_stream_read,
-                        anyhow!(PpaassError::TimeoutError {
-                            elapsed: read_target_timeout_seconds
-                        }),
-                    ));
-                },
-                Ok(Err(e)) => {
+            match target_stream_read.read_buf(&mut target_buffer).await {
+                Err(e) => {
                     error!(
                         "Error happen when relay data from target to proxy, target address={:?}, source address={:?}, error: {:#?}",
                         target_address, source_address, e
                     );
                     return Err((message_framed_write, target_stream_read, anyhow!(e)));
                 },
-                Ok(Ok(0)) => {
+                Ok(0) => {
                     debug!(
                         "Read all data from target, target address={:?}, source address={:?}.",
                         target_address, source_address
@@ -268,7 +246,7 @@ where
                     };
                     return Ok(());
                 },
-                Ok(Ok(size)) => {
+                Ok(size) => {
                     debug!(
                         "Read {} bytes from target to proxy, target address={:?}, source address={:?}.",
                         size, target_address, source_address

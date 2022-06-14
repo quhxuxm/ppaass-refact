@@ -1,4 +1,3 @@
-use std::time::Duration;
 use std::{
     fmt::{Debug, Formatter},
     net::SocketAddr,
@@ -12,7 +11,7 @@ use bytes::Bytes;
 use futures::future::{self, BoxFuture};
 use futures::stream::{SplitSink, SplitStream};
 use futures::{SinkExt, StreamExt};
-use tokio::{net::TcpStream, time::timeout};
+use tokio::net::TcpStream;
 use tokio_util::codec::Framed;
 use tower::Service;
 use tracing::{debug, error, info, trace};
@@ -185,7 +184,6 @@ pub struct ReadMessageServiceRequest<T>
 where
     T: RsaCryptoFetcher,
 {
-    pub read_timeout_seconds: u64,
     pub message_framed_read: MessageFramedRead<T>,
     pub read_from_address: Option<SocketAddr>,
 }
@@ -249,23 +247,15 @@ where
     }
 
     fn call(&mut self, mut req: ReadMessageServiceRequest<T>) -> Self::Future {
-        let read_timeout_seconds = req.read_timeout_seconds;
         Box::pin(async move {
-            let result = match timeout(Duration::from_secs(read_timeout_seconds), req.message_framed_read.next()).await {
-                Err(_e) => {
-                    error!("The read timeout in {} seconds, read from: {:?}.", read_timeout_seconds, req.read_from_address);
-                    return Err(ReadMessageServiceError {
-                        message_framed_read: req.message_framed_read,
-                        source: PpaassError::TimeoutError { elapsed: read_timeout_seconds },
-                    });
-                },
-                Ok(None) => {
+            let result = match req.message_framed_read.next().await {
+                None => {
                     return Ok(ReadMessageServiceResult {
                         content: None,
                         message_framed_read: req.message_framed_read,
                     });
                 },
-                Ok(Some(Ok(message))) => ReadMessageServiceResult {
+                Some(Ok(message)) => ReadMessageServiceResult {
                     content: Some(ReadMessageServiceResultContent {
                         message_id: message.id,
                         user_token: message.user_token,
@@ -294,7 +284,7 @@ where
                     }),
                     message_framed_read: req.message_framed_read,
                 },
-                Ok(Some(Err(e))) => {
+                Some(Err(e)) => {
                     error!(
                         "Fail to decode message because of error, read from {:?}, error: {:#?}",
                         req.read_from_address, e

@@ -37,8 +37,6 @@ pub(crate) struct Config {
     buffered_connection_number: Option<usize>,
     concurrent_connection_number: Option<usize>,
     rate_limit: Option<u64>,
-    read_proxy_timeout_seconds: Option<u64>,
-    read_client_timeout_seconds: Option<u64>,
     connect_proxy_timeout_seconds: Option<u64>,
     client_stream_so_linger: Option<u64>,
     proxy_stream_so_linger: Option<u64>,
@@ -93,12 +91,6 @@ impl Config {
     }
     pub fn rate_limit(&self) -> Option<u64> {
         self.rate_limit
-    }
-    pub fn read_proxy_timeout_seconds(&self) -> Option<u64> {
-        self.read_proxy_timeout_seconds
-    }
-    pub fn read_client_timeout_seconds(&self) -> Option<u64> {
-        self.read_client_timeout_seconds
     }
     pub fn connect_proxy_timeout_seconds(&self) -> Option<u64> {
         self.connect_proxy_timeout_seconds
