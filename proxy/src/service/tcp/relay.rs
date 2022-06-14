@@ -18,7 +18,7 @@ use tokio::{
 
 use tower::Service;
 
-use tracing::{debug, error, info};
+use tracing::{debug, error};
 
 use common::{
     generate_uuid, ready_and_call_service, AgentMessagePayloadTypeValue, MessageFramedRead,

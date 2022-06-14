@@ -540,10 +540,19 @@ where
             )
             .await
             {
-                Err(e) => {
-                    return Err((message_framed_write, client_stream_read_half, anyhow!(e)));
+                Err(_) => {
+                    return Err((
+                        message_framed_write,
+                        client_stream_read_half,
+                        anyhow!(PpaassError::TimeoutError {
+                            elapsed: read_client_timeout_seconds
+                        }),
+                    ));
                 },
                 Ok(Err(e)) => {
+                    error!(
+                        "Error happen when relay data from client to proxy,  agent address={:?}, target address={:?}, error: {:#?}", 
+                    source_address_a2t,target_address_a2t, e);
                     return Err((message_framed_write, client_stream_read_half, anyhow!(e)));
                 },
                 Ok(Ok(0)) => {
