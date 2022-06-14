@@ -557,10 +557,12 @@ where
                 },
                 Ok(Ok(0)) => {
                     debug!("Read all data from client, target address: {:?}", target_address_a2t);
-                    message_framed_write
-                        .flush()
-                        .await
-                        .map_err(|e| (message_framed_write, client_stream_read_half, anyhow!(e)))?;
+                    if let Err(e) = message_framed_write.flush().await {
+                        return Err((message_framed_write, client_stream_read_half, anyhow!(e)));
+                    };
+                    if let Err(e) = message_framed_write.close().await {
+                        return Err((message_framed_write, client_stream_read_half, anyhow!(e)));
+                    };
                     return Ok(());
                 },
                 Ok(Ok(size)) => {

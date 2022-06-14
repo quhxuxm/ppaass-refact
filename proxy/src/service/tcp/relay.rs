@@ -296,10 +296,12 @@ where
                         "Read all data from target, target address={:?}, source address={:?}.",
                         target_address, source_address
                     );
-                    message_framed_write
-                        .flush()
-                        .await
-                        .map_err(|e| (message_framed_write, target_stream_read, anyhow!(e)))?;
+                    if let Err(e) = message_framed_write.flush().await {
+                        return Err((message_framed_write, target_stream_read, anyhow!(e)));
+                    };
+                    if let Err(e) = message_framed_write.close().await {
+                        return Err((message_framed_write, target_stream_read, anyhow!(e)));
+                    };
                     return Ok(());
                 },
                 Ok(Ok(size)) => {
