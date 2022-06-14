@@ -18,7 +18,7 @@ use tokio::{
 
 use tower::Service;
 
-use tracing::error;
+use tracing::{debug, error};
 
 use common::{
     generate_uuid, ready_and_call_service, AgentMessagePayloadTypeValue, MessageFramedRead,
@@ -258,17 +258,23 @@ where
             let mut target_buffer = BytesMut::with_capacity(target_buffer_size);
             let source_address = agent_connect_message_source_address.clone();
             let target_address = agent_connect_message_target_address.clone();
-            let timeout_seconds = SERVER_CONFIG
+            let read_target_timeout_seconds = SERVER_CONFIG
                 .read_target_timeout_seconds()
                 .unwrap_or(DEFAULT_READ_TARGET_TIMEOUT_SECONDS);
             match timeout(
-                Duration::from_secs(timeout_seconds),
+                Duration::from_secs(read_target_timeout_seconds),
                 target_stream_read.read_buf(&mut target_buffer),
             )
             .await
             {
-                Err(e) => {
-                    return Err((message_framed_write, target_stream_read, anyhow!(e)));
+                Err(_e) => {
+                    return Err((
+                        message_framed_write,
+                        target_stream_read,
+                        anyhow!(PpaassError::TimeoutError {
+                            elapsed: read_target_timeout_seconds
+                        }),
+                    ));
                 },
                 Ok(Err(e)) => {
                     return Err((message_framed_write, target_stream_read, anyhow!(e)));
@@ -280,7 +286,10 @@ where
                         .map_err(|e| (message_framed_write, target_stream_read, anyhow!(e)))?;
                     return Ok(());
                 },
-                Ok(Ok(size)) => size,
+                Ok(Ok(size)) => {
+                    debug!("Read {} bytes from target to proxy.", size);
+                    size
+                },
             };
             let payload_data = target_buffer.split().freeze();
             let payload_data_chunks = payload_data
