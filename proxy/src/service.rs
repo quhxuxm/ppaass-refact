@@ -30,9 +30,7 @@ use anyhow::Result;
 mod tcp;
 mod udp;
 const DEFAULT_BUFFER_SIZE: usize = 1024 * 64;
-pub const DEFAULT_BUFFERED_CONNECTION_NUMBER: usize = 1024;
-pub const DEFAULT_RATE_LIMIT: u64 = 1024;
-pub const DEFAULT_CONCURRENCY_LIMIT: usize = 1024;
+
 pub(crate) struct ProxyRsaCryptoFetcher {
     cache: HashMap<String, RsaCrypto>,
 }

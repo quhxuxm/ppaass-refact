@@ -40,12 +40,6 @@ pub(crate) struct ProxyConfig {
     compress: Option<bool>,
     /// The max log level
     max_log_level: Option<String>,
-    /// The buffered connection number
-    buffered_connection_number: Option<usize>,
-    /// The concurrent connection number
-    concurrent_connection_number: Option<usize>,
-    /// The rate limit
-    rate_limit: Option<u64>,
     agent_stream_so_linger: Option<u64>,
     target_stream_so_linger: Option<u64>,
     so_backlog: Option<u32>,
@@ -109,18 +103,6 @@ impl ProxyConfig {
     pub fn set_rsa_root_dir(&mut self, rsa_root_dir: String) {
         self.rsa_root_dir = Some(rsa_root_dir)
     }
-    pub fn buffered_connection_number(&self) -> Option<usize> {
-        self.buffered_connection_number
-    }
-    pub fn concurrent_connection_number(&self) -> Option<usize> {
-        self.concurrent_connection_number
-    }
-    pub fn rate_limit(&self) -> Option<u64> {
-        self.rate_limit
-    }
-    pub fn set_rate_limit(&mut self, rate_limit: u64) {
-        self.rate_limit = Some(rate_limit)
-    }
     pub fn target_stream_so_linger(&self) -> Option<u64> {
         self.target_stream_so_linger
     }
@@ -168,9 +150,6 @@ pub(crate) struct ProxyArguments {
     /// The max log level
     #[clap(long, value_parser)]
     pub max_log_level: Option<String>,
-    /// The rate limit
-    #[clap(long, value_parser)]
-    pub rate_limit: Option<u64>,
     /// The so_backlog
     #[clap(long, value_parser)]
     pub so_backlog: Option<u32>,

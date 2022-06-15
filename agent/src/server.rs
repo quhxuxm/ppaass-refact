@@ -6,18 +6,15 @@ use std::time::Duration;
 use anyhow::Result;
 use tokio::net::TcpSocket;
 use tokio::runtime::{Builder as TokioRuntimeBuilder, Runtime};
-use tower::ServiceBuilder;
+
 use tracing::error;
 
 use common::ready_and_call_service;
 
+use crate::config::AgentConfig;
 use crate::service::{
-    common::{ClientConnectionInfo, HandleClientConnectionService, DEFAULT_BUFFERED_CONNECTION_NUMBER},
+    common::{ClientConnectionInfo, HandleClientConnectionService},
     AgentRsaCryptoFetcher,
-};
-use crate::{
-    config::AgentConfig,
-    service::common::{DEFAULT_CONCURRENCY_LIMIT, DEFAULT_RATE_LIMIT},
 };
 
 const DEFAULT_SERVER_PORT: u16 = 10080;
@@ -94,15 +91,8 @@ impl AgentServer {
             let proxy_addresses = proxy_addresses.clone();
             let configuration = self.configuration.clone();
             tokio::spawn(async move {
-                let mut handle_client_connection_service = ServiceBuilder::new()
-                    .buffer(configuration.buffered_connection_number().unwrap_or(DEFAULT_BUFFERED_CONNECTION_NUMBER))
-                    .concurrency_limit(configuration.concurrent_connection_number().unwrap_or(DEFAULT_CONCURRENCY_LIMIT))
-                    .rate_limit(configuration.rate_limit().unwrap_or(DEFAULT_RATE_LIMIT), Duration::from_secs(60))
-                    .service(HandleClientConnectionService::new(
-                        proxy_addresses,
-                        agent_rsa_crypto_fetcher.clone(),
-                        configuration.clone(),
-                    ));
+                let mut handle_client_connection_service =
+                    HandleClientConnectionService::new(proxy_addresses, agent_rsa_crypto_fetcher.clone(), configuration.clone());
                 if let Err(e) = ready_and_call_service(&mut handle_client_connection_service, ClientConnectionInfo { client_stream, client_address }).await {
                     error!("Error happen when handle client connection [{}], error:{:#?}", client_address, e);
                 }

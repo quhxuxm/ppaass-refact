@@ -9,15 +9,14 @@ use anyhow::Result;
 use tokio::net::TcpSocket;
 use tokio::runtime::Builder as TokioRuntimeBuilder;
 use tokio::runtime::Runtime as TokioRuntime;
-use tower::ServiceBuilder;
+
 use tracing::error;
 
 use common::ready_and_call_service;
 
-use crate::service::{DEFAULT_BUFFERED_CONNECTION_NUMBER, DEFAULT_CONCURRENCY_LIMIT};
 use crate::{
     config::ProxyConfig,
-    service::{AgentConnectionInfo, HandleAgentConnectionService, ProxyRsaCryptoFetcher, DEFAULT_RATE_LIMIT},
+    service::{AgentConnectionInfo, HandleAgentConnectionService, ProxyRsaCryptoFetcher},
 };
 
 const DEFAULT_SERVER_PORT: u16 = 80;
@@ -78,16 +77,9 @@ impl ProxyServer {
                 }
             }
             let proxy_rsa_crypto_fetcher = proxy_rsa_crypto_fetcher.clone();
-            let buffered_connection_number = self.configuration.buffered_connection_number().unwrap_or(DEFAULT_BUFFERED_CONNECTION_NUMBER);
-            let concurrent_connection_number = self.configuration.concurrent_connection_number().unwrap_or(DEFAULT_CONCURRENCY_LIMIT);
-            let rate_limit = self.configuration.rate_limit().unwrap_or(DEFAULT_RATE_LIMIT);
             let configuration = self.configuration.clone();
             tokio::spawn(async move {
-                let mut handle_agent_connection_service = ServiceBuilder::new()
-                    .buffer(buffered_connection_number)
-                    .concurrency_limit(concurrent_connection_number)
-                    .rate_limit(rate_limit, Duration::from_secs(60))
-                    .service(HandleAgentConnectionService::new(proxy_rsa_crypto_fetcher.clone(), configuration));
+                let mut handle_agent_connection_service = HandleAgentConnectionService::new(proxy_rsa_crypto_fetcher.clone(), configuration);
                 if let Err(e) = ready_and_call_service(&mut handle_agent_connection_service, AgentConnectionInfo { agent_stream, agent_address }).await {
                     error!("Error happen when handle agent connection [{}], error:{:#?}", agent_address, e)
                 }

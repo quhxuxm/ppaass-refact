@@ -52,9 +52,6 @@ fn init() -> ProxyConfig {
     if let Some(max_log_level) = arguments.max_log_level {
         configuration.set_max_log_level(max_log_level)
     }
-    if let Some(rate_limit) = arguments.rate_limit {
-        configuration.set_rate_limit(rate_limit)
-    }
     if let Some(so_backlog) = arguments.so_backlog {
         configuration.set_so_backlog(so_backlog)
     }
