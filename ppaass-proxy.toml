@@ -1,4 +1,3 @@
-connect_target_timeout_seconds = 120
 log_dir = "./log"
 log_file = "ppaass-proxy.log"
 max_blocking_threads = 1024
@@ -12,7 +11,7 @@ agent_stream_so_linger = 20
 compress = true
 so_backlog = 2048
 target_stream_so_linger = 20
-thread_number = 512
+thread_number = 1024
 thread_timeout = 60
 #so_recv_buffer_size=8192
 #so_send_buffer_size=262144

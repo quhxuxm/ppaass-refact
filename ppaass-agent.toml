@@ -1,6 +1,5 @@
 #port = 10080
 client_buffer_size = 131072
-connect_proxy_timeout_seconds = 120
 log_dir = "./log"
 log_file = "ppaass-agent.log"
 max_blocking_threads = 1024
@@ -16,7 +15,7 @@ compress = false
 proxy_public_key_file = "ProxyPublicKey.pem"
 proxy_stream_so_linger = 20
 so_backlog = 2048
-thread_number = 256
+thread_number = 1024
 thread_timeout = 60
 #so_recv_buffer_size=8192
 #so_send_buffer_size=262144
