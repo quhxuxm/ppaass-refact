@@ -1,6 +1,6 @@
 log_dir = "./log"
 log_file = "ppaass-proxy.log"
-max_blocking_threads = 1024
+max_blocking_threads = 128
 max_log_level = "INFO"
 message_framed_buffer_size = 2097152
 port = 80
@@ -11,7 +11,7 @@ agent_stream_so_linger = 20
 compress = true
 so_backlog = 2048
 target_stream_so_linger = 20
-thread_number = 1024
-thread_timeout = 60
+thread_number = 2048
+thread_timeout = 10
 #so_recv_buffer_size=8192
 #so_send_buffer_size=262144
