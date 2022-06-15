@@ -9,8 +9,11 @@ use tower::{Service, ServiceBuilder};
 
 use common::{ready_and_call_service, RsaCryptoFetcher};
 
-use crate::service::common::{TcpRelayService, TcpRelayServiceRequest};
 use crate::service::http::connect::{HttpConnectService, HttpConnectServiceRequest};
+use crate::{
+    config::AgentConfig,
+    service::common::{TcpRelayService, TcpRelayServiceRequest},
+};
 
 mod connect;
 
@@ -20,6 +23,7 @@ pub(crate) struct HttpFlowRequest {
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,
     pub buffer: BytesMut,
+    pub configuration: Arc<AgentConfig>,
 }
 #[derive(Debug)]
 #[allow(unused)]
@@ -68,6 +72,7 @@ where
                     client_address: req.client_address,
                     client_stream: req.client_stream,
                     initial_buf: req.buffer,
+                    configuration: req.configuration.clone(),
                 },
             )
             .await?;
@@ -83,6 +88,7 @@ where
                     init_data: connect_result.init_data,
                     connect_response_message_id: connect_result.message_id,
                     proxy_address: connect_result.proxy_address,
+                    configuration: req.configuration,
                 },
             )
             .await?;

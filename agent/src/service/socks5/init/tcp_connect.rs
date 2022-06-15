@@ -15,17 +15,15 @@ use tracing::error;
 use common::{
     generate_uuid, ready_and_call_service, AgentMessagePayloadTypeValue, MessageFramedRead, MessageFramedWrite, MessagePayload, NetAddress,
     PayloadEncryptionTypeSelectService, PayloadEncryptionTypeSelectServiceRequest, PayloadEncryptionTypeSelectServiceResult, PayloadType, PpaassError,
-    ProxyMessagePayloadTypeValue, ReadMessageService, ReadMessageServiceError, ReadMessageServiceRequest, ReadMessageServiceResult,
-    ReadMessageServiceResultContent, RsaCryptoFetcher, WriteMessageService, WriteMessageServiceError, WriteMessageServiceRequest, WriteMessageServiceResult,
+    PrepareMessageFramedService, ProxyMessagePayloadTypeValue, ReadMessageService, ReadMessageServiceError, ReadMessageServiceRequest,
+    ReadMessageServiceResult, ReadMessageServiceResultContent, RsaCryptoFetcher, WriteMessageService, WriteMessageServiceError, WriteMessageServiceRequest,
+    WriteMessageServiceResult,
 };
 
 use crate::{
-    config::SERVER_CONFIG,
+    config::AgentConfig,
     message::socks5::Socks5Addr,
-    service::common::{
-        generate_prepare_message_framed_service, ConnectToProxyService, ConnectToProxyServiceRequest, DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS,
-        DEFAULT_RETRY_TIMES,
-    },
+    service::common::{ConnectToProxyService, ConnectToProxyServiceRequest, DEFAULT_BUFFER_SIZE, DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS, DEFAULT_RETRY_TIMES},
 };
 
 pub(crate) struct Socks5TcpConnectService<T>
@@ -39,6 +37,7 @@ pub(crate) struct Socks5TcpConnectServiceRequest {
     pub proxy_addresses: Arc<Vec<SocketAddr>>,
     pub client_address: SocketAddr,
     pub dest_address: Socks5Addr,
+    pub configuration: Arc<AgentConfig>,
 }
 
 impl Debug for Socks5TcpConnectServiceRequest {
@@ -96,11 +95,19 @@ where
             let mut write_agent_message_service: WriteMessageService = Default::default();
             let mut read_proxy_message_service: ReadMessageService = Default::default();
             let mut connect_to_proxy_service = ServiceBuilder::new().service(ConnectToProxyService::new(
-                SERVER_CONFIG.proxy_connection_retry().unwrap_or(DEFAULT_RETRY_TIMES),
-                SERVER_CONFIG.connect_proxy_timeout_seconds().unwrap_or(DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS),
+                request.configuration.proxy_connection_retry().unwrap_or(DEFAULT_RETRY_TIMES),
+                request
+                    .configuration
+                    .connect_proxy_timeout_seconds()
+                    .unwrap_or(DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS),
+                request.configuration.proxy_stream_so_linger().unwrap_or(DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS),
             ));
-            let mut payload_encryption_type_select_service = ServiceBuilder::new().service(PayloadEncryptionTypeSelectService);
-            let mut prepare_message_framed_service = generate_prepare_message_framed_service(rsa_crypto_fetcher);
+            let mut payload_encryption_type_select_service: PayloadEncryptionTypeSelectService = Default::default();
+            let mut prepare_message_framed_service = PrepareMessageFramedService::new(
+                request.configuration.message_framed_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
+                request.configuration.compress().unwrap_or(true),
+                rsa_crypto_fetcher,
+            );
             let connect_to_proxy_service_result = ready_and_call_service(
                 &mut connect_to_proxy_service,
                 ConnectToProxyServiceRequest {
@@ -114,7 +121,7 @@ where
                 &mut payload_encryption_type_select_service,
                 PayloadEncryptionTypeSelectServiceRequest {
                     encryption_token: generate_uuid().into(),
-                    user_token: SERVER_CONFIG.user_token().clone().unwrap(),
+                    user_token: request.configuration.user_token().clone().unwrap(),
                 },
             )
             .await?;
@@ -123,7 +130,7 @@ where
                 WriteMessageServiceRequest {
                     message_framed_write: framed_result.message_framed_write,
                     payload_encryption_type,
-                    user_token: SERVER_CONFIG.user_token().clone().unwrap(),
+                    user_token: request.configuration.user_token().clone().unwrap(),
                     ref_id: None,
                     message_payload: Some(MessagePayload::new(
                         request.client_address.into(),

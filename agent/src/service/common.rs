@@ -26,15 +26,16 @@ use tracing::{debug, error};
 use common::{
     generate_uuid, ready_and_call_service, AgentMessagePayloadTypeValue, MessageFramedRead, MessageFramedWrite, MessagePayload, NetAddress,
     PayloadEncryptionTypeSelectService, PayloadEncryptionTypeSelectServiceRequest, PayloadEncryptionTypeSelectServiceResult, PayloadType, PpaassError,
-    PrepareMessageFramedService, ProxyMessagePayloadTypeValue, ReadMessageService, ReadMessageServiceError, ReadMessageServiceRequest,
-    ReadMessageServiceResult, ReadMessageServiceResultContent, RsaCryptoFetcher, WriteMessageService, WriteMessageServiceError, WriteMessageServiceRequest,
-    WriteMessageServiceResult,
+    ProxyMessagePayloadTypeValue, ReadMessageService, ReadMessageServiceError, ReadMessageServiceRequest, ReadMessageServiceResult,
+    ReadMessageServiceResultContent, RsaCryptoFetcher, WriteMessageService, WriteMessageServiceError, WriteMessageServiceRequest, WriteMessageServiceResult,
 };
 
-use crate::codec::{Protocol, SwitchClientProtocolDecoder};
-use crate::config::SERVER_CONFIG;
 use crate::service::http::{HttpFlowRequest, HttpFlowService};
 use crate::service::socks5::{Socks5FlowRequest, Socks5FlowService};
+use crate::{
+    codec::{Protocol, SwitchClientProtocolDecoder},
+    config::AgentConfig,
+};
 
 pub const DEFAULT_BUFFER_SIZE: usize = 1024 * 64;
 pub const DEFAULT_RETRY_TIMES: u16 = 3;
@@ -62,6 +63,7 @@ where
 {
     pub proxy_addresses: Arc<Vec<SocketAddr>>,
     pub rsa_crypto_fetcher: Arc<T>,
+    pub confiugration: Arc<AgentConfig>,
 }
 
 impl<T> Debug for HandleClientConnectionService<T>
@@ -77,10 +79,11 @@ impl<T> HandleClientConnectionService<T>
 where
     T: RsaCryptoFetcher,
 {
-    pub(crate) fn new(proxy_addresses: Arc<Vec<SocketAddr>>, rsa_crypto_fetcher: Arc<T>) -> Self {
+    pub(crate) fn new(proxy_addresses: Arc<Vec<SocketAddr>>, rsa_crypto_fetcher: Arc<T>, confiugration: Arc<AgentConfig>) -> Self {
         Self {
             proxy_addresses,
             rsa_crypto_fetcher,
+            confiugration,
         }
     }
 }
@@ -99,13 +102,14 @@ where
     fn call(&mut self, mut req: ClientConnectionInfo) -> Self::Future {
         let rsa_crypto_fetcher = self.rsa_crypto_fetcher.clone();
         let proxy_addresses = self.proxy_addresses.clone();
+        let configuration = self.confiugration.clone();
         Box::pin(async move {
             let mut socks5_flow_service = ServiceBuilder::new().service(Socks5FlowService::new(rsa_crypto_fetcher.clone()));
             let mut http_flow_service = ServiceBuilder::new().service(HttpFlowService::new(rsa_crypto_fetcher));
             let mut framed = Framed::with_capacity(
                 &mut req.client_stream,
                 SwitchClientProtocolDecoder,
-                SERVER_CONFIG.message_framed_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
+                configuration.message_framed_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
             );
             return match framed.next().await {
                 None => Ok(()),
@@ -122,6 +126,7 @@ where
                             client_stream: req.client_stream,
                             client_address: req.client_address,
                             buffer,
+                            configuration,
                         },
                     )
                     .await?;
@@ -136,6 +141,7 @@ where
                             client_stream: req.client_stream,
                             client_address: req.client_address,
                             buffer,
+                            configuration,
                         },
                     )
                     .await?;
@@ -193,7 +199,7 @@ pub(crate) struct ConnectToProxyService {
 }
 
 impl ConnectToProxyService {
-    pub(crate) fn new(retry: u16, connect_timeout_seconds: u64) -> Self {
+    pub(crate) fn new(retry: u16, connect_timeout_seconds: u64, proxy_stream_so_linger: u64) -> Self {
         let concrete_service = Retry::new(
             ConnectToProxyAttempts { retry },
             service_fn(move |request: ConcreteConnectToProxyRequest| async move {
@@ -217,9 +223,7 @@ impl ConnectToProxyService {
                     Ok(Ok(v)) => v,
                 };
                 proxy_stream.set_nodelay(true)?;
-                if let Some(so_linger) = SERVER_CONFIG.proxy_stream_so_linger() {
-                    proxy_stream.set_linger(Some(Duration::from_secs(so_linger)))?;
-                }
+                proxy_stream.set_linger(Some(Duration::from_secs(proxy_stream_so_linger)))?;
                 debug!("Client {}, success connect to proxy", request.client_address);
                 Ok(ConnectToProxyServiceResult { proxy_stream })
             }),
@@ -290,18 +294,6 @@ impl Service<ConnectToProxyServiceRequest> for ConnectToProxyService {
     }
 }
 
-pub fn generate_prepare_message_framed_service<T>(rsa_crypto_fetcher: Arc<T>) -> PrepareMessageFramedService<T>
-where
-    T: RsaCryptoFetcher,
-{
-    let buffer_size = SERVER_CONFIG.message_framed_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE);
-    ServiceBuilder::new().service(PrepareMessageFramedService::new(
-        buffer_size,
-        SERVER_CONFIG.compress().unwrap_or(true),
-        rsa_crypto_fetcher,
-    ))
-}
-
 #[allow(unused)]
 pub(crate) struct TcpRelayServiceRequest<T>
 where
@@ -316,6 +308,7 @@ where
     pub target_address: NetAddress,
     pub init_data: Option<Vec<u8>>,
     pub proxy_address: Option<SocketAddr>,
+    pub configuration: Arc<AgentConfig>,
 }
 
 impl<T> Debug for TcpRelayServiceRequest<T>
@@ -377,6 +370,7 @@ where
             let target_address_t2a = request.target_address.clone();
             let client_address = request.client_address;
             let (client_stream_read_half, client_stream_write_half) = client_stream.into_split();
+            let configuration_clone = request.configuration.clone();
             tokio::spawn(async move {
                 if let Err((mut message_framed_write, _client_stream_read_half, original_error)) = Self::relay_client_to_proxy(
                     request.init_data,
@@ -385,6 +379,7 @@ where
                     source_address_a2t,
                     target_address_a2t,
                     client_stream_read_half,
+                    configuration_clone,
                 )
                 .await
                 {
@@ -398,8 +393,14 @@ where
                 }
             });
             tokio::spawn(async move {
-                if let Err((_message_framed_read, mut client_stream_write_half, original_error)) =
-                    Self::relay_proxy_to_client(request.proxy_address, target_address_t2a, message_framed_read, client_stream_write_half).await
+                if let Err((_message_framed_read, mut client_stream_write_half, original_error)) = Self::relay_proxy_to_client(
+                    request.proxy_address,
+                    target_address_t2a,
+                    message_framed_read,
+                    client_stream_write_half,
+                    request.configuration,
+                )
+                .await
                 {
                     error!("Error happen when relay data from proxy to client, error: {:#?}", original_error);
                     if let Err(e) = client_stream_write_half.flush().await {
@@ -421,11 +422,11 @@ where
 {
     async fn relay_client_to_proxy(
         init_data: Option<Vec<u8>>, connect_response_message_id: String, mut message_framed_write: MessageFramedWrite<T>, source_address_a2t: NetAddress,
-        target_address_a2t: NetAddress, mut client_stream_read_half: OwnedReadHalf,
+        target_address_a2t: NetAddress, mut client_stream_read_half: OwnedReadHalf, configuration: Arc<AgentConfig>,
     ) -> Result<(), (MessageFramedWrite<T>, OwnedReadHalf, anyhow::Error)> {
         let mut payload_encryption_type_select_service: PayloadEncryptionTypeSelectService = Default::default();
         let mut write_agent_message_service: WriteMessageService = Default::default();
-        let user_token = SERVER_CONFIG.user_token().clone().unwrap();
+        let user_token = configuration.user_token().clone().unwrap();
         if let Some(init_data) = init_data {
             let payload_encryption_type = match ready_and_call_service(
                 &mut payload_encryption_type_select_service,
@@ -447,7 +448,7 @@ where
                 WriteMessageServiceRequest {
                     message_framed_write,
                     ref_id: Some(connect_response_message_id.clone()),
-                    user_token: SERVER_CONFIG.user_token().clone().unwrap(),
+                    user_token: configuration.user_token().clone().unwrap(),
                     payload_encryption_type,
                     message_payload: Some(MessagePayload::new(
                         source_address_a2t.clone(),
@@ -473,7 +474,7 @@ where
             };
         }
         loop {
-            let client_buffer_size = SERVER_CONFIG.client_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE);
+            let client_buffer_size = configuration.client_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE);
             let mut client_buffer = BytesMut::with_capacity(client_buffer_size);
 
             match client_stream_read_half.read_buf(&mut client_buffer).await {
@@ -515,7 +516,7 @@ where
                 Ok(PayloadEncryptionTypeSelectServiceResult { payload_encryption_type, .. }) => payload_encryption_type,
             };
             let payload_data = client_buffer.split().freeze();
-            let payload_data_chunks = payload_data.chunks(SERVER_CONFIG.message_framed_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE));
+            let payload_data_chunks = payload_data.chunks(configuration.message_framed_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE));
             for (_, chunk) in payload_data_chunks.enumerate() {
                 let chunk_data = Bytes::copy_from_slice(chunk);
                 let write_agent_message_result = ready_and_call_service(
@@ -523,7 +524,7 @@ where
                     WriteMessageServiceRequest {
                         message_framed_write,
                         ref_id: Some(connect_response_message_id.clone()),
-                        user_token: SERVER_CONFIG.user_token().clone().unwrap(),
+                        user_token: configuration.user_token().clone().unwrap(),
                         payload_encryption_type: payload_encryption_type.clone(),
                         message_payload: Some(MessagePayload::new(
                             source_address_a2t.clone(),
@@ -550,7 +551,7 @@ where
 
     async fn relay_proxy_to_client(
         read_from_address: Option<SocketAddr>, _target_address_t2a: NetAddress, mut message_framed_read: MessageFramedRead<T>,
-        mut client_stream_write_half: OwnedWriteHalf,
+        mut client_stream_write_half: OwnedWriteHalf, configuration: Arc<AgentConfig>,
     ) -> Result<(), (MessageFramedRead<T>, OwnedWriteHalf, anyhow::Error)> {
         let mut read_proxy_message_service: ReadMessageService = Default::default();
         loop {
@@ -599,7 +600,7 @@ where
                 },
             };
 
-            let client_buffer_size = SERVER_CONFIG.client_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE);
+            let client_buffer_size = configuration.client_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE);
             let proxy_raw_data_chunks = proxy_raw_data.chunks(client_buffer_size);
             for (_, chunk) in proxy_raw_data_chunks.enumerate() {
                 if let Err(e) = client_stream_write_half.write(chunk).await {

@@ -11,9 +11,12 @@ use tower::ServiceBuilder;
 
 use common::{ready_and_call_service, RsaCryptoFetcher};
 
-use crate::service::common::{TcpRelayService, TcpRelayServiceRequest};
 use crate::service::socks5::auth::{Socks5AuthCommandService, Socks5AuthenticateFlowRequest};
 use crate::service::socks5::init::{Socks5InitCommandService, Socks5InitCommandServiceRequest};
+use crate::{
+    config::AgentConfig,
+    service::common::{TcpRelayService, TcpRelayServiceRequest},
+};
 
 mod auth;
 mod init;
@@ -23,6 +26,7 @@ pub(crate) struct Socks5FlowRequest {
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,
     pub buffer: BytesMut,
+    pub configuration: Arc<AgentConfig>,
 }
 
 impl Debug for Socks5FlowRequest {
@@ -89,6 +93,7 @@ where
                     client_stream: authenticate_result.client_stream,
                     client_address: authenticate_result.client_address,
                     buffer: authenticate_result.buffer,
+                    configuration: req.configuration.clone(),
                 },
             )
             .await?;
@@ -104,6 +109,7 @@ where
                     target_address: connect_flow_result.target_address,
                     init_data: None,
                     proxy_address: connect_flow_result.proxy_address,
+                    configuration: req.configuration,
                 },
             )
             .await?;

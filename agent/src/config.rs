@@ -3,22 +3,14 @@ use std::net::SocketAddr;
 use std::path::Path;
 use std::str::FromStr;
 
+use clap::Parser;
 use lazy_static::lazy_static;
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
 use tracing::error;
 
-lazy_static! {
-    pub(crate) static ref SERVER_CONFIG: Config = {
-        let config_file_content = std::fs::read_to_string("ppaass-agent.toml").expect("Fail to read agent configuration file.");
-        toml::from_str::<Config>(&config_file_content).expect("Fail to parse agent configuration file")
-    };
-    pub(crate) static ref AGENT_PRIVATE_KEY: String = std::fs::read_to_string(Path::new("AgentPrivateKey.pem")).expect("Fail to read agent private key.");
-    pub(crate) static ref PROXY_PUBLIC_KEY: String = std::fs::read_to_string(Path::new("ProxyPublicKey.pem")).expect("Fail to read proxy public key.");
-}
-
-#[derive(Serialize, Deserialize)]
-pub(crate) struct Config {
+#[derive(Serialize, Deserialize, Debug)]
+pub struct AgentConfig {
     port: Option<u16>,
     so_recv_buffer_size: Option<u32>,
     so_send_buffer_size: Option<u32>,
@@ -41,23 +33,40 @@ pub(crate) struct Config {
     client_stream_so_linger: Option<u64>,
     proxy_stream_so_linger: Option<u64>,
     so_backlog: Option<u32>,
+    agent_private_key_file: Option<String>,
+    proxy_public_key_file: Option<String>,
 }
 
-impl Config {
+impl AgentConfig {
     pub fn port(&self) -> Option<u16> {
         self.port
+    }
+    pub fn set_port(&mut self, port: u16) {
+        self.port = Some(port);
     }
     pub fn user_token(&self) -> &Option<String> {
         &self.user_token
     }
+    pub fn set_user_token(&mut self, user_token: String) {
+        self.user_token = Some(user_token);
+    }
     pub fn proxy_addresses(&self) -> &Option<Vec<String>> {
         &self.proxy_addresses
+    }
+    pub fn set_proxy_addresses(&mut self, proxy_addresses: Vec<String>) {
+        self.proxy_addresses = Some(proxy_addresses);
     }
     pub fn client_buffer_size(&self) -> Option<usize> {
         self.client_buffer_size
     }
+    pub fn set_client_buffer_size(&mut self, client_buffer_size: usize) {
+        self.client_buffer_size = Some(client_buffer_size)
+    }
     pub fn message_framed_buffer_size(&self) -> Option<usize> {
         self.message_framed_buffer_size
+    }
+    pub fn set_message_framed_buffer_size(&mut self, message_framed_buffer_size: usize) {
+        self.message_framed_buffer_size = Some(message_framed_buffer_size)
     }
     pub fn thread_number(&self) -> Option<usize> {
         self.thread_number
@@ -71,17 +80,32 @@ impl Config {
     pub fn log_dir(&self) -> &Option<String> {
         &self.log_dir
     }
+    pub fn set_log_dir(&mut self, log_dir: String) {
+        self.log_dir = Some(log_dir);
+    }
     pub fn log_file(&self) -> &Option<String> {
         &self.log_file
+    }
+    pub fn set_log_file(&mut self, log_file: String) {
+        self.log_file = Some(log_file)
     }
     pub fn compress(&self) -> Option<bool> {
         self.compress
     }
+    pub fn set_compress(&mut self, compress: bool) {
+        self.compress = Some(compress);
+    }
     pub fn max_log_level(&self) -> &Option<String> {
         &self.max_log_level
     }
+    pub fn set_max_log_level(&mut self, max_log_level: String) {
+        self.max_log_level = Some(max_log_level)
+    }
     pub fn proxy_connection_retry(&self) -> Option<u16> {
         self.proxy_connection_retry
+    }
+    pub fn set_proxy_connection_retry(&mut self, proxy_connection_retry: u16) {
+        self.proxy_connection_retry = Some(proxy_connection_retry)
     }
     pub fn buffered_connection_number(&self) -> Option<usize> {
         self.buffered_connection_number
@@ -92,8 +116,14 @@ impl Config {
     pub fn rate_limit(&self) -> Option<u64> {
         self.rate_limit
     }
+    pub fn set_rate_limit(&mut self, rate_limit: u64) {
+        self.rate_limit = Some(rate_limit)
+    }
     pub fn connect_proxy_timeout_seconds(&self) -> Option<u64> {
         self.connect_proxy_timeout_seconds
+    }
+    pub fn set_connect_proxy_timeout_seconds(&mut self, connect_proxy_timeout_seconds: u64) {
+        self.connect_proxy_timeout_seconds = Some(connect_proxy_timeout_seconds)
     }
     pub fn client_stream_so_linger(&self) -> Option<u64> {
         self.client_stream_so_linger
@@ -104,10 +134,80 @@ impl Config {
     pub fn so_backlog(&self) -> Option<u32> {
         self.so_backlog
     }
+    pub fn set_so_backlog(&mut self, so_backlog: u32) {
+        self.so_backlog = Some(so_backlog)
+    }
     pub fn so_recv_buffer_size(&self) -> Option<u32> {
         self.so_recv_buffer_size
     }
     pub fn so_send_buffer_size(&self) -> Option<u32> {
         self.so_send_buffer_size
     }
+    pub fn agent_private_key_file(&self) -> &Option<String> {
+        &self.agent_private_key_file
+    }
+    pub fn set_agent_private_key_file(&mut self, agent_private_key_file: String) {
+        self.agent_private_key_file = Some(agent_private_key_file)
+    }
+    pub fn proxy_public_key_file(&self) -> &Option<String> {
+        &self.proxy_public_key_file
+    }
+    pub fn set_proxy_public_key_file(&mut self, proxy_public_key_file: String) {
+        self.proxy_public_key_file = Some(proxy_public_key_file)
+    }
+}
+
+#[derive(Parser, Debug)]
+#[clap(name="ppaass-agent", author="Qu Hao", version="1.0", about, long_about = None)]
+/// The agent side of the ppaass, which will run as a http or sock5 agent
+/// in client side and transfer the connection to the ppaass proxy side.
+pub(crate) struct AgentArguments {
+    /// Configuration file path
+    #[clap(short = 'c', long, value_parser)]
+    pub configuration_file: Option<String>,
+    /// Port of the ppaass proxy
+    #[clap(short = 'p', long, value_parser)]
+    pub port: Option<u16>,
+    /// The user token used to authenticate ppaass proxy
+    #[clap(short = 'u', long, value_parser)]
+    pub user_token: Option<String>,
+    /// The log directory
+    #[clap(long, value_parser)]
+    pub log_dir: Option<String>,
+    /// The log file name prefix
+    #[clap(long, value_parser)]
+    pub log_file: Option<String>,
+    /// Whether enable compressing
+    #[clap(short = 'z', long, value_parser)]
+    pub compress: Option<bool>,
+    /// The max log level
+    #[clap(long, value_parser)]
+    pub max_log_level: Option<String>,
+    /// The retry for proxy connection
+    #[clap(long, value_parser)]
+    pub proxy_connection_retry: Option<u16>,
+    /// The rate limit
+    #[clap(long, value_parser)]
+    pub rate_limit: Option<u64>,
+    /// The connect to proxy timeout seconds
+    #[clap(long, value_parser)]
+    pub connect_proxy_timeout_seconds: Option<u64>,
+    /// The so_backlog
+    #[clap(long, value_parser)]
+    pub so_backlog: Option<u32>,
+    /// The client buffer size
+    #[clap(long, value_parser)]
+    pub client_buffer_size: Option<usize>,
+    /// The message framed buffer size
+    #[clap(long, value_parser)]
+    pub message_framed_buffer_size: Option<usize>,
+    /// The proxy addresses
+    #[clap(long, value_parser)]
+    pub proxy_addresses: Option<Vec<String>>,
+    /// The agent private key file path
+    #[clap(long, value_parser)]
+    pub agent_private_key_file: Option<String>,
+    /// The proxy public key file path
+    #[clap(long, value_parser)]
+    pub proxy_public_key_file: Option<String>,
 }

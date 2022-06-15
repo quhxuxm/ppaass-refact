@@ -15,10 +15,13 @@ use tower::Service;
 use tower::ServiceBuilder;
 use tracing::log::{debug, error};
 
-use crate::message::socks5::{Socks5InitCommandResultContent, Socks5InitCommandResultStatus, Socks5InitCommandType};
 use crate::service::socks5::init::tcp_connect::Socks5TcpConnectServiceResponse;
 use crate::service::socks5::init::udp_associate::{Socks5UdpAssociateService, Socks5UdpAssociateServiceRequest, Socks5UdpAssociateServiceResponse};
 use crate::{codec::socks5::Socks5InitCommandContentCodec, service::socks5::init::tcp_connect::Socks5TcpConnectServiceRequest};
+use crate::{
+    config::AgentConfig,
+    message::socks5::{Socks5InitCommandResultContent, Socks5InitCommandResultStatus, Socks5InitCommandType},
+};
 
 mod tcp_connect;
 mod udp_associate;
@@ -29,6 +32,7 @@ pub(crate) struct Socks5InitCommandServiceRequest {
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,
     pub buffer: BytesMut,
+    pub configuration: Arc<AgentConfig>,
 }
 
 impl Debug for Socks5InitCommandServiceRequest {
@@ -108,6 +112,7 @@ where
                             proxy_addresses: request.proxy_addresses,
                             client_address,
                             dest_address: dest_address.clone(),
+                            configuration: request.configuration.clone(),
                         },
                     )
                     .await

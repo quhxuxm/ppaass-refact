@@ -7,7 +7,7 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug executable 'ppaass-proxy'",
+            "name": "Debug 'ppaass-proxy'",
             "cargo": {
                 "args": [
                     "build",
@@ -28,7 +28,7 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug executable 'ppaass-agent'",
+            "name": "Debug 'ppaass-agent'",
             "cargo": {
                 "args": [
                     "build",
@@ -40,7 +40,9 @@
                     "kind": "bin"
                 }
             },
-            "args": [],
+            "args": [
+                "--help",
+            ],
             "cwd": "${workspaceFolder}"
         },
     ]

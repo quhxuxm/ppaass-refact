@@ -19,7 +19,7 @@ fn init() -> ProxyConfig {
     let arguments = ProxyArguments::parse();
     let configuration_file_content = match arguments.configuration_file {
         None => {
-            println!("Starting ppaass-proxy with defaul configuration file:  ppaass-proxy.toml");
+            println!("Starting ppaass-proxy with default configuration file:  ppaass-proxy.toml");
             std::fs::read_to_string("ppaass-proxy.toml").expect("Fail to read proxy configuration file.")
         },
         Some(path) => {

@@ -14,8 +14,9 @@ use bytes::{Bytes, BytesMut};
 use common::{
     generate_uuid, ready_and_call_service, AgentMessagePayloadTypeValue, MessageFramedRead, MessageFramedWrite, MessagePayload, NetAddress,
     PayloadEncryptionTypeSelectService, PayloadEncryptionTypeSelectServiceRequest, PayloadEncryptionTypeSelectServiceResult, PayloadType, PpaassError,
-    ProxyMessagePayloadTypeValue, ReadMessageService, ReadMessageServiceError, ReadMessageServiceRequest, ReadMessageServiceResult,
-    ReadMessageServiceResultContent, RsaCryptoFetcher, WriteMessageService, WriteMessageServiceError, WriteMessageServiceRequest, WriteMessageServiceResult,
+    PrepareMessageFramedService, ProxyMessagePayloadTypeValue, ReadMessageService, ReadMessageServiceError, ReadMessageServiceRequest,
+    ReadMessageServiceResult, ReadMessageServiceResultContent, RsaCryptoFetcher, WriteMessageService, WriteMessageServiceError, WriteMessageServiceRequest,
+    WriteMessageServiceResult,
 };
 use futures::future::BoxFuture;
 use futures::{SinkExt, StreamExt};
@@ -27,13 +28,10 @@ use tower::ServiceBuilder;
 use tracing::error;
 use url::Url;
 
-use crate::codec::http::HttpCodec;
-use crate::service::common::{
-    generate_prepare_message_framed_service, ConnectToProxyService, ConnectToProxyServiceRequest, ConnectToProxyServiceResult,
-    DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS, DEFAULT_RETRY_TIMES,
-};
-use crate::SERVER_CONFIG;
+use crate::service::common::{ConnectToProxyService, ConnectToProxyServiceRequest, ConnectToProxyServiceResult, DEFAULT_RETRY_TIMES};
 
+use crate::{codec::http::HttpCodec, config::AgentConfig};
+const DEFAULT_BUFFER_SIZE: usize = 65536;
 const HTTPS_SCHEMA: &str = "https";
 const SCHEMA_SEP: &str = "://";
 const CONNECT_METHOD: &str = "connect";
@@ -43,6 +41,7 @@ const OK_CODE: u16 = 200;
 const ERROR_CODE: u16 = 400;
 const ERROR_REASON: &str = " ";
 const CONNECTION_ESTABLISHED: &str = "Connection Established";
+const DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS: u64 = 20;
 
 type HttpFramed<'a> = Framed<&'a mut TcpStream, HttpCodec>;
 
@@ -52,6 +51,7 @@ pub(crate) struct HttpConnectServiceRequest {
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,
     pub initial_buf: BytesMut,
+    pub configuration: Arc<AgentConfig>,
 }
 
 impl Debug for HttpConnectServiceRequest {
@@ -120,14 +120,22 @@ where
     fn call(&mut self, mut request: HttpConnectServiceRequest) -> Self::Future {
         let rsa_crypto_fetcher = self.rsa_crypto_fetcher.clone();
         Box::pin(async move {
-            let mut prepare_message_framed_service = generate_prepare_message_framed_service(rsa_crypto_fetcher);
+            let mut prepare_message_framed_service = PrepareMessageFramedService::new(
+                request.configuration.message_framed_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
+                request.configuration.compress().unwrap_or(true),
+                rsa_crypto_fetcher,
+            );
             let mut write_agent_message_service: WriteMessageService = Default::default();
 
             let mut read_proxy_message_service: ReadMessageService = Default::default();
 
             let mut connect_to_proxy_service = ServiceBuilder::new().service(ConnectToProxyService::new(
-                SERVER_CONFIG.proxy_connection_retry().unwrap_or(DEFAULT_RETRY_TIMES),
-                SERVER_CONFIG.connect_proxy_timeout_seconds().unwrap_or(DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS),
+                request.configuration.proxy_connection_retry().unwrap_or(DEFAULT_RETRY_TIMES),
+                request
+                    .configuration
+                    .connect_proxy_timeout_seconds()
+                    .unwrap_or(DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS),
+                request.configuration.proxy_stream_so_linger().unwrap_or(DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS),
             ));
             let mut payload_encryption_type_select_service = ServiceBuilder::new().service(PayloadEncryptionTypeSelectService);
             let mut framed_parts = FramedParts::new(&mut request.client_stream, HttpCodec::default());
@@ -202,7 +210,7 @@ where
                 &mut payload_encryption_type_select_service,
                 PayloadEncryptionTypeSelectServiceRequest {
                     encryption_token: generate_uuid().into(),
-                    user_token: SERVER_CONFIG.user_token().clone().unwrap(),
+                    user_token: request.configuration.user_token().clone().unwrap(),
                 },
             )
             .await?;
@@ -211,7 +219,7 @@ where
                 WriteMessageServiceRequest {
                     message_framed_write: framed_result.message_framed_write,
                     payload_encryption_type,
-                    user_token: SERVER_CONFIG.user_token().clone().unwrap(),
+                    user_token: request.configuration.user_token().clone().unwrap(),
                     ref_id: None,
                     message_payload: Some(MessagePayload::new(
                         request.client_address.into(),
