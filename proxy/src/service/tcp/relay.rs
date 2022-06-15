@@ -1,9 +1,9 @@
-use std::net::SocketAddr;
 use std::task::{Context, Poll};
 use std::{
     fmt::{Debug, Formatter},
     marker::PhantomData,
 };
+use std::{net::SocketAddr, sync::Arc};
 
 use anyhow::{anyhow, Result};
 use bytes::{Bytes, BytesMut};
@@ -24,7 +24,7 @@ use common::{
     ReadMessageServiceResultContent, RsaCryptoFetcher, WriteMessageService, WriteMessageServiceError, WriteMessageServiceRequest, WriteMessageServiceResult,
 };
 
-use crate::SERVER_CONFIG;
+use crate::config::ProxyConfig;
 
 const DEFAULT_BUFFER_SIZE: usize = 64 * 1024;
 
@@ -41,6 +41,7 @@ where
     pub user_token: String,
     pub source_address: NetAddress,
     pub target_address: NetAddress,
+    pub configuration: Arc<ProxyConfig>,
 }
 
 impl<T> Debug for TcpRelayServiceRequest<T>
@@ -97,11 +98,13 @@ where
                 user_token,
                 source_address,
                 target_address,
+                configuration,
             } = req;
             let (target_stream_read, target_stream_write) = target_stream.into_split();
+            let configuration_clone = configuration.clone();
             tokio::spawn(async move {
                 if let Err((_message_framed_read, mut target_stream_write, original_error)) =
-                    Self::relay_proxy_to_target(agent_address, message_framed_read, target_stream_write).await
+                    Self::relay_proxy_to_target(agent_address, message_framed_read, target_stream_write, configuration_clone).await
                 {
                     error!("Error happen when relay data from proxy to target, error: {:#?}", original_error);
                     if let Err(e) = target_stream_write.flush().await {
@@ -120,6 +123,7 @@ where
                     source_address,
                     target_address,
                     target_stream_read,
+                    configuration,
                 )
                 .await
                 {
@@ -142,7 +146,7 @@ where
     T: RsaCryptoFetcher + Send + Sync + 'static,
 {
     async fn relay_proxy_to_target(
-        agent_address: SocketAddr, mut message_framed_read: MessageFramedRead<T>, mut target_stream_write: OwnedWriteHalf,
+        agent_address: SocketAddr, mut message_framed_read: MessageFramedRead<T>, mut target_stream_write: OwnedWriteHalf, configuration: Arc<ProxyConfig>,
     ) -> Result<(), (MessageFramedRead<T>, OwnedWriteHalf, anyhow::Error)> {
         loop {
             let mut read_agent_message_service: ReadMessageService = Default::default();
@@ -202,7 +206,7 @@ where
                 },
             };
             message_framed_read = message_framed_read_move_back;
-            let agent_data_chunks = agent_data.chunks(SERVER_CONFIG.target_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE) as usize);
+            let agent_data_chunks = agent_data.chunks(configuration.target_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE) as usize);
             for (_, chunk) in agent_data_chunks.enumerate() {
                 if let Err(e) = target_stream_write.write(chunk).await {
                     return Err((message_framed_read, target_stream_write, anyhow!(e)));
@@ -217,11 +221,12 @@ where
     async fn relay_target_to_proxy(
         mut message_framed_write: MessageFramedWrite<T>, agent_tcp_connect_message_id: String, user_token: String,
         agent_connect_message_source_address: NetAddress, agent_connect_message_target_address: NetAddress, mut target_stream_read: OwnedReadHalf,
+        configuration: Arc<ProxyConfig>,
     ) -> Result<(), (MessageFramedWrite<T>, OwnedReadHalf, anyhow::Error)> {
         loop {
             let mut write_proxy_message_service: WriteMessageService = Default::default();
             let mut payload_encryption_type_select_service: PayloadEncryptionTypeSelectService = Default::default();
-            let target_buffer_size = SERVER_CONFIG.target_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE);
+            let target_buffer_size = configuration.target_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE);
             let mut target_buffer = BytesMut::with_capacity(target_buffer_size);
             let source_address = agent_connect_message_source_address.clone();
             let target_address = agent_connect_message_target_address.clone();
@@ -255,7 +260,7 @@ where
                 },
             };
             let payload_data = target_buffer.split().freeze();
-            let payload_data_chunks = payload_data.chunks(SERVER_CONFIG.message_framed_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE));
+            let payload_data_chunks = payload_data.chunks(configuration.message_framed_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE));
             for (_, chunk) in payload_data_chunks.enumerate() {
                 let chunk_data = Bytes::copy_from_slice(chunk);
                 let proxy_message_payload = MessagePayload::new(

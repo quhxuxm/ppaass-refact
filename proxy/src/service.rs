@@ -24,9 +24,12 @@ use tracing::{debug, error};
 
 use common::{ready_and_call_service, PpaassError, PrepareMessageFramedService, RsaCrypto, RsaCryptoFetcher};
 
-use crate::service::tcp::connect::{TcpConnectService, TcpConnectServiceRequest};
 use crate::service::tcp::relay::{TcpRelayService, TcpRelayServiceRequest};
-use crate::SERVER_CONFIG;
+use crate::{
+    config::ProxyConfig,
+    service::tcp::connect::{TcpConnectService, TcpConnectServiceRequest},
+};
+
 use anyhow::{anyhow, Result};
 mod tcp;
 mod udp;
@@ -39,9 +42,9 @@ pub(crate) struct ProxyRsaCryptoFetcher {
 }
 
 impl ProxyRsaCryptoFetcher {
-    pub fn new() -> Result<Self> {
+    pub fn new(configuration: Arc<ProxyConfig>) -> Result<Self> {
         let mut result = Self { cache: HashMap::new() };
-        let rsa_dir_path = SERVER_CONFIG.rsa_root_dir().as_ref().expect("Fail to read rsa root directory.");
+        let rsa_dir_path = configuration.rsa_root_dir().as_ref().expect("Fail to read rsa root directory.");
         let rsa_dir = fs::read_dir(rsa_dir_path)?;
         rsa_dir.for_each(|entry| {
             let entry = match entry {
@@ -113,13 +116,17 @@ where
     T: RsaCryptoFetcher,
 {
     rsa_crypto_fetch: Arc<T>,
+    configuration: Arc<ProxyConfig>,
 }
 impl<T> HandleAgentConnectionService<T>
 where
     T: RsaCryptoFetcher,
 {
-    pub fn new(rsa_crypto_fetch: Arc<T>) -> Self {
-        Self { rsa_crypto_fetch }
+    pub fn new(rsa_crypto_fetch: Arc<T>, configuration: Arc<ProxyConfig>) -> Self {
+        Self {
+            rsa_crypto_fetch,
+            configuration,
+        }
     }
 }
 
@@ -137,13 +144,12 @@ where
 
     fn call(&mut self, req: AgentConnectionInfo) -> Self::Future {
         let rsa_crypto_fetch = self.rsa_crypto_fetch.clone();
+        let message_framed_buffer_size = self.configuration.message_framed_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE);
+        let compress = self.configuration.compress().unwrap_or(true);
+        let configuration = self.configuration.clone();
         Box::pin(async move {
-            let framed_buffer_size = SERVER_CONFIG.message_framed_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE);
-            let mut prepare_message_frame_service = ServiceBuilder::new().service(PrepareMessageFramedService::new(
-                framed_buffer_size,
-                SERVER_CONFIG.compress().unwrap_or(true),
-                rsa_crypto_fetch.clone(),
-            ));
+            let mut prepare_message_frame_service =
+                ServiceBuilder::new().service(PrepareMessageFramedService::new(message_framed_buffer_size, compress, rsa_crypto_fetch.clone()));
             let mut tcp_connect_service: TcpConnectService = Default::default();
             let mut tcp_relay_service: TcpRelayService<T> = Default::default();
             let framed_result = ready_and_call_service(&mut prepare_message_frame_service, req.agent_stream).await?;
@@ -153,6 +159,7 @@ where
                     message_framed_read: framed_result.message_framed_read,
                     message_framed_write: framed_result.message_framed_write,
                     agent_address: req.agent_address,
+                    configuration: configuration.clone(),
                 },
             )
             .await?;
@@ -167,6 +174,7 @@ where
                     target_address: tcp_connect_result.target_address,
                     user_token: tcp_connect_result.user_token,
                     agent_tcp_connect_message_id: tcp_connect_result.agent_tcp_connect_message_id,
+                    configuration,
                 },
             )
             .await?;
@@ -206,7 +214,7 @@ pub(crate) struct ConnectToTargetService {
 }
 
 impl ConnectToTargetService {
-    pub(crate) fn new(retry: u16, connect_timeout_seconds: u64) -> Self {
+    pub(crate) fn new(retry: u16, connect_timeout_seconds: u64, target_stream_so_linger: u64) -> Self {
         let connect_timeout_seconds = connect_timeout_seconds;
         let concrete_service = Retry::new(
             ConnectToTargetAttempts { retry },
@@ -225,12 +233,8 @@ impl ConnectToTargetService {
                         return Err(anyhow!(e));
                     },
                 };
-
                 target_stream.set_nodelay(true)?;
-                if let Some(so_linger) = SERVER_CONFIG.target_stream_so_linger() {
-                    target_stream.set_linger(Some(Duration::from_secs(so_linger)))?;
-                }
-
+                target_stream.set_linger(Some(Duration::from_secs(target_stream_so_linger)))?;
                 debug!("Success connect to target: {}", request.target_address);
                 Ok(ConnectToTargetServiceResult { target_stream })
             }),

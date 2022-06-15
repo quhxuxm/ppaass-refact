@@ -1,6 +1,9 @@
-use std::fmt::{Debug, Formatter};
 use std::net::SocketAddr;
 use std::task::{Context, Poll};
+use std::{
+    fmt::{Debug, Formatter},
+    sync::Arc,
+};
 
 use anyhow::anyhow;
 use bytes::Bytes;
@@ -18,9 +21,8 @@ use tower::ServiceBuilder;
 use tracing::error;
 use tracing::log::debug;
 
-use crate::config::{DEFAULT_CONNECT_TARGET_RETRY, DEFAULT_CONNECT_TARGET_TIMEOUT_SECONDS};
+use crate::config::{ProxyConfig, DEFAULT_CONNECT_TARGET_RETRY, DEFAULT_CONNECT_TARGET_TIMEOUT_SECONDS, DEFAULT_TARGET_STREAM_SO_LINGER};
 use crate::service::{ConnectToTargetService, ConnectToTargetServiceRequest, ConnectToTargetServiceResult};
-use crate::SERVER_CONFIG;
 
 pub(crate) struct TcpConnectServiceRequest<T>
 where
@@ -29,6 +31,7 @@ where
     pub message_framed_read: MessageFramedRead<T>,
     pub message_framed_write: MessageFramedWrite<T>,
     pub agent_address: SocketAddr,
+    pub configuration: Arc<ProxyConfig>,
 }
 
 impl<T> Debug for TcpConnectServiceRequest<T>
@@ -73,8 +76,11 @@ where
             let mut read_agent_message_service: ReadMessageService = Default::default();
             let mut write_proxy_message_service = WriteMessageService::default();
             let mut connect_to_target_service = ServiceBuilder::new().service(ConnectToTargetService::new(
-                SERVER_CONFIG.target_connection_retry().unwrap_or(DEFAULT_CONNECT_TARGET_RETRY),
-                SERVER_CONFIG.connect_target_timeout_seconds().unwrap_or(DEFAULT_CONNECT_TARGET_TIMEOUT_SECONDS),
+                req.configuration.target_connection_retry().unwrap_or(DEFAULT_CONNECT_TARGET_RETRY),
+                req.configuration
+                    .connect_target_timeout_seconds()
+                    .unwrap_or(DEFAULT_CONNECT_TARGET_TIMEOUT_SECONDS),
+                req.configuration.target_stream_so_linger().unwrap_or(DEFAULT_TARGET_STREAM_SO_LINGER),
             ));
 
             let mut payload_encryption_type_select_service: PayloadEncryptionTypeSelectService = Default::default();
