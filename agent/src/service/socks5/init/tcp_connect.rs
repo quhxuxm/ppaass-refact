@@ -9,7 +9,7 @@ use anyhow::anyhow;
 use bytes::Bytes;
 use futures::future::BoxFuture;
 use futures::SinkExt;
-use tower::{Service, ServiceBuilder};
+use tower::Service;
 use tracing::error;
 
 use common::{
@@ -23,7 +23,7 @@ use common::{
 use crate::{
     config::AgentConfig,
     message::socks5::Socks5Addr,
-    service::common::{ConnectToProxyService, ConnectToProxyServiceRequest, DEFAULT_BUFFER_SIZE, DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS, DEFAULT_RETRY_TIMES},
+    service::common::{ConnectToProxyService, ConnectToProxyServiceRequest, DEFAULT_BUFFER_SIZE, DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS},
 };
 
 pub(crate) struct Socks5TcpConnectService<T>
@@ -94,14 +94,8 @@ where
             let client_address = request.client_address;
             let mut write_agent_message_service: WriteMessageService = Default::default();
             let mut read_proxy_message_service: ReadMessageService = Default::default();
-            let mut connect_to_proxy_service = ServiceBuilder::new().service(ConnectToProxyService::new(
-                request.configuration.proxy_connection_retry().unwrap_or(DEFAULT_RETRY_TIMES),
-                request
-                    .configuration
-                    .connect_proxy_timeout_seconds()
-                    .unwrap_or(DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS),
-                request.configuration.proxy_stream_so_linger().unwrap_or(DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS),
-            ));
+            let mut connect_to_proxy_service =
+                ConnectToProxyService::new(request.configuration.proxy_stream_so_linger().unwrap_or(DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS));
             let mut payload_encryption_type_select_service: PayloadEncryptionTypeSelectService = Default::default();
             let mut prepare_message_framed_service = PrepareMessageFramedService::new(
                 request.configuration.message_framed_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),

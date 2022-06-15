@@ -17,11 +17,11 @@ use futures::future::BoxFuture;
 use futures::SinkExt;
 use tokio::net::TcpStream;
 use tower::Service;
-use tower::ServiceBuilder;
+
 use tracing::error;
 use tracing::log::debug;
 
-use crate::config::{ProxyConfig, DEFAULT_CONNECT_TARGET_RETRY, DEFAULT_CONNECT_TARGET_TIMEOUT_SECONDS, DEFAULT_TARGET_STREAM_SO_LINGER};
+use crate::config::{ProxyConfig, DEFAULT_TARGET_STREAM_SO_LINGER};
 use crate::service::{ConnectToTargetService, ConnectToTargetServiceRequest, ConnectToTargetServiceResult};
 
 pub(crate) struct TcpConnectServiceRequest<T>
@@ -75,13 +75,8 @@ where
         Box::pin(async move {
             let mut read_agent_message_service: ReadMessageService = Default::default();
             let mut write_proxy_message_service = WriteMessageService::default();
-            let mut connect_to_target_service = ServiceBuilder::new().service(ConnectToTargetService::new(
-                req.configuration.target_connection_retry().unwrap_or(DEFAULT_CONNECT_TARGET_RETRY),
-                req.configuration
-                    .connect_target_timeout_seconds()
-                    .unwrap_or(DEFAULT_CONNECT_TARGET_TIMEOUT_SECONDS),
-                req.configuration.target_stream_so_linger().unwrap_or(DEFAULT_TARGET_STREAM_SO_LINGER),
-            ));
+            let mut connect_to_target_service =
+                ConnectToTargetService::new(req.configuration.target_stream_so_linger().unwrap_or(DEFAULT_TARGET_STREAM_SO_LINGER));
 
             let mut payload_encryption_type_select_service: PayloadEncryptionTypeSelectService = Default::default();
             let read_agent_message_result = ready_and_call_service(

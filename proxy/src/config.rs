@@ -40,16 +40,12 @@ pub(crate) struct ProxyConfig {
     compress: Option<bool>,
     /// The max log level
     max_log_level: Option<String>,
-    /// The retry for target connection
-    target_connection_retry: Option<u16>,
     /// The buffered connection number
     buffered_connection_number: Option<usize>,
     /// The concurrent connection number
     concurrent_connection_number: Option<usize>,
     /// The rate limit
     rate_limit: Option<u64>,
-    /// The connect to target timeout in seconds
-    connect_target_timeout_seconds: Option<u64>,
     agent_stream_so_linger: Option<u64>,
     target_stream_so_linger: Option<u64>,
     so_backlog: Option<u32>,
@@ -107,12 +103,6 @@ impl ProxyConfig {
     pub fn set_max_log_level(&mut self, max_log_level: String) {
         self.max_log_level = Some(max_log_level)
     }
-    pub fn target_connection_retry(&self) -> Option<u16> {
-        self.target_connection_retry
-    }
-    pub fn set_target_connection_retry(&mut self, target_connection_retry: u16) {
-        self.target_connection_retry = Some(target_connection_retry)
-    }
     pub fn rsa_root_dir(&self) -> &Option<String> {
         &self.rsa_root_dir
     }
@@ -130,12 +120,6 @@ impl ProxyConfig {
     }
     pub fn set_rate_limit(&mut self, rate_limit: u64) {
         self.rate_limit = Some(rate_limit)
-    }
-    pub fn connect_target_timeout_seconds(&self) -> Option<u64> {
-        self.connect_target_timeout_seconds
-    }
-    pub fn set_connect_target_timeout_seconds(&mut self, connect_target_timeout_seconds: u64) {
-        self.connect_target_timeout_seconds = Some(connect_target_timeout_seconds)
     }
     pub fn target_stream_so_linger(&self) -> Option<u64> {
         self.target_stream_so_linger
@@ -184,15 +168,9 @@ pub(crate) struct ProxyArguments {
     /// The max log level
     #[clap(long, value_parser)]
     pub max_log_level: Option<String>,
-    /// The retry for target connection
-    #[clap(long, value_parser)]
-    pub target_connection_retry: Option<u16>,
     /// The rate limit
     #[clap(long, value_parser)]
     pub rate_limit: Option<u64>,
-    /// The connect to target timeout seconds
-    #[clap(long, value_parser)]
-    pub connect_target_timeout_seconds: Option<u64>,
     /// The so_backlog
     #[clap(long, value_parser)]
     pub so_backlog: Option<u32>,

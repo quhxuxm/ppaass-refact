@@ -28,7 +28,7 @@ use tower::ServiceBuilder;
 use tracing::error;
 use url::Url;
 
-use crate::service::common::{ConnectToProxyService, ConnectToProxyServiceRequest, ConnectToProxyServiceResult, DEFAULT_RETRY_TIMES};
+use crate::service::common::{ConnectToProxyService, ConnectToProxyServiceRequest, ConnectToProxyServiceResult};
 
 use crate::{codec::http::HttpCodec, config::AgentConfig};
 const DEFAULT_BUFFER_SIZE: usize = 65536;
@@ -129,14 +129,8 @@ where
 
             let mut read_proxy_message_service: ReadMessageService = Default::default();
 
-            let mut connect_to_proxy_service = ServiceBuilder::new().service(ConnectToProxyService::new(
-                request.configuration.proxy_connection_retry().unwrap_or(DEFAULT_RETRY_TIMES),
-                request
-                    .configuration
-                    .connect_proxy_timeout_seconds()
-                    .unwrap_or(DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS),
-                request.configuration.proxy_stream_so_linger().unwrap_or(DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS),
-            ));
+            let mut connect_to_proxy_service =
+                ConnectToProxyService::new(request.configuration.proxy_stream_so_linger().unwrap_or(DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS));
             let mut payload_encryption_type_select_service = ServiceBuilder::new().service(PayloadEncryptionTypeSelectService);
             let mut framed_parts = FramedParts::new(&mut request.client_stream, HttpCodec::default());
             framed_parts.read_buf = request.initial_buf;

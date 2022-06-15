@@ -9,16 +9,13 @@ use std::{
 
 use anyhow::anyhow;
 use bytes::{Bytes, BytesMut};
-use futures::{future, StreamExt};
+use futures::StreamExt;
 use futures::{future::BoxFuture, SinkExt};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::net::TcpStream;
-use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
-    time::timeout,
-};
 use tokio_util::codec::{Framed, FramedParts};
-use tower::retry::{Policy, Retry};
+
 use tower::util::BoxCloneService;
 use tower::{service_fn, Service, ServiceBuilder};
 use tracing::{debug, error};
@@ -38,7 +35,6 @@ use crate::{
 };
 
 pub const DEFAULT_BUFFER_SIZE: usize = 1024 * 64;
-pub const DEFAULT_RETRY_TIMES: u16 = 3;
 
 pub const DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS: u64 = 20;
 
@@ -189,76 +185,23 @@ pub(crate) struct ConnectToProxyServiceResult {
 }
 
 #[derive(Clone)]
-struct ConnectToProxyAttempts {
-    retry: u16,
-}
-
-#[derive(Clone)]
 pub(crate) struct ConnectToProxyService {
     concrete_service: BoxCloneService<ConcreteConnectToProxyRequest, ConnectToProxyServiceResult, anyhow::Error>,
 }
 
 impl ConnectToProxyService {
-    pub(crate) fn new(retry: u16, connect_timeout_seconds: u64, proxy_stream_so_linger: u64) -> Self {
-        let concrete_service = Retry::new(
-            ConnectToProxyAttempts { retry },
-            service_fn(move |request: ConcreteConnectToProxyRequest| async move {
-                debug!("Client {}, begin connect to proxy", request.client_address);
-                let proxy_stream = match timeout(
-                    Duration::from_secs(connect_timeout_seconds),
-                    TcpStream::connect(request.proxy_addresses.as_slice()),
-                )
-                .await
-                {
-                    Err(_e) => {
-                        error!("The connect to proxy timeout: {} seconds.", connect_timeout_seconds);
-                        return Err(anyhow!(PpaassError::TimeoutError {
-                            elapsed: connect_timeout_seconds,
-                        }));
-                    },
-                    Ok(Err(e)) => {
-                        error!("Fail connect to proxy because of error: {:#?}", e);
-                        return Err(anyhow!(e));
-                    },
-                    Ok(Ok(v)) => v,
-                };
-                proxy_stream.set_nodelay(true)?;
-                proxy_stream.set_linger(Some(Duration::from_secs(proxy_stream_so_linger)))?;
-                debug!("Client {}, success connect to proxy", request.client_address);
-                Ok(ConnectToProxyServiceResult { proxy_stream })
-            }),
-        );
+    pub(crate) fn new(proxy_stream_so_linger: u64) -> Self {
+        let concrete_service = service_fn(move |request: ConcreteConnectToProxyRequest| async move {
+            debug!("Client {}, begin connect to proxy", request.client_address);
+            let proxy_stream = TcpStream::connect(request.proxy_addresses.as_slice()).await?;
+            proxy_stream.set_nodelay(true)?;
+            proxy_stream.set_linger(Some(Duration::from_secs(proxy_stream_so_linger)))?;
+            debug!("Client {}, success connect to proxy", request.client_address);
+            Ok(ConnectToProxyServiceResult { proxy_stream })
+        });
         Self {
             concrete_service: BoxCloneService::new(concrete_service),
         }
-    }
-}
-
-impl Policy<ConcreteConnectToProxyRequest, ConnectToProxyServiceResult, anyhow::Error> for ConnectToProxyAttempts {
-    type Future = future::Ready<Self>;
-
-    fn retry(&self, _req: &ConcreteConnectToProxyRequest, result: Result<&ConnectToProxyServiceResult, &anyhow::Error>) -> Option<Self::Future> {
-        match result {
-            Ok(_) => {
-                // Treat all `Response`s as success,
-                // so don't retry...
-                None
-            },
-            Err(_) => {
-                // Treat all errors as failures...
-                // But we limit the number of attempts...
-                if self.retry > 0 {
-                    // Try again!
-                    return Some(future::ready(ConnectToProxyAttempts { retry: self.retry - 1 }));
-                }
-                // Used all our attempts, no retry...
-                None
-            },
-        }
-    }
-
-    fn clone_request(&self, req: &ConcreteConnectToProxyRequest) -> Option<ConcreteConnectToProxyRequest> {
-        Some(req.clone())
     }
 }
 

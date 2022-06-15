@@ -58,12 +58,6 @@ fn init() -> ProxyConfig {
     if let Some(so_backlog) = arguments.so_backlog {
         configuration.set_so_backlog(so_backlog)
     }
-    if let Some(connect_target_timeout_seconds) = arguments.connect_target_timeout_seconds {
-        configuration.set_connect_target_timeout_seconds(connect_target_timeout_seconds)
-    }
-    if let Some(target_connection_retry) = arguments.target_connection_retry {
-        configuration.set_target_connection_retry(target_connection_retry)
-    }
     configuration
 }
 fn main() -> Result<()> {

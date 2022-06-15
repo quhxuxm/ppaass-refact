@@ -60,12 +60,6 @@ fn init() -> AgentConfig {
     if let Some(so_backlog) = arguments.so_backlog {
         configuration.set_so_backlog(so_backlog)
     }
-    if let Some(connect_proxy_timeout_seconds) = arguments.connect_proxy_timeout_seconds {
-        configuration.set_connect_proxy_timeout_seconds(connect_proxy_timeout_seconds)
-    }
-    if let Some(proxy_connection_retry) = arguments.proxy_connection_retry {
-        configuration.set_proxy_connection_retry(proxy_connection_retry)
-    }
     configuration
 }
 fn main() -> Result<()> {

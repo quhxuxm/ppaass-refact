@@ -10,15 +10,11 @@ use std::{
     task::{Context, Poll},
 };
 
-use futures::future;
 use futures::future::BoxFuture;
 use tokio::net::TcpStream;
-use tokio::time::timeout;
+
 use tower::util::BoxCloneService;
-use tower::{
-    retry::{Policy, Retry},
-    ServiceBuilder,
-};
+use tower::ServiceBuilder;
 use tower::{service_fn, Service};
 use tracing::{debug, error};
 
@@ -30,7 +26,7 @@ use crate::{
     service::tcp::connect::{TcpConnectService, TcpConnectServiceRequest},
 };
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 mod tcp;
 mod udp;
 const DEFAULT_BUFFER_SIZE: usize = 1024 * 64;
@@ -204,72 +200,23 @@ pub(crate) struct ConnectToTargetServiceResult {
 }
 
 #[derive(Clone)]
-struct ConnectToTargetAttempts {
-    retry: u16,
-}
-
-#[derive(Clone)]
 pub(crate) struct ConnectToTargetService {
     concrete_service: BoxCloneService<ConnectToTargetServiceRequest, ConnectToTargetServiceResult, anyhow::Error>,
 }
 
 impl ConnectToTargetService {
-    pub(crate) fn new(retry: u16, connect_timeout_seconds: u64, target_stream_so_linger: u64) -> Self {
-        let connect_timeout_seconds = connect_timeout_seconds;
-        let concrete_service = Retry::new(
-            ConnectToTargetAttempts { retry },
-            service_fn(move |request: ConnectToTargetServiceRequest| async move {
-                debug!("Begin connect to target: {}", request.target_address);
-                let target_stream = match timeout(Duration::from_secs(connect_timeout_seconds), TcpStream::connect(&request.target_address)).await {
-                    Err(_e) => {
-                        error!("The connect to target timeout, duration: {}.", connect_timeout_seconds);
-                        return Err(anyhow!(PpaassError::TimeoutError {
-                            elapsed: connect_timeout_seconds,
-                        }));
-                    },
-                    Ok(Ok(v)) => v,
-                    Ok(Err(e)) => {
-                        error!("Fail connect to target {} because of error: {:#?}", &request.target_address, e);
-                        return Err(anyhow!(e));
-                    },
-                };
-                target_stream.set_nodelay(true)?;
-                target_stream.set_linger(Some(Duration::from_secs(target_stream_so_linger)))?;
-                debug!("Success connect to target: {}", request.target_address);
-                Ok(ConnectToTargetServiceResult { target_stream })
-            }),
-        );
+    pub(crate) fn new(target_stream_so_linger: u64) -> Self {
+        let concrete_service = service_fn(move |request: ConnectToTargetServiceRequest| async move {
+            debug!("Begin connect to target: {}", request.target_address);
+            let target_stream = TcpStream::connect(&request.target_address).await?;
+            target_stream.set_nodelay(true)?;
+            target_stream.set_linger(Some(Duration::from_secs(target_stream_so_linger)))?;
+            debug!("Success connect to target: {}", request.target_address);
+            Ok(ConnectToTargetServiceResult { target_stream })
+        });
         Self {
             concrete_service: BoxCloneService::new(concrete_service),
         }
-    }
-}
-
-impl Policy<ConnectToTargetServiceRequest, ConnectToTargetServiceResult, anyhow::Error> for ConnectToTargetAttempts {
-    type Future = future::Ready<Self>;
-
-    fn retry(&self, _req: &ConnectToTargetServiceRequest, result: Result<&ConnectToTargetServiceResult, &anyhow::Error>) -> Option<Self::Future> {
-        match result {
-            Ok(_) => {
-                // Treat all `Response`s as success,
-                // so don't retry...
-                None
-            },
-            Err(_) => {
-                // Treat all errors as failures...
-                // But we limit the number of attempts...
-                if self.retry > 0 {
-                    // Try again!
-                    return Some(future::ready(ConnectToTargetAttempts { retry: self.retry - 1 }));
-                }
-                // Used all our attempts, no retry...
-                None
-            },
-        }
-    }
-
-    fn clone_request(&self, req: &ConnectToTargetServiceRequest) -> Option<ConnectToTargetServiceRequest> {
-        Some(req.clone())
     }
 }
 

@@ -24,12 +24,10 @@ pub struct AgentConfig {
     log_dir: Option<String>,
     log_file: Option<String>,
     max_log_level: Option<String>,
-    proxy_connection_retry: Option<u16>,
     compress: Option<bool>,
     buffered_connection_number: Option<usize>,
     concurrent_connection_number: Option<usize>,
     rate_limit: Option<u64>,
-    connect_proxy_timeout_seconds: Option<u64>,
     client_stream_so_linger: Option<u64>,
     proxy_stream_so_linger: Option<u64>,
     so_backlog: Option<u32>,
@@ -101,12 +99,6 @@ impl AgentConfig {
     pub fn set_max_log_level(&mut self, max_log_level: String) {
         self.max_log_level = Some(max_log_level)
     }
-    pub fn proxy_connection_retry(&self) -> Option<u16> {
-        self.proxy_connection_retry
-    }
-    pub fn set_proxy_connection_retry(&mut self, proxy_connection_retry: u16) {
-        self.proxy_connection_retry = Some(proxy_connection_retry)
-    }
     pub fn buffered_connection_number(&self) -> Option<usize> {
         self.buffered_connection_number
     }
@@ -118,12 +110,6 @@ impl AgentConfig {
     }
     pub fn set_rate_limit(&mut self, rate_limit: u64) {
         self.rate_limit = Some(rate_limit)
-    }
-    pub fn connect_proxy_timeout_seconds(&self) -> Option<u64> {
-        self.connect_proxy_timeout_seconds
-    }
-    pub fn set_connect_proxy_timeout_seconds(&mut self, connect_proxy_timeout_seconds: u64) {
-        self.connect_proxy_timeout_seconds = Some(connect_proxy_timeout_seconds)
     }
     pub fn client_stream_so_linger(&self) -> Option<u64> {
         self.client_stream_so_linger
@@ -183,15 +169,9 @@ pub(crate) struct AgentArguments {
     /// The max log level
     #[clap(long, value_parser)]
     pub max_log_level: Option<String>,
-    /// The retry for proxy connection
-    #[clap(long, value_parser)]
-    pub proxy_connection_retry: Option<u16>,
     /// The rate limit
     #[clap(long, value_parser)]
     pub rate_limit: Option<u64>,
-    /// The connect to proxy timeout seconds
-    #[clap(long, value_parser)]
-    pub connect_proxy_timeout_seconds: Option<u64>,
     /// The so_backlog
     #[clap(long, value_parser)]
     pub so_backlog: Option<u32>,
