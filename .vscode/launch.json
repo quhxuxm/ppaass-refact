@@ -21,7 +21,7 @@
             },
             "args": [
                 "-c",
-                "ppaass-proxy.toml"
+                "d:\\ppaass-proxy-copy.toml"
             ],
             "cwd": "${workspaceFolder}"
         },

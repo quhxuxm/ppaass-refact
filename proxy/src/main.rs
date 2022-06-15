@@ -18,8 +18,14 @@ pub(crate) mod service;
 fn init() -> ProxyConfig {
     let arguments = ProxyArguments::parse();
     let configuration_file_content = match arguments.configuration_file {
-        None => std::fs::read_to_string("ppaass-proxy.toml").expect("Fail to read proxy configuration file."),
-        Some(path) => std::fs::read_to_string(path.as_str()).expect("Fail to read proxy configuration file."),
+        None => {
+            println!("Starting ppaass-proxy with defaul configuration file:  ppaass-proxy.toml");
+            std::fs::read_to_string("ppaass-proxy.toml").expect("Fail to read proxy configuration file.")
+        },
+        Some(path) => {
+            println!("Starting ppaass-proxy with customized configuration file: {}", path.as_str());
+            std::fs::read_to_string(path.as_str()).expect("Fail to read proxy configuration file.")
+        },
     };
     let mut configuration = toml::from_str::<ProxyConfig>(&configuration_file_content).expect("Fail to parse proxy configuration file");
     if let Some(port) = arguments.port {
