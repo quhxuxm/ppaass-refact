@@ -20,8 +20,8 @@
                 }
             },
             "args": [
-                "-p",
-                "90"
+                "-c",
+                "ppaass-proxy.toml"
             ],
             "cwd": "${workspaceFolder}"
         },
