@@ -59,6 +59,7 @@ fn init() -> AgentConfig {
     }
     configuration
 }
+
 fn main() -> Result<()> {
     let confiugration = init();
     let _tracing_guard = init_log(

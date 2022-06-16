@@ -30,16 +30,6 @@ where
     pub message_framed_read: MessageFramedRead<T>,
     pub message_framed_write: MessageFramedWrite<T>,
     pub agent_address: SocketAddr,
-    pub configuration: Arc<ProxyConfig>,
-}
-
-impl<T> Debug for TcpConnectProcessRequest<T>
-where
-    T: RsaCryptoFetcher,
-{
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "TcpConnectServiceRequest: agent_address={}", self.agent_address)
-    }
 }
 
 pub(crate) struct TcpConnectProcessResult<T>
@@ -59,7 +49,7 @@ where
 pub(crate) struct TcpConnectProcess;
 
 impl TcpConnectProcess {
-    pub async fn exec<T>(&self, request: TcpConnectProcessRequest<T>) -> Result<TcpConnectProcessResult<T>>
+    pub async fn exec<T>(&self, request: TcpConnectProcessRequest<T>, configuration: Arc<ProxyConfig>) -> Result<TcpConnectProcessResult<T>>
     where
         T: RsaCryptoFetcher + Send + Sync + 'static,
     {
@@ -68,7 +58,6 @@ impl TcpConnectProcess {
             message_framed_read,
             message_framed_write,
             agent_address,
-            configuration,
         } = request;
         let target_stream_so_linger = configuration.target_stream_so_linger().unwrap_or(DEFAULT_TARGET_STREAM_SO_LINGER);
         let read_agent_message_result = MessageFramedReader::read(ReadMessageFramedRequest {

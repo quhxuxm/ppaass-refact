@@ -34,7 +34,7 @@ pub const DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS: u64 = 20;
 
 pub(crate) struct ClientConnection {
     pub id: String,
-    pub client_stream: Option<TcpStream>,
+    pub client_stream: TcpStream,
     pub client_address: SocketAddr,
     pub proxy_addresses: Arc<Vec<SocketAddr>>,
 }
@@ -43,13 +43,13 @@ impl ClientConnection {
     pub(crate) fn new(client_stream: TcpStream, client_address: SocketAddr, proxy_addresses: Arc<Vec<SocketAddr>>) -> Self {
         Self {
             id: generate_uuid(),
-            client_stream: Some(client_stream),
+            client_stream,
             client_address,
             proxy_addresses,
         }
     }
 
-    pub async fn exec<T>(mut self, rsa_crypto_fetcher: Arc<T>, confiugration: Arc<AgentConfig>) -> Result<()>
+    pub async fn exec<T>(self, rsa_crypto_fetcher: Arc<T>, confiugration: Arc<AgentConfig>) -> Result<()>
     where
         T: RsaCryptoFetcher + Send + Sync + 'static,
     {
@@ -57,17 +57,8 @@ impl ClientConnection {
         let proxy_addresses = self.proxy_addresses.clone();
         let configuration = confiugration.clone();
         let connection_id = self.id.clone();
-        let mut client_stream = match std::mem::take(&mut self.client_stream) {
-            None => {
-                return Err(anyhow!(
-                    "Connection [{}] fail to take client stream, can not handle connection stream.",
-                    connection_id
-                ))
-            },
-            Some(v) => v,
-        };
+        let mut client_stream = self.client_stream;
         let client_address = self.client_address;
-
         let mut framed = Framed::with_capacity(
             &mut client_stream,
             SwitchClientProtocolDecoder,

@@ -19,10 +19,7 @@
                     "kind": "bin"
                 }
             },
-            "args": [
-                "-c",
-                "d:\\ppaass-proxy-copy.toml"
-            ],
+            "args": [],
             "cwd": "${workspaceFolder}"
         },
         {
@@ -40,9 +37,7 @@
                     "kind": "bin"
                 }
             },
-            "args": [
-                "--help",
-            ],
+            "args": [],
             "cwd": "${workspaceFolder}"
         },
     ]

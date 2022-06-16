@@ -85,14 +85,14 @@ impl RsaCryptoFetcher for ProxyRsaCryptoFetcher {
 #[derive(Debug)]
 pub(crate) struct AgentConnection {
     id: String,
-    agent_stream: Option<TcpStream>,
+    agent_stream: TcpStream,
     agent_address: SocketAddr,
 }
 impl AgentConnection {
     pub fn new(agent_stream: TcpStream, agent_address: SocketAddr) -> Self {
         Self {
             id: generate_uuid(),
-            agent_stream: Some(agent_stream),
+            agent_stream,
             agent_address,
         }
     }
@@ -108,15 +108,7 @@ impl AgentConnection {
 
         let message_framed_buffer_size = configuration.message_framed_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE);
         let compress = configuration.compress().unwrap_or(true);
-        let agent_stream = match std::mem::take(&mut self.agent_stream) {
-            None => {
-                return Err(anyhow!(
-                    "Connection [{}] fail to take agent stream, can not handle connection stream.",
-                    connection_id
-                ));
-            },
-            Some(v) => v,
-        };
+        let agent_stream = self.agent_stream;
         let agent_address_clone = self.agent_address.clone();
         let agent_address = self.agent_address;
         let tcp_connect_process = TcpConnectProcess;
@@ -124,13 +116,15 @@ impl AgentConnection {
         let framed_result = MessageFramedGenerator::generate(agent_stream, message_framed_buffer_size, compress, rsa_crypto_fetcher.clone()).await?;
         debug!("Connection [{}] is going to handle tcp connect.", connection_id);
         let tcp_connect_result = tcp_connect_process
-            .exec(TcpConnectProcessRequest {
-                connection_id: connection_id.clone(),
-                message_framed_read: framed_result.message_framed_read,
-                message_framed_write: framed_result.message_framed_write,
-                agent_address: agent_address_clone,
-                configuration: configuration.clone(),
-            })
+            .exec(
+                TcpConnectProcessRequest {
+                    connection_id: connection_id.clone(),
+                    message_framed_read: framed_result.message_framed_read,
+                    message_framed_write: framed_result.message_framed_write,
+                    agent_address: agent_address_clone,
+                },
+                configuration.clone(),
+            )
             .await?;
         debug!("Connection [{}] is going to handle tcp relay.", connection_id);
         tcp_relay_process

@@ -1,5 +1,4 @@
 #![allow(unused)]
-use std::sync::Arc;
 use std::{
     fmt::{Debug, Display, Formatter},
     mem::size_of,
@@ -8,6 +7,7 @@ use std::{
     io::Cursor,
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6},
 };
+use std::{net::ToSocketAddrs, sync::Arc};
 use std::{ops::Deref, str::FromStr};
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
@@ -178,7 +178,11 @@ impl TryFrom<NetAddress> for SocketAddr {
                 ));
                 Ok(socket_addr)
             },
-            NetAddress::Domain(host, port) => Ok(SocketAddr::from_str(host.as_str()).map_err(|e| PpaassError::CodecError)?),
+            NetAddress::Domain(host, port) => {
+                let addresses = format!("{}:{}", host, port).to_socket_addrs()?.collect::<Vec<_>>();
+                let addr = addresses.into_iter().next().ok_or(PpaassError::CodecError)?;
+                Ok(addr)
+            },
         }
     }
 }
@@ -623,7 +627,7 @@ impl TryFrom<Bytes> for Message {
                 return Err(PpaassError::CodecError);
             },
         };
-        if value.remaining() < 8 {
+        if value.remaining() < size_of::<u64>() {
             error!("Fail to parse message because of no remaining");
             return Err(PpaassError::CodecError);
         };
