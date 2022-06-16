@@ -11,10 +11,7 @@ use common::{
 use futures::SinkExt;
 use std::net::SocketAddr;
 
-use std::{
-    fmt::{Debug, Formatter},
-    sync::Arc,
-};
+use std::sync::Arc;
 use tokio::net::TcpStream;
 
 use tracing::debug;

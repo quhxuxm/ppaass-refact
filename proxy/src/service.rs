@@ -4,7 +4,6 @@ use std::{fs, path::Path};
 
 use tokio::net::TcpStream;
 
-use anyhow::anyhow;
 use common::{generate_uuid, MessageFramedGenerator, PpaassError, RsaCrypto, RsaCryptoFetcher};
 
 use tracing::{debug, error};
@@ -99,7 +98,7 @@ impl AgentConnection {
     pub fn get_id(&self) -> &str {
         self.id.as_str()
     }
-    pub async fn exec<T>(mut self, rsa_crypto_fetcher: Arc<T>, configuration: Arc<ProxyConfig>) -> Result<()>
+    pub async fn exec<T>(self, rsa_crypto_fetcher: Arc<T>, configuration: Arc<ProxyConfig>) -> Result<()>
     where
         T: RsaCryptoFetcher + Send + Sync + 'static,
     {
