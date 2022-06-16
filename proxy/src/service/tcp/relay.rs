@@ -268,15 +268,15 @@ where
             match target_stream_read.read_buf(&mut target_buffer).await {
                 Err(e) => {
                     error!(
-                        "Error happen when relay data from target to proxy, target address={:?}, source address={:?}, error: {:#?}",
-                        target_address, source_address, e
+                        "Connection [{}] error happen when relay data from target to proxy, target address={:?}, source address={:?}, error: {:#?}",
+                        connection_id, target_address, source_address, e
                     );
                     return Err((message_framed_write, target_stream_read, anyhow!(e)));
                 },
                 Ok(0) => {
                     debug!(
-                        "Read all data from target, target address={:?}, source address={:?}.",
-                        target_address, source_address
+                        "Connection [{}]  read all data from target, target address={:?}, source address={:?}.",
+                        connection_id, target_address, source_address
                     );
                     if let Err(e) = message_framed_write.flush().await {
                         return Err((message_framed_write, target_stream_read, anyhow!(e)));
@@ -288,8 +288,8 @@ where
                 },
                 Ok(size) => {
                     debug!(
-                        "Read {} bytes from target to proxy, target address={:?}, source address={:?}.",
-                        size, target_address, source_address
+                        "Connection [{}] read {} bytes from target to proxy, target address={:?}, source address={:?}.",
+                        connection_id, size, target_address, source_address
                     );
                     size
                 },
