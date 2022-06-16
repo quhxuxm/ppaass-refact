@@ -225,8 +225,6 @@ impl TcpRelayProcess {
         T: RsaCryptoFetcher + Send + Sync + 'static,
     {
         loop {
-            // let connection_id = connection_id.clone();
-
             let target_buffer_size = configuration.target_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE);
             let mut target_buffer = BytesMut::with_capacity(target_buffer_size);
             let source_address = agent_connect_message_source_address.clone();
@@ -241,13 +239,21 @@ impl TcpRelayProcess {
                 },
                 Ok(0) => {
                     debug!(
-                        "Connection [{}]  read all data from target, target address={:?}, source address={:?}.",
+                        "Connection [{}] read all data from target, target address={:?}, source address={:?}.",
                         connection_id, target_address, source_address
                     );
                     if let Err(e) = message_framed_write.flush().await {
+                        error!(
+                            "Connection [{}] fail to flush data from target to proxy when all data read from target, target address={:?}, source address={:?}.",
+                            connection_id, target_address, source_address
+                        );
                         return Err((message_framed_write, target_stream_read, anyhow!(e)));
                     };
                     if let Err(e) = message_framed_write.close().await {
+                        error!(
+                            "Connection [{}] fail to close data from target to proxy when all data read from target, target address={:?}, source address={:?}.",
+                            connection_id, target_address, source_address
+                        );
                         return Err((message_framed_write, target_stream_read, anyhow!(e)));
                     };
                     return Ok(());
@@ -276,7 +282,13 @@ impl TcpRelayProcess {
                 })
                 .await
                 {
-                    Err(e) => return Err((message_framed_write, target_stream_read, anyhow!(e))),
+                    Err(e) => {
+                        error!(
+                            "Connection [{}] fail to select payload encryption type when transfer data from target to proxy, target address={:?}, source address={:?}.",
+                            connection_id, target_address, source_address
+                        );
+                        return Err((message_framed_write, target_stream_read, anyhow!(e)));
+                    },
                     Ok(PayloadEncryptionTypeSelectResult { payload_encryption_type, .. }) => payload_encryption_type,
                 };
                 message_framed_write = match MessageFramedWriter::write(WriteMessageFramedRequest {
@@ -289,7 +301,13 @@ impl TcpRelayProcess {
                 })
                 .await
                 {
-                    Err(WriteMessageFramedError { message_framed_write, source }) => return Err((message_framed_write, target_stream_read, anyhow!(source))),
+                    Err(WriteMessageFramedError { message_framed_write, source }) => {
+                        error!(
+                            "Connection [{}] fail to write data from target to proxy, target address={:?}, source address={:?}, error: {:#?}.",
+                            connection_id, target_address, source_address, source
+                        );
+                        return Err((message_framed_write, target_stream_read, anyhow!(source)));
+                    },
                     Ok(WriteMessageFramedResult { message_framed_write, .. }) => message_framed_write,
                 };
             }
