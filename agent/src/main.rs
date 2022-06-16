@@ -3,7 +3,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use clap::Parser;
 use config::{AgentArguments, AgentConfig};
-use tracing::log::Level;
+use tracing::Level;
 
 use common::init_log;
 
@@ -64,7 +64,7 @@ fn main() -> Result<()> {
     let _tracing_guard = init_log(
         confiugration.log_dir().as_ref().expect("No log directory given."),
         confiugration.log_file().as_ref().expect("No log file name given."),
-        confiugration.max_log_level().as_ref().unwrap_or(&Level::Error.to_string()),
+        confiugration.max_log_level().as_ref().unwrap_or(&Level::ERROR.to_string()),
     );
     let agent_server = AgentServer::new(Arc::new(confiugration))?;
     agent_server.run()?;

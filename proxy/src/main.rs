@@ -5,7 +5,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use clap::Parser;
 use config::{ProxyArguments, ProxyConfig};
-use tracing::log::Level;
+use tracing::Level;
 
 use common::init_log;
 
@@ -62,7 +62,7 @@ fn main() -> Result<()> {
     let _tracing_guard = init_log(
         configuration.log_dir().as_ref().expect("No log directory given."),
         configuration.log_file().as_ref().expect("No log file name given."),
-        configuration.max_log_level().as_ref().unwrap_or(&Level::Error.to_string()),
+        configuration.max_log_level().as_ref().unwrap_or(&Level::ERROR.to_string()),
     );
     let proxy_server = ProxyServer::new(Arc::new(configuration))?;
     proxy_server.run()?;

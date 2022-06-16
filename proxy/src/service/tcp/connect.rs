@@ -17,8 +17,8 @@ use std::{
 };
 use tokio::net::TcpStream;
 
+use tracing::debug;
 use tracing::error;
-use tracing::log::debug;
 
 use crate::config::{ProxyConfig, DEFAULT_TARGET_STREAM_SO_LINGER};
 

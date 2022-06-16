@@ -17,7 +17,7 @@ use crate::{
 
 use anyhow::Result;
 mod tcp;
-mod udp;
+
 const DEFAULT_BUFFER_SIZE: usize = 1024 * 64;
 
 pub(crate) struct ProxyRsaCryptoFetcher {

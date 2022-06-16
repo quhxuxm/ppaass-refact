@@ -11,7 +11,7 @@ use tcp_connect::Socks5TcpConnectService;
 use tokio::net::TcpStream;
 use tokio_util::codec::{Framed, FramedParts};
 
-use tracing::log::{debug, error};
+use tracing::{debug, error};
 
 use crate::service::socks5::init::tcp_connect::Socks5TcpConnectServiceResponse;
 
@@ -23,7 +23,7 @@ use crate::{
 use anyhow::Result;
 
 mod tcp_connect;
-mod udp_associate;
+
 pub(crate) type Socks5InitFramed<'a> = Framed<&'a mut TcpStream, Socks5InitCommandContentCodec>;
 
 pub(crate) struct Socks5InitFlowRequest {

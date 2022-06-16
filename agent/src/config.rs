@@ -4,7 +4,6 @@ use std::path::Path;
 use std::str::FromStr;
 
 use clap::Parser;
-use lazy_static::lazy_static;
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
 use tracing::error;

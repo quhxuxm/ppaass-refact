@@ -3,7 +3,6 @@
 use std::path::Path;
 
 use clap::Parser;
-use lazy_static::lazy_static;
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
 
