@@ -447,6 +447,7 @@ impl Debug for Message {
         f.debug_struct("Message")
             .field("id", &self.id)
             .field("ref_id", &self.ref_id)
+            .field("connection_id", &self.connection_id)
             .field("user_token", &self.user_token)
             .field("payload_encryption_type", &"[...omit...]")
             .field("payload", &"[... omit ...]")
