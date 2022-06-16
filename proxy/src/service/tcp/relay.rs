@@ -1,27 +1,22 @@
-use std::task::{Context, Poll};
-use std::{
-    fmt::{Debug, Formatter},
-    marker::PhantomData,
-};
+use std::fmt::{Debug, Formatter};
+
 use std::{net::SocketAddr, sync::Arc};
 
 use anyhow::{anyhow, Result};
 use bytes::{Bytes, BytesMut};
 
-use futures::{future::BoxFuture, SinkExt};
+use futures::SinkExt;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::net::TcpStream;
 
-use tower::Service;
-
 use tracing::{debug, error};
 
 use common::{
-    generate_uuid, ready_and_call_service, AgentMessagePayloadTypeValue, MessageFramedRead, MessageFramedWrite, MessagePayload, NetAddress,
-    PayloadEncryptionTypeSelectService, PayloadEncryptionTypeSelectServiceRequest, PayloadEncryptionTypeSelectServiceResult, PayloadType, PpaassError,
-    ProxyMessagePayloadTypeValue, ReadMessageService, ReadMessageServiceError, ReadMessageServiceRequest, ReadMessageServiceResult,
-    ReadMessageServiceResultContent, RsaCryptoFetcher, WriteMessageService, WriteMessageServiceError, WriteMessageServiceRequest, WriteMessageServiceResult,
+    generate_uuid, AgentMessagePayloadTypeValue, MessageFramedRead, MessageFramedReader, MessageFramedWrite, MessageFramedWriter, MessagePayload, NetAddress,
+    PayloadEncryptionTypeSelectRequest, PayloadEncryptionTypeSelectResult, PayloadEncryptionTypeSelector, PayloadType, PpaassError,
+    ProxyMessagePayloadTypeValue, ReadMessageFramedError, ReadMessageFramedRequest, ReadMessageFramedResult, ReadMessageServiceResultContent, RsaCryptoFetcher,
+    WriteMessageFramedError, WriteMessageFramedRequest, WriteMessageFramedResult,
 };
 
 use crate::config::ProxyConfig;
@@ -59,138 +54,107 @@ where
     }
 }
 
-#[derive(Clone)]
-pub(crate) struct TcpRelayService<T>
-where
-    T: RsaCryptoFetcher,
-{
-    _mark: PhantomData<T>,
-}
+pub(crate) struct TcpRelayProcess;
 
-impl<T> Default for TcpRelayService<T>
-where
-    T: RsaCryptoFetcher,
-{
-    fn default() -> Self {
-        Self { _mark: Default::default() }
-    }
-}
-
-impl<T> Service<TcpRelayServiceRequest<T>> for TcpRelayService<T>
-where
-    T: RsaCryptoFetcher + Send + Sync + 'static,
-{
-    type Response = ();
-    type Error = anyhow::Error;
-    type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
-
-    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        Poll::Ready(Ok(()))
-    }
-
-    fn call(&mut self, req: TcpRelayServiceRequest<T>) -> Self::Future {
-        Box::pin(async move {
-            let TcpRelayServiceRequest {
-                connection_id,
-                message_framed_read,
-                message_framed_write,
+impl TcpRelayProcess {
+    pub async fn exec<T>(&self, request: TcpRelayServiceRequest<T>) -> Result<()>
+    where
+        T: RsaCryptoFetcher + Send + Sync + 'static,
+    {
+        let TcpRelayServiceRequest {
+            connection_id,
+            message_framed_read,
+            message_framed_write,
+            agent_address,
+            target_stream,
+            agent_tcp_connect_message_id,
+            user_token,
+            source_address,
+            target_address,
+            configuration,
+        } = request;
+        let (target_stream_read, target_stream_write) = target_stream.into_split();
+        let configuration_clone = configuration.clone();
+        let connection_id_clone = connection_id.clone();
+        tokio::spawn(async move {
+            if let Err((_message_framed_read, mut target_stream_write, original_error)) = Self::relay_proxy_to_target(
+                connection_id_clone.clone(),
                 agent_address,
-                target_stream,
+                message_framed_read,
+                target_stream_write,
+                configuration_clone,
+            )
+            .await
+            {
+                error!(
+                    "Connection [{}] error happen when relay data from proxy to target, error: {:#?}",
+                    connection_id_clone, original_error
+                );
+                if let Err(e) = target_stream_write.flush().await {
+                    error!(
+                        "Connection [{}] fail to flush target stream writer when relay data from proxy to target have error:{:#?}",
+                        connection_id_clone, e
+                    );
+                };
+                if let Err(e) = target_stream_write.shutdown().await {
+                    error!(
+                        "Connection [{}] fail to shutdown target stream writer when relay data from proxy to target have error:{:#?}",
+                        connection_id_clone, e
+                    );
+                };
+            }
+        });
+        tokio::spawn(async move {
+            if let Err((mut message_framed_write, _target_stream_read, original_error)) = Self::relay_target_to_proxy(
+                connection_id.clone(),
+                message_framed_write,
                 agent_tcp_connect_message_id,
                 user_token,
                 source_address,
                 target_address,
+                target_stream_read,
                 configuration,
-            } = req;
-            let (target_stream_read, target_stream_write) = target_stream.into_split();
-            let configuration_clone = configuration.clone();
-            let connection_id_clone = connection_id.clone();
-            tokio::spawn(async move {
-                if let Err((_message_framed_read, mut target_stream_write, original_error)) = Self::relay_proxy_to_target(
-                    connection_id_clone.clone(),
-                    agent_address,
-                    message_framed_read,
-                    target_stream_write,
-                    configuration_clone,
-                )
-                .await
-                {
+            )
+            .await
+            {
+                error!(
+                    "Connection [{}] error happen when relay data from target to proxy, error: {:#?}",
+                    connection_id, original_error
+                );
+                if let Err(e) = message_framed_write.flush().await {
                     error!(
-                        "Connection [{}] error happen when relay data from proxy to target, error: {:#?}",
-                        connection_id_clone, original_error
+                        "Connection [{}] fail to flush proxy writer when relay data from target to proxy have error:{:#?}",
+                        connection_id, e
                     );
-                    if let Err(e) = target_stream_write.flush().await {
-                        error!(
-                            "Connection [{}] fail to flush target stream writer when relay data from proxy to target have error:{:#?}",
-                            connection_id_clone, e
-                        );
-                    };
-                    if let Err(e) = target_stream_write.shutdown().await {
-                        error!(
-                            "Connection [{}] fail to shutdown target stream writer when relay data from proxy to target have error:{:#?}",
-                            connection_id_clone, e
-                        );
-                    };
-                }
-            });
-            tokio::spawn(async move {
-                if let Err((mut message_framed_write, _target_stream_read, original_error)) = Self::relay_target_to_proxy(
-                    connection_id.clone(),
-                    message_framed_write,
-                    agent_tcp_connect_message_id,
-                    user_token,
-                    source_address,
-                    target_address,
-                    target_stream_read,
-                    configuration,
-                )
-                .await
-                {
+                };
+                if let Err(e) = message_framed_write.close().await {
                     error!(
-                        "Connection [{}] error happen when relay data from target to proxy, error: {:#?}",
-                        connection_id, original_error
+                        "Connection [{}] fail to close proxy writer when relay data from target to proxy have error:{:#?}",
+                        connection_id, e
                     );
-                    if let Err(e) = message_framed_write.flush().await {
-                        error!(
-                            "Connection [{}] fail to flush proxy writer when relay data from target to proxy have error:{:#?}",
-                            connection_id, e
-                        );
-                    };
-                    if let Err(e) = message_framed_write.close().await {
-                        error!(
-                            "Connection [{}] fail to close proxy writer when relay data from target to proxy have error:{:#?}",
-                            connection_id, e
-                        );
-                    };
-                }
-            });
-            Ok(())
-        })
+                };
+            }
+        });
+        Ok(())
     }
-}
 
-impl<T> TcpRelayService<T>
-where
-    T: RsaCryptoFetcher + Send + Sync + 'static,
-{
-    async fn relay_proxy_to_target(
+    async fn relay_proxy_to_target<T>(
         connection_id: String, agent_address: SocketAddr, mut message_framed_read: MessageFramedRead<T>, mut target_stream_write: OwnedWriteHalf,
         configuration: Arc<ProxyConfig>,
-    ) -> Result<(), (MessageFramedRead<T>, OwnedWriteHalf, anyhow::Error)> {
+    ) -> Result<(), (MessageFramedRead<T>, OwnedWriteHalf, anyhow::Error)>
+    where
+        T: RsaCryptoFetcher + Send + Sync + 'static,
+    {
         loop {
             let connection_id = connection_id.clone();
-            let mut read_agent_message_service: ReadMessageService = Default::default();
-            let read_agent_message_result = ready_and_call_service(
-                &mut read_agent_message_service,
-                ReadMessageServiceRequest {
-                    connection_id: connection_id.clone(),
-                    message_framed_read,
-                    read_from_address: Some(agent_address),
-                },
-            )
+            let read_agent_message_result = MessageFramedReader::read(ReadMessageFramedRequest {
+                connection_id: connection_id.clone(),
+                message_framed_read,
+                read_from_address: Some(agent_address),
+            })
             .await;
             let (message_framed_read_move_back, agent_data) = match read_agent_message_result {
-                Err(ReadMessageServiceError { message_framed_read, source }) => {
+                Err(ReadMessageFramedError { message_framed_read, source }) => {
                     error!(
                         "Connection [{}] error happen when relay data from proxy to target,  agent address={:?}, target address={:?}, error: {:#?}",
                         connection_id,
@@ -200,7 +164,7 @@ where
                     );
                     return Err((message_framed_read, target_stream_write, anyhow!(source)));
                 },
-                Ok(ReadMessageServiceResult {
+                Ok(ReadMessageFramedResult {
                     message_framed_read,
                     content: None,
                 }) => {
@@ -216,7 +180,7 @@ where
                         .map_err(|e| (message_framed_read, target_stream_write, anyhow!(e)))?;
                     return Ok(());
                 },
-                Ok(ReadMessageServiceResult {
+                Ok(ReadMessageFramedResult {
                     message_framed_read,
                     content:
                         Some(ReadMessageServiceResultContent {
@@ -229,7 +193,7 @@ where
                             ..
                         }),
                 }) => (message_framed_read, data),
-                Ok(ReadMessageServiceResult { message_framed_read, .. }) => {
+                Ok(ReadMessageFramedResult { message_framed_read, .. }) => {
                     error!(
                         "Connection [{}] receive invalid data from agent when relay data from proxy to target,  agent address={:?}, target address={:?}",
                         connection_id,
@@ -252,15 +216,17 @@ where
         }
     }
 
-    async fn relay_target_to_proxy(
+    async fn relay_target_to_proxy<T>(
         connection_id: String, mut message_framed_write: MessageFramedWrite<T>, agent_tcp_connect_message_id: String, user_token: String,
         agent_connect_message_source_address: NetAddress, agent_connect_message_target_address: NetAddress, mut target_stream_read: OwnedReadHalf,
         configuration: Arc<ProxyConfig>,
-    ) -> Result<(), (MessageFramedWrite<T>, OwnedReadHalf, anyhow::Error)> {
+    ) -> Result<(), (MessageFramedWrite<T>, OwnedReadHalf, anyhow::Error)>
+    where
+        T: RsaCryptoFetcher + Send + Sync + 'static,
+    {
         loop {
             // let connection_id = connection_id.clone();
-            let mut write_proxy_message_service: WriteMessageService = Default::default();
-            let mut payload_encryption_type_select_service: PayloadEncryptionTypeSelectService = Default::default();
+
             let target_buffer_size = configuration.target_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE);
             let mut target_buffer = BytesMut::with_capacity(target_buffer_size);
             let source_address = agent_connect_message_source_address.clone();
@@ -304,33 +270,27 @@ where
                     PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::TcpData),
                     chunk_data,
                 );
-                let payload_encryption_type = match ready_and_call_service(
-                    &mut payload_encryption_type_select_service,
-                    PayloadEncryptionTypeSelectServiceRequest {
-                        encryption_token: generate_uuid().into(),
-                        user_token: user_token.clone(),
-                    },
-                )
+                let payload_encryption_type = match PayloadEncryptionTypeSelector::select(PayloadEncryptionTypeSelectRequest {
+                    encryption_token: generate_uuid().into(),
+                    user_token: user_token.clone(),
+                })
                 .await
                 {
                     Err(e) => return Err((message_framed_write, target_stream_read, anyhow!(e))),
-                    Ok(PayloadEncryptionTypeSelectServiceResult { payload_encryption_type, .. }) => payload_encryption_type,
+                    Ok(PayloadEncryptionTypeSelectResult { payload_encryption_type, .. }) => payload_encryption_type,
                 };
-                message_framed_write = match ready_and_call_service(
-                    &mut write_proxy_message_service,
-                    WriteMessageServiceRequest {
-                        message_framed_write,
-                        ref_id: Some(agent_tcp_connect_message_id.clone()),
-                        user_token: user_token.clone(),
-                        payload_encryption_type,
-                        message_payload: Some(proxy_message_payload),
-                        connection_id: Some(connection_id.clone()),
-                    },
-                )
+                message_framed_write = match MessageFramedWriter::write(WriteMessageFramedRequest {
+                    message_framed_write,
+                    ref_id: Some(agent_tcp_connect_message_id.clone()),
+                    user_token: user_token.clone(),
+                    payload_encryption_type,
+                    message_payload: Some(proxy_message_payload),
+                    connection_id: Some(connection_id.clone()),
+                })
                 .await
                 {
-                    Err(WriteMessageServiceError { message_framed_write, source }) => return Err((message_framed_write, target_stream_read, anyhow!(source))),
-                    Ok(WriteMessageServiceResult { message_framed_write, .. }) => message_framed_write,
+                    Err(WriteMessageFramedError { message_framed_write, source }) => return Err((message_framed_write, target_stream_read, anyhow!(source))),
+                    Ok(WriteMessageFramedResult { message_framed_write, .. }) => message_framed_write,
                 };
             }
         }

@@ -9,8 +9,6 @@ use tokio::runtime::{Builder as TokioRuntimeBuilder, Runtime};
 
 use tracing::error;
 
-use common::ready_and_call_service;
-
 use crate::config::AgentConfig;
 use crate::service::{common::ClientConnection, AgentRsaCryptoFetcher};
 
@@ -88,14 +86,8 @@ impl AgentServer {
             let proxy_addresses = proxy_addresses.clone();
             let configuration = self.configuration.clone();
             tokio::spawn(async move {
-                let mut handle_client_connection_service = ClientConnection::new(
-                    client_stream,
-                    client_address,
-                    proxy_addresses,
-                    agent_rsa_crypto_fetcher.clone(),
-                    configuration.clone(),
-                );
-                if let Err(e) = ready_and_call_service(&mut handle_client_connection_service, ()).await {
+                let client_connection = ClientConnection::new(client_stream, client_address, proxy_addresses);
+                if let Err(e) = client_connection.exec(agent_rsa_crypto_fetcher.clone(), configuration.clone()).await {
                     error!("Error happen when handle client connection [{}], error:{:#?}", client_address, e);
                 }
             });

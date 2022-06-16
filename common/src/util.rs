@@ -1,11 +1,8 @@
 use std::str::FromStr;
-use std::{any::type_name, fmt::Debug};
 
 use chrono::Local;
-use futures::TryFutureExt;
-use tower::{Service, ServiceExt};
-use tracing::Instrument;
-use tracing::{level_filters::LevelFilter, trace};
+
+use tracing::level_filters::LevelFilter;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::fmt::format::Writer;
 use tracing_subscriber::fmt::time::FormatTime;
@@ -47,19 +44,14 @@ pub fn generate_uuid() -> String {
     uuid_str.replace('-', "")
 }
 
-pub async fn ready_and_call_service<T, S>(service: &mut S, request: T) -> Result<S::Response, S::Error>
-where
-    S: Service<T>,
-    S::Error: Debug,
-    T: Debug,
-{
-    let service_type_name = type_name::<S>();
-    let service_call_span = tracing::trace_span!("CALL_SERVICE=>", service_name = service_type_name, request = format!("{:#?}", request).as_str());
-    match service.ready().and_then(|v| v.call(request)).instrument(service_call_span).await {
-        Ok(v) => Ok(v),
-        Err(e) => {
-            trace!("Fail to invoke service [{}] because of errors: {:#?}", service_type_name, e);
-            Err(e)
-        },
-    }
-}
+// let mut proxy_addresses: Vec<SocketAddr> = Vec::new();
+//         for address in proxy_addresses_from_config {
+//             match SocketAddr::from_str(address) {
+//                 Ok(r) => {
+//                     proxy_addresses.push(r);
+//                 },
+//                 Err(e) => {
+//                     error!("Fail to convert proxy address to socket address because of error: {:#?}", e)
+//                 },
+//             }
+//         }

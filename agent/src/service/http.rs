@@ -1,19 +1,20 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::task::{Context, Poll};
 
+use anyhow::Result;
 use bytes::BytesMut;
-use futures::future::BoxFuture;
+use common::RsaCryptoFetcher;
 use tokio::net::TcpStream;
-use tower::{Service, ServiceBuilder};
 
-use common::{ready_and_call_service, RsaCryptoFetcher};
-
-use crate::service::http::connect::{HttpConnectService, HttpConnectServiceRequest};
+use crate::service::http::connect::{HttpConnectFlow, HttpConnectFlowRequest};
 use crate::{
     config::AgentConfig,
-    service::common::{TcpRelayService, TcpRelayServiceRequest},
+    service::common::{TcpRelayFlow, TcpRelayFlowRequest},
 };
+
+use self::connect::HttpConnectFlowResult;
+
+use super::common::TcpRelayFlowResult;
 
 mod connect;
 
@@ -24,7 +25,6 @@ pub(crate) struct HttpFlowRequest {
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,
     pub buffer: BytesMut,
-    pub configuration: Arc<AgentConfig>,
 }
 #[derive(Debug)]
 #[allow(unused)]
@@ -32,72 +32,58 @@ pub(crate) struct HttpFlowResult {
     pub client_address: SocketAddr,
 }
 
-#[derive(Clone, Debug)]
-pub(crate) struct HttpFlowService<T>
-where
-    T: RsaCryptoFetcher,
-{
-    rsa_crypto_fetcher: Arc<T>,
-}
+pub(crate) struct HttpFlow;
 
-impl<T> HttpFlowService<T>
-where
-    T: RsaCryptoFetcher,
-{
-    pub fn new(rsa_crypto_fetcher: Arc<T>) -> Self {
-        Self { rsa_crypto_fetcher }
-    }
-}
-
-impl<T> Service<HttpFlowRequest> for HttpFlowService<T>
-where
-    T: RsaCryptoFetcher + Send + Sync + 'static,
-{
-    type Response = HttpFlowResult;
-    type Error = anyhow::Error;
-    type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
-
-    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        Poll::Ready(Ok(()))
-    }
-
-    fn call(&mut self, req: HttpFlowRequest) -> Self::Future {
-        let rsa_crypto_fetcher = self.rsa_crypto_fetcher.clone();
-        Box::pin(async move {
-            let mut connect_service = ServiceBuilder::new().service(HttpConnectService::new(rsa_crypto_fetcher.clone()));
-            let mut relay_service = ServiceBuilder::new().service(TcpRelayService::new());
-            let connect_result = ready_and_call_service(
-                &mut connect_service,
-                HttpConnectServiceRequest {
-                    connection_id: req.connection_id.clone(),
-                    proxy_addresses: req.proxy_addresses,
-                    client_address: req.client_address,
-                    client_stream: req.client_stream,
-                    initial_buf: req.buffer,
-                    configuration: req.configuration.clone(),
-                },
-            )
-            .await?;
-            let relay_result = ready_and_call_service(
-                &mut relay_service,
-                TcpRelayServiceRequest {
-                    connection_id: req.connection_id,
-                    client_address: connect_result.client_address,
-                    client_stream: connect_result.client_stream,
-                    message_framed_write: connect_result.message_framed_write,
-                    message_framed_read: connect_result.message_framed_read,
-                    target_address: connect_result.target_address,
-                    source_address: connect_result.source_address,
-                    init_data: connect_result.init_data,
-                    connect_response_message_id: connect_result.message_id,
-                    proxy_address: connect_result.proxy_address,
-                    configuration: req.configuration,
-                },
-            )
-            .await?;
-            Ok(HttpFlowResult {
-                client_address: relay_result.client_address,
-            })
-        })
+impl HttpFlow {
+    pub async fn exec<T>(request: HttpFlowRequest, rsa_crypto_fetcher: Arc<T>, configuration: Arc<AgentConfig>) -> Result<HttpFlowResult>
+    where
+        T: RsaCryptoFetcher + Send + Sync + 'static,
+    {
+        let HttpFlowRequest {
+            connection_id,
+            proxy_addresses,
+            client_stream,
+            client_address,
+            buffer,
+        } = request;
+        let HttpConnectFlowResult {
+            client_stream,
+            client_address,
+            proxy_address,
+            init_data,
+            message_framed_read,
+            message_framed_write,
+            message_id,
+            source_address,
+            target_address,
+        } = HttpConnectFlow::exec(
+            HttpConnectFlowRequest {
+                connection_id: connection_id.clone(),
+                proxy_addresses,
+                client_address,
+                client_stream,
+                initial_buf: buffer,
+            },
+            rsa_crypto_fetcher.clone(),
+            configuration.clone(),
+        )
+        .await?;
+        let TcpRelayFlowResult { client_address } = TcpRelayFlow::exec(
+            TcpRelayFlowRequest {
+                connection_id,
+                client_address,
+                client_stream,
+                message_framed_write,
+                message_framed_read,
+                target_address,
+                source_address,
+                init_data,
+                connect_response_message_id: message_id,
+                proxy_address,
+            },
+            configuration,
+        )
+        .await?;
+        Ok(HttpFlowResult { client_address })
     }
 }

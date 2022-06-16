@@ -12,8 +12,6 @@ use tokio::runtime::Runtime as TokioRuntime;
 
 use tracing::error;
 
-use common::ready_and_call_service;
-
 use crate::{
     config::ProxyConfig,
     service::{AgentConnection, ProxyRsaCryptoFetcher},
@@ -79,13 +77,12 @@ impl ProxyServer {
             let proxy_rsa_crypto_fetcher = proxy_rsa_crypto_fetcher.clone();
             let configuration = self.configuration.clone();
             tokio::spawn(async move {
-                let mut agent_connection = AgentConnection::new(proxy_rsa_crypto_fetcher.clone(), configuration, agent_stream, agent_address);
-                if let Err(e) = ready_and_call_service(&mut agent_connection, ()).await {
+                let agent_connection = AgentConnection::new(agent_stream, agent_address);
+                let agent_connection_id = agent_connection.get_id().to_string();
+                if let Err(e) = agent_connection.exec(proxy_rsa_crypto_fetcher, configuration).await {
                     error!(
                         "Error happen when handle agent connection: [{}], agent address:[{}], error:{:#?}",
-                        agent_connection.get_id(),
-                        agent_address,
-                        e
+                        agent_connection_id, agent_address, e
                     )
                 }
             });

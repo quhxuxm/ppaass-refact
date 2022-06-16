@@ -2,18 +2,15 @@ use std::{
     fmt::{Debug, Formatter},
     net::SocketAddr,
 };
-use std::{
-    sync::Arc,
-    task::{Context, Poll},
-};
+use std::{sync::Arc, time::Duration};
 
 use bytes::Bytes;
-use futures::future::{self, BoxFuture};
+
 use futures::stream::{SplitSink, SplitStream};
 use futures::{SinkExt, StreamExt};
 use tokio::net::TcpStream;
 use tokio_util::codec::Framed;
-use tower::Service;
+
 use tracing::{debug, error, info, trace};
 
 use crate::{crypto::RsaCryptoFetcher, generate_uuid, Message, MessageCodec, MessagePayload, PayloadEncryptionType, PpaassError};
@@ -21,7 +18,7 @@ use crate::{crypto::RsaCryptoFetcher, generate_uuid, Message, MessageCodec, Mess
 pub type MessageFramedRead<T> = SplitStream<Framed<TcpStream, MessageCodec<T>>>;
 pub type MessageFramedWrite<T> = SplitSink<Framed<TcpStream, MessageCodec<T>>, Message>;
 
-pub struct PrepareMessageFramedResult<T>
+pub struct MessageFramedGenerateResult<T>
 where
     T: RsaCryptoFetcher,
 {
@@ -30,59 +27,27 @@ where
     pub framed_address: Option<SocketAddr>,
 }
 
-#[derive(Clone)]
-pub struct PrepareMessageFramedService<T>
-where
-    T: RsaCryptoFetcher,
-{
-    buffer_size: usize,
-    compress: bool,
-    rsa_crypto_fetcher: Arc<T>,
-}
+pub struct MessageFramedGenerator;
 
-impl<T> PrepareMessageFramedService<T>
-where
-    T: RsaCryptoFetcher,
-{
-    pub fn new(buffer_size: usize, compress: bool, rsa_crypto_fetcher: Arc<T>) -> Self {
-        Self {
-            buffer_size,
-            compress,
-            rsa_crypto_fetcher,
-        }
-    }
-}
-
-impl<T> Service<TcpStream> for PrepareMessageFramedService<T>
-where
-    T: RsaCryptoFetcher + Send + Sync + 'static,
-{
-    type Response = PrepareMessageFramedResult<T>;
-    type Error = PpaassError;
-    type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
-
-    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        Poll::Ready(Ok(()))
-    }
-
-    fn call(&mut self, input_stream: TcpStream) -> Self::Future {
-        let compress = self.compress;
-        let rsa_crypto_fetcher = self.rsa_crypto_fetcher.clone();
-        let buffer_size = self.buffer_size;
-        Box::pin(async move {
-            let framed_address = input_stream.peer_addr().ok();
-            let framed = Framed::with_capacity(input_stream, MessageCodec::<T>::new(compress, rsa_crypto_fetcher), buffer_size);
-            let (message_framed_write, message_framed_read) = framed.split();
-            Ok(PrepareMessageFramedResult {
-                message_framed_write,
-                message_framed_read,
-                framed_address,
-            })
+impl MessageFramedGenerator {
+    pub async fn generate<T>(
+        input_stream: TcpStream, buffer_size: usize, compress: bool, rsa_crypto_fetcher: Arc<T>,
+    ) -> Result<MessageFramedGenerateResult<T>, PpaassError>
+    where
+        T: RsaCryptoFetcher,
+    {
+        let framed_address = input_stream.peer_addr().ok();
+        let framed = Framed::with_capacity(input_stream, MessageCodec::<T>::new(compress, rsa_crypto_fetcher), buffer_size);
+        let (message_framed_write, message_framed_read) = framed.split();
+        Ok(MessageFramedGenerateResult {
+            message_framed_write,
+            message_framed_read,
+            framed_address,
         })
     }
 }
 
-pub struct WriteMessageServiceRequest<T>
+pub struct WriteMessageFramedRequest<T>
 where
     T: RsaCryptoFetcher,
 {
@@ -94,7 +59,7 @@ where
     pub payload_encryption_type: PayloadEncryptionType,
 }
 
-impl<T> Debug for WriteMessageServiceRequest<T>
+impl<T> Debug for WriteMessageFramedRequest<T>
 where
     T: RsaCryptoFetcher,
 {
@@ -109,14 +74,14 @@ where
     }
 }
 
-pub struct WriteMessageServiceResult<T>
+pub struct WriteMessageFramedResult<T>
 where
     T: RsaCryptoFetcher,
 {
     pub message_framed_write: MessageFramedWrite<T>,
 }
 
-pub struct WriteMessageServiceError<T>
+pub struct WriteMessageFramedError<T>
 where
     T: RsaCryptoFetcher,
 {
@@ -124,7 +89,7 @@ where
     pub source: PpaassError,
 }
 
-impl<T> Debug for WriteMessageServiceError<T>
+impl<T> Debug for WriteMessageFramedError<T>
 where
     T: RsaCryptoFetcher,
 {
@@ -136,66 +101,49 @@ where
     }
 }
 
-#[derive(Clone, Default)]
-pub struct WriteMessageService;
+pub struct MessageFramedWriter;
 
-impl<T> Service<WriteMessageServiceRequest<T>> for WriteMessageService
-where
-    T: RsaCryptoFetcher + Send + Sync + 'static,
-{
-    type Response = WriteMessageServiceResult<T>;
-    type Error = WriteMessageServiceError<T>;
-    type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
-
-    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        Poll::Ready(Ok(()))
-    }
-
-    fn call(&mut self, req: WriteMessageServiceRequest<T>) -> Self::Future {
-        Box::pin(async move {
-            let message = match req.message_payload {
-                None => Message::new(
-                    generate_uuid(),
-                    req.ref_id,
-                    req.connection_id,
-                    req.user_token,
-                    req.payload_encryption_type,
-                    None::<Bytes>,
-                ),
-                Some(payload) => {
-                    let message = Message::new(
-                        generate_uuid(),
-                        req.ref_id,
-                        req.connection_id,
-                        req.user_token,
-                        req.payload_encryption_type,
-                        Some(payload),
-                    );
-                    debug!("Write message to remote:\n\n{:?}\n\n", message);
-                    trace!("Write message payload to remote:\n\n{:#?}\n\n", message.payload);
-                    message
-                },
-            };
-            let mut message_framed_write = req.message_framed_write;
-            if let Err(e) = message_framed_write.send(message).await {
-                error!("Fail to write message because of error: {:#?}", e);
-                if let Err(e) = message_framed_write.flush().await {
-                    error!("Fail to flush message because of error: {:#?}", e);
-                }
-                if let Err(e) = message_framed_write.close().await {
-                    error!("Fail to close message writer because of error: {:#?}", e);
-                };
-                return Err(WriteMessageServiceError {
-                    message_framed_write,
-                    source: e,
-                });
+impl MessageFramedWriter {
+    pub async fn write<T>(request: WriteMessageFramedRequest<T>) -> Result<WriteMessageFramedResult<T>, WriteMessageFramedError<T>>
+    where
+        T: RsaCryptoFetcher,
+    {
+        let WriteMessageFramedRequest {
+            message_framed_write,
+            message_payload,
+            ref_id,
+            connection_id,
+            user_token,
+            payload_encryption_type,
+        } = request;
+        let message = match message_payload {
+            None => Message::new(generate_uuid(), ref_id, connection_id, user_token, payload_encryption_type, None::<Bytes>),
+            Some(payload) => {
+                let message = Message::new(generate_uuid(), ref_id, connection_id, user_token, payload_encryption_type, Some(payload));
+                debug!("Write message to remote:\n\n{:?}\n\n", message);
+                trace!("Write message payload to remote:\n\n{:#?}\n\n", message.payload);
+                message
+            },
+        };
+        let mut message_framed_write = message_framed_write;
+        if let Err(e) = message_framed_write.send(message).await {
+            error!("Fail to write message because of error: {:#?}", e);
+            if let Err(e) = message_framed_write.flush().await {
+                error!("Fail to flush message because of error: {:#?}", e);
             }
-            Ok(WriteMessageServiceResult { message_framed_write })
-        })
+            if let Err(e) = message_framed_write.close().await {
+                error!("Fail to close message writer because of error: {:#?}", e);
+            };
+            return Err(WriteMessageFramedError {
+                message_framed_write,
+                source: e,
+            });
+        }
+        Ok(WriteMessageFramedResult { message_framed_write })
     }
 }
 
-pub struct ReadMessageServiceRequest<T>
+pub struct ReadMessageFramedRequest<T>
 where
     T: RsaCryptoFetcher,
 {
@@ -204,7 +152,7 @@ where
     pub read_from_address: Option<SocketAddr>,
 }
 
-impl<T> Debug for ReadMessageServiceRequest<T>
+impl<T> Debug for ReadMessageFramedRequest<T>
 where
     T: RsaCryptoFetcher,
 {
@@ -223,7 +171,7 @@ pub struct ReadMessageServiceResultContent {
     pub user_token: String,
 }
 
-pub struct ReadMessageServiceResult<T>
+pub struct ReadMessageFramedResult<T>
 where
     T: RsaCryptoFetcher,
 {
@@ -231,7 +179,7 @@ where
     pub content: Option<ReadMessageServiceResultContent>,
 }
 
-pub struct ReadMessageServiceError<T>
+pub struct ReadMessageFramedError<T>
 where
     T: RsaCryptoFetcher,
 {
@@ -239,7 +187,7 @@ where
     pub source: PpaassError,
 }
 
-impl<T> Debug for ReadMessageServiceError<T>
+impl<T> Debug for ReadMessageFramedError<T>
 where
     T: RsaCryptoFetcher,
 {
@@ -251,107 +199,116 @@ where
     }
 }
 
-#[derive(Clone, Default)]
-pub struct ReadMessageService;
+pub struct MessageFramedReader;
 
-impl<T> Service<ReadMessageServiceRequest<T>> for ReadMessageService
-where
-    T: RsaCryptoFetcher + Send + Sync + 'static,
-{
-    type Response = ReadMessageServiceResult<T>;
-    type Error = ReadMessageServiceError<T>;
-    type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
-
-    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        Poll::Ready(Ok(()))
-    }
-
-    fn call(&mut self, mut req: ReadMessageServiceRequest<T>) -> Self::Future {
-        Box::pin(async move {
-            let result = match req.message_framed_read.next().await {
-                None => {
-                    return Ok(ReadMessageServiceResult {
-                        content: None,
-                        message_framed_read: req.message_framed_read,
-                    });
-                },
-                Some(Ok(message)) => ReadMessageServiceResult {
-                    content: Some(ReadMessageServiceResultContent {
-                        message_id: message.id,
-                        user_token: message.user_token,
-                        message_payload: match message.payload {
-                            None => {
-                                info!(
-                                    "Connection [{}] no payload in the message, read from: {:?}.",
-                                    req.connection_id, req.read_from_address
-                                );
-                                None
+impl MessageFramedReader {
+    pub async fn read<T>(request: ReadMessageFramedRequest<T>) -> Result<ReadMessageFramedResult<T>, ReadMessageFramedError<T>>
+    where
+        T: RsaCryptoFetcher,
+    {
+        let ReadMessageFramedRequest {
+            connection_id,
+            mut message_framed_read,
+            read_from_address,
+        } = request;
+        let result = match message_framed_read.next().await {
+            None => {
+                return Ok(ReadMessageFramedResult {
+                    content: None,
+                    message_framed_read,
+                });
+            },
+            Some(Ok(message)) => ReadMessageFramedResult {
+                content: Some(ReadMessageServiceResultContent {
+                    message_id: message.id,
+                    user_token: message.user_token,
+                    message_payload: match message.payload {
+                        None => {
+                            info!("Connection [{}] no payload in the message, read from: {:?}.", connection_id, read_from_address);
+                            None
+                        },
+                        Some(payload_bytes) => match payload_bytes.try_into() {
+                            Ok(v) => {
+                                trace!("Connection [{}] read message payload from remote:\n\n{:#?}\n\n", connection_id, v);
+                                Some(v)
                             },
-                            Some(payload_bytes) => match payload_bytes.try_into() {
-                                Ok(v) => {
-                                    trace!("Connection [{}] read message payload from remote:\n\n{:#?}\n\n", req.connection_id, v);
-                                    Some(v)
-                                },
-                                Err(e) => {
-                                    error!(
-                                        "Connection [{}] fail to decode message payload because of error, read from:{:?}, error: {:#?}",
-                                        req.connection_id, req.read_from_address, e
-                                    );
-                                    return Err(ReadMessageServiceError {
-                                        message_framed_read: req.message_framed_read,
-                                        source: e,
-                                    });
-                                },
+                            Err(e) => {
+                                error!(
+                                    "Connection [{}] fail to decode message payload because of error, read from:{:?}, error: {:#?}",
+                                    connection_id, read_from_address, e
+                                );
+                                return Err(ReadMessageFramedError {
+                                    message_framed_read,
+                                    source: e,
+                                });
                             },
                         },
-                    }),
-                    message_framed_read: req.message_framed_read,
-                },
-                Some(Err(e)) => {
-                    error!(
-                        "Connection [{}] fail to decode message because of error, read from {:?}, error: {:#?}",
-                        req.connection_id, req.read_from_address, e
-                    );
-                    return Err(ReadMessageServiceError {
-                        message_framed_read: req.message_framed_read,
-                        source: e,
-                    });
-                },
-            };
-            Ok(result)
-        })
+                    },
+                }),
+                message_framed_read,
+            },
+            Some(Err(e)) => {
+                error!(
+                    "Connection [{}] fail to decode message because of error, read from {:?}, error: {:#?}",
+                    connection_id, read_from_address, e
+                );
+                return Err(ReadMessageFramedError {
+                    message_framed_read,
+                    source: e,
+                });
+            },
+        };
+        Ok(result)
     }
 }
 
 #[derive(Debug)]
-pub struct PayloadEncryptionTypeSelectServiceRequest {
+pub struct PayloadEncryptionTypeSelectRequest {
     pub user_token: String,
     pub encryption_token: Bytes,
 }
 
-pub struct PayloadEncryptionTypeSelectServiceResult {
+pub struct PayloadEncryptionTypeSelectResult {
     pub user_token: String,
     pub encryption_token: Bytes,
     pub payload_encryption_type: PayloadEncryptionType,
 }
 
-#[derive(Clone, Default)]
-pub struct PayloadEncryptionTypeSelectService;
+pub struct PayloadEncryptionTypeSelector;
 
-impl Service<PayloadEncryptionTypeSelectServiceRequest> for PayloadEncryptionTypeSelectService {
-    type Response = PayloadEncryptionTypeSelectServiceResult;
-    type Error = PpaassError;
-    type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
-
-    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        Poll::Ready(Ok(()))
+impl PayloadEncryptionTypeSelector {
+    pub async fn select(request: PayloadEncryptionTypeSelectRequest) -> Result<PayloadEncryptionTypeSelectResult, PpaassError> {
+        let PayloadEncryptionTypeSelectRequest { user_token, encryption_token } = request;
+        Ok(PayloadEncryptionTypeSelectResult {
+            payload_encryption_type: PayloadEncryptionType::Blowfish(encryption_token.clone()),
+            user_token,
+            encryption_token,
+        })
     }
+}
 
-    fn call(&mut self, req: PayloadEncryptionTypeSelectServiceRequest) -> Self::Future {
-        Box::pin(future::ready(Ok(PayloadEncryptionTypeSelectServiceResult {
-            payload_encryption_type: PayloadEncryptionType::Blowfish(req.encryption_token.clone()),
-            user_token: req.user_token.clone(),
-            encryption_token: req.encryption_token.clone(),
-        })))
+pub struct TcpConnectRequest {
+    pub target_addresses: Vec<SocketAddr>,
+    pub target_stream_so_linger: u64,
+}
+
+pub struct TcpConnectResult {
+    pub target_stream: TcpStream,
+}
+
+pub struct TcpConnector;
+
+impl TcpConnector {
+    pub async fn connect(request: TcpConnectRequest) -> Result<TcpConnectResult, PpaassError> {
+        let TcpConnectRequest {
+            target_addresses,
+            target_stream_so_linger,
+        } = request;
+        debug!("Begin connect to target: {:?}", target_addresses);
+        let target_stream = TcpStream::connect(&target_addresses.as_slice()).await?;
+        target_stream.set_nodelay(true)?;
+        target_stream.set_linger(Some(Duration::from_secs(target_stream_so_linger)))?;
+        debug!("Success connect to target: {:?}", target_addresses);
+        Ok(TcpConnectResult { target_stream })
     }
 }

@@ -1,13 +1,17 @@
 #![allow(unused)]
-use std::net::{IpAddr, SocketAddr};
-use std::ops::Deref;
 use std::sync::Arc;
 use std::{
     fmt::{Debug, Display, Formatter},
     mem::size_of,
 };
+use std::{
+    io::Cursor,
+    net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6},
+};
+use std::{ops::Deref, str::FromStr};
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
+
 use pretty_hex::*;
 use tracing::error;
 
@@ -144,6 +148,38 @@ impl TryFrom<Bytes> for NetAddress {
     fn try_from(mut value: Bytes) -> Result<Self, Self::Error> {
         let value_mut_ref: &mut Bytes = &mut value;
         value_mut_ref.try_into()
+    }
+}
+
+impl TryFrom<NetAddress> for SocketAddr {
+    type Error = PpaassError;
+    fn try_from(net_address: NetAddress) -> Result<Self, PpaassError> {
+        match net_address {
+            NetAddress::IpV4(ip, port) => {
+                let socket_addr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(ip[0], ip[1], ip[2], ip[3]), port));
+                Ok(socket_addr)
+            },
+            NetAddress::IpV6(ip, port) => {
+                let mut ip_cursor = Cursor::new(ip);
+                let socket_addr = SocketAddr::V6(SocketAddrV6::new(
+                    Ipv6Addr::new(
+                        ip_cursor.get_u16(),
+                        ip_cursor.get_u16(),
+                        ip_cursor.get_u16(),
+                        ip_cursor.get_u16(),
+                        ip_cursor.get_u16(),
+                        ip_cursor.get_u16(),
+                        ip_cursor.get_u16(),
+                        ip_cursor.get_u16(),
+                    ),
+                    port,
+                    0,
+                    0,
+                ));
+                Ok(socket_addr)
+            },
+            NetAddress::Domain(host, port) => Ok(SocketAddr::from_str(host.as_str()).map_err(|e| PpaassError::CodecError)?),
+        }
     }
 }
 
