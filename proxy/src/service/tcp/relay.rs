@@ -33,6 +33,7 @@ pub(crate) struct TcpRelayServiceRequest<T>
 where
     T: RsaCryptoFetcher,
 {
+    pub connection_id: String,
     pub message_framed_read: MessageFramedRead<T>,
     pub message_framed_write: MessageFramedWrite<T>,
     pub agent_address: SocketAddr,
@@ -90,6 +91,7 @@ where
     fn call(&mut self, req: TcpRelayServiceRequest<T>) -> Self::Future {
         Box::pin(async move {
             let TcpRelayServiceRequest {
+                connection_id,
                 message_framed_read,
                 message_framed_write,
                 agent_address,
@@ -102,16 +104,32 @@ where
             } = req;
             let (target_stream_read, target_stream_write) = target_stream.into_split();
             let configuration_clone = configuration.clone();
+            let connection_id_clone = connection_id.clone();
             tokio::spawn(async move {
-                if let Err((_message_framed_read, mut target_stream_write, original_error)) =
-                    Self::relay_proxy_to_target(agent_address, message_framed_read, target_stream_write, configuration_clone).await
+                if let Err((_message_framed_read, mut target_stream_write, original_error)) = Self::relay_proxy_to_target(
+                    connection_id_clone.clone(),
+                    agent_address,
+                    message_framed_read,
+                    target_stream_write,
+                    configuration_clone,
+                )
+                .await
                 {
-                    error!("Error happen when relay data from proxy to target, error: {:#?}", original_error);
+                    error!(
+                        "Connection [{}] error happen when relay data from proxy to target, error: {:#?}",
+                        connection_id_clone, original_error
+                    );
                     if let Err(e) = target_stream_write.flush().await {
-                        error!("Fail to flush target stream writer when relay data from proxy to target have error:{:#?}", e);
+                        error!(
+                            "Connection [{}] fail to flush target stream writer when relay data from proxy to target have error:{:#?}",
+                            connection_id_clone, e
+                        );
                     };
                     if let Err(e) = target_stream_write.shutdown().await {
-                        error!("Fail to shutdown target stream writer when relay data from proxy to target have error:{:#?}", e);
+                        error!(
+                            "Connection [{}] fail to shutdown target stream writer when relay data from proxy to target have error:{:#?}",
+                            connection_id_clone, e
+                        );
                     };
                 }
             });
@@ -127,12 +145,21 @@ where
                 )
                 .await
                 {
-                    error!("Error happen when relay data from target to proxy, error: {:#?}", original_error);
+                    error!(
+                        "Connection [{}] error happen when relay data from target to proxy, error: {:#?}",
+                        connection_id, original_error
+                    );
                     if let Err(e) = message_framed_write.flush().await {
-                        error!("Fail to flush proxy writer when relay data from target to proxy have error:{:#?}", e);
+                        error!(
+                            "Connection [{}] fail to flush proxy writer when relay data from target to proxy have error:{:#?}",
+                            connection_id, e
+                        );
                     };
                     if let Err(e) = message_framed_write.close().await {
-                        error!("Fail to close proxy writer when relay data from target to proxy have error:{:#?}", e);
+                        error!(
+                            "Connection [{}] fail to close proxy writer when relay data from target to proxy have error:{:#?}",
+                            connection_id, e
+                        );
                     };
                 }
             });
@@ -146,13 +173,16 @@ where
     T: RsaCryptoFetcher + Send + Sync + 'static,
 {
     async fn relay_proxy_to_target(
-        agent_address: SocketAddr, mut message_framed_read: MessageFramedRead<T>, mut target_stream_write: OwnedWriteHalf, configuration: Arc<ProxyConfig>,
+        connection_id: String, agent_address: SocketAddr, mut message_framed_read: MessageFramedRead<T>, mut target_stream_write: OwnedWriteHalf,
+        configuration: Arc<ProxyConfig>,
     ) -> Result<(), (MessageFramedRead<T>, OwnedWriteHalf, anyhow::Error)> {
         loop {
+            let connection_id = connection_id.clone();
             let mut read_agent_message_service: ReadMessageService = Default::default();
             let read_agent_message_result = ready_and_call_service(
                 &mut read_agent_message_service,
                 ReadMessageServiceRequest {
+                    connection_id: connection_id.clone(),
                     message_framed_read,
                     read_from_address: Some(agent_address),
                 },
@@ -161,7 +191,8 @@ where
             let (message_framed_read_move_back, agent_data) = match read_agent_message_result {
                 Err(ReadMessageServiceError { message_framed_read, source }) => {
                     error!(
-                        "Error happen when relay data from proxy to target,  agent address={:?}, target address={:?}, error: {:#?}",
+                        "Connection [{}] error happen when relay data from proxy to target,  agent address={:?}, target address={:?}, error: {:#?}",
+                        connection_id,
                         agent_address,
                         target_stream_write.peer_addr(),
                         source
@@ -173,7 +204,8 @@ where
                     content: None,
                 }) => {
                     debug!(
-                        "Read all data from agent, agent address={:?}, target address = {:?}.",
+                        "Connection [{}] read all data from agent, agent address={:?}, target address = {:?}.",
+                        connection_id,
                         agent_address,
                         target_stream_write.peer_addr()
                     );
@@ -198,7 +230,8 @@ where
                 }) => (message_framed_read, data),
                 Ok(ReadMessageServiceResult { message_framed_read, .. }) => {
                     error!(
-                        "Receive invalid data from agent when relay data from proxy to target,  agent address={:?}, target address={:?}",
+                        "Connection [{}] receive invalid data from agent when relay data from proxy to target,  agent address={:?}, target address={:?}",
+                        connection_id,
                         agent_address,
                         target_stream_write.peer_addr()
                     );

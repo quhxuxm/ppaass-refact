@@ -47,6 +47,7 @@ type HttpFramed<'a> = Framed<&'a mut TcpStream, HttpCodec>;
 
 #[allow(unused)]
 pub(crate) struct HttpConnectServiceRequest {
+    pub connection_id: String,
     pub proxy_addresses: Arc<Vec<SocketAddr>>,
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,
@@ -240,6 +241,7 @@ where
             match ready_and_call_service(
                 &mut read_proxy_message_service,
                 ReadMessageServiceRequest {
+                    connection_id: request.connection_id,
                     message_framed_read: framed_result.message_framed_read,
                     read_from_address: framed_result.framed_address,
                 },

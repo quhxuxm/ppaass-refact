@@ -28,6 +28,7 @@ mod udp_associate;
 pub(crate) type Socks5InitFramed<'a> = Framed<&'a mut TcpStream, Socks5InitCommandContentCodec>;
 
 pub(crate) struct Socks5InitCommandServiceRequest {
+    pub connection_id: String,
     pub proxy_addresses: Arc<Vec<SocketAddr>>,
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,
@@ -109,6 +110,7 @@ where
                     match ready_and_call_service(
                         &mut socks5_tcp_connect_service,
                         Socks5TcpConnectServiceRequest {
+                            connection_id: request.connection_id,
                             proxy_addresses: request.proxy_addresses,
                             client_address,
                             dest_address: dest_address.clone(),

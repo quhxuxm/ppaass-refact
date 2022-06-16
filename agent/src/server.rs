@@ -12,10 +12,7 @@ use tracing::error;
 use common::ready_and_call_service;
 
 use crate::config::AgentConfig;
-use crate::service::{
-    common::{ClientConnectionInfo, HandleClientConnectionService},
-    AgentRsaCryptoFetcher,
-};
+use crate::service::{common::ClientConnection, AgentRsaCryptoFetcher};
 
 const DEFAULT_SERVER_PORT: u16 = 10080;
 
@@ -91,9 +88,14 @@ impl AgentServer {
             let proxy_addresses = proxy_addresses.clone();
             let configuration = self.configuration.clone();
             tokio::spawn(async move {
-                let mut handle_client_connection_service =
-                    HandleClientConnectionService::new(proxy_addresses, agent_rsa_crypto_fetcher.clone(), configuration.clone());
-                if let Err(e) = ready_and_call_service(&mut handle_client_connection_service, ClientConnectionInfo { client_stream, client_address }).await {
+                let mut handle_client_connection_service = ClientConnection::new(
+                    client_stream,
+                    client_address,
+                    proxy_addresses,
+                    agent_rsa_crypto_fetcher.clone(),
+                    configuration.clone(),
+                );
+                if let Err(e) = ready_and_call_service(&mut handle_client_connection_service, ()).await {
                     error!("Error happen when handle client connection [{}], error:{:#?}", client_address, e);
                 }
             });

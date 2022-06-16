@@ -19,6 +19,7 @@ mod connect;
 
 #[derive(Debug)]
 pub(crate) struct HttpFlowRequest {
+    pub connection_id: String,
     pub proxy_addresses: Arc<Vec<SocketAddr>>,
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,
@@ -68,6 +69,7 @@ where
             let connect_result = ready_and_call_service(
                 &mut connect_service,
                 HttpConnectServiceRequest {
+                    connection_id: req.connection_id.clone(),
                     proxy_addresses: req.proxy_addresses,
                     client_address: req.client_address,
                     client_stream: req.client_stream,
@@ -79,6 +81,7 @@ where
             let relay_result = ready_and_call_service(
                 &mut relay_service,
                 TcpRelayServiceRequest {
+                    connection_id: req.connection_id,
                     client_address: connect_result.client_address,
                     client_stream: connect_result.client_stream,
                     message_framed_write: connect_result.message_framed_write,

@@ -184,6 +184,7 @@ pub struct ReadMessageServiceRequest<T>
 where
     T: RsaCryptoFetcher,
 {
+    pub connection_id: String,
     pub message_framed_read: MessageFramedRead<T>,
     pub read_from_address: Option<SocketAddr>,
 }
@@ -193,7 +194,11 @@ where
     T: RsaCryptoFetcher,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "ReadMessageServiceRequest")
+        f.debug_struct("ReadMessageServiceRequest")
+            .field("connection_id", &self.connection_id)
+            .field("message_framed_read", &self.message_framed_read)
+            .field("read_from_address", &self.read_from_address)
+            .finish()
     }
 }
 
@@ -261,18 +266,21 @@ where
                         user_token: message.user_token,
                         message_payload: match message.payload {
                             None => {
-                                info!("No payload in the message, read from: {:?}.", req.read_from_address);
+                                info!(
+                                    "Connection [{}] no payload in the message, read from: {:?}.",
+                                    req.connection_id, req.read_from_address
+                                );
                                 None
                             },
                             Some(payload_bytes) => match payload_bytes.try_into() {
                                 Ok(v) => {
-                                    trace!("Read message payload from remote:\n\n{:#?}\n\n", v);
+                                    trace!("Connection [{}] read message payload from remote:\n\n{:#?}\n\n", req.connection_id, v);
                                     Some(v)
                                 },
                                 Err(e) => {
                                     error!(
-                                        "Fail to decode message payload because of error, read from:{:?}, error: {:#?}",
-                                        req.read_from_address, e
+                                        "Connection [{}] fail to decode message payload because of error, read from:{:?}, error: {:#?}",
+                                        req.connection_id, req.read_from_address, e
                                     );
                                     return Err(ReadMessageServiceError {
                                         message_framed_read: req.message_framed_read,
@@ -286,8 +294,8 @@ where
                 },
                 Some(Err(e)) => {
                     error!(
-                        "Fail to decode message because of error, read from {:?}, error: {:#?}",
-                        req.read_from_address, e
+                        "Connection [{}] fail to decode message because of error, read from {:?}, error: {:#?}",
+                        req.connection_id, req.read_from_address, e
                     );
                     return Err(ReadMessageServiceError {
                         message_framed_read: req.message_framed_read,

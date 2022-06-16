@@ -22,6 +22,7 @@ mod auth;
 mod init;
 
 pub(crate) struct Socks5FlowRequest {
+    pub connection_id: String,
     pub proxy_addresses: Arc<Vec<SocketAddr>>,
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,
@@ -89,6 +90,7 @@ where
             let connect_flow_result = ready_and_call_service(
                 &mut connect_service,
                 Socks5InitCommandServiceRequest {
+                    connection_id: req.connection_id.clone(),
                     proxy_addresses: req.proxy_addresses,
                     client_stream: authenticate_result.client_stream,
                     client_address: authenticate_result.client_address,
@@ -100,6 +102,7 @@ where
             let relay_flow_result = ready_and_call_service(
                 &mut relay_service,
                 TcpRelayServiceRequest {
+                    connection_id: req.connection_id,
                     client_address: connect_flow_result.client_address,
                     client_stream: connect_flow_result.client_stream,
                     message_framed_write: connect_flow_result.message_framed_write,

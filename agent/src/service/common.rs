@@ -9,7 +9,7 @@ use std::{
 
 use anyhow::anyhow;
 use bytes::{Bytes, BytesMut};
-use futures::StreamExt;
+use futures::{future, StreamExt};
 use futures::{future::BoxFuture, SinkExt};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
@@ -38,27 +38,19 @@ pub const DEFAULT_BUFFER_SIZE: usize = 1024 * 64;
 
 pub const DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS: u64 = 20;
 
-pub(crate) struct ClientConnectionInfo {
-    pub client_stream: TcpStream,
-    pub client_address: SocketAddr,
-}
-
-impl Debug for ClientConnectionInfo {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "ClientConnectionInfo: client_address={}", self.client_address)
-    }
-}
-
-pub(crate) struct HandleClientConnectionService<T>
+pub(crate) struct ClientConnection<T>
 where
     T: RsaCryptoFetcher,
 {
+    pub id: String,
+    pub client_stream: Option<TcpStream>,
+    pub client_address: SocketAddr,
     pub proxy_addresses: Arc<Vec<SocketAddr>>,
     pub rsa_crypto_fetcher: Arc<T>,
     pub confiugration: Arc<AgentConfig>,
 }
 
-impl<T> Debug for HandleClientConnectionService<T>
+impl<T> Debug for ClientConnection<T>
 where
     T: RsaCryptoFetcher,
 {
@@ -67,19 +59,25 @@ where
     }
 }
 
-impl<T> HandleClientConnectionService<T>
+impl<T> ClientConnection<T>
 where
     T: RsaCryptoFetcher,
 {
-    pub(crate) fn new(proxy_addresses: Arc<Vec<SocketAddr>>, rsa_crypto_fetcher: Arc<T>, confiugration: Arc<AgentConfig>) -> Self {
+    pub(crate) fn new(
+        client_stream: TcpStream, client_address: SocketAddr, proxy_addresses: Arc<Vec<SocketAddr>>, rsa_crypto_fetcher: Arc<T>,
+        confiugration: Arc<AgentConfig>,
+    ) -> Self {
         Self {
+            id: generate_uuid(),
+            client_stream: Some(client_stream),
+            client_address,
             proxy_addresses,
             rsa_crypto_fetcher,
             confiugration,
         }
     }
 }
-impl<T> Service<ClientConnectionInfo> for HandleClientConnectionService<T>
+impl<T> Service<()> for ClientConnection<T>
 where
     T: RsaCryptoFetcher + Send + Sync + 'static,
 {
@@ -91,15 +89,26 @@ where
         Poll::Ready(Ok(()))
     }
 
-    fn call(&mut self, mut req: ClientConnectionInfo) -> Self::Future {
+    fn call(&mut self, _: ()) -> Self::Future {
         let rsa_crypto_fetcher = self.rsa_crypto_fetcher.clone();
         let proxy_addresses = self.proxy_addresses.clone();
         let configuration = self.confiugration.clone();
+        let connection_id = self.id.clone();
+        let mut client_stream = match std::mem::take(&mut self.client_stream) {
+            None => {
+                return Box::pin(future::err(anyhow!(
+                    "Connection [{}] fail to take client stream, can not handle connection stream.",
+                    connection_id
+                )))
+            },
+            Some(v) => v,
+        };
+        let client_address = self.client_address;
         Box::pin(async move {
             let mut socks5_flow_service = ServiceBuilder::new().service(Socks5FlowService::new(rsa_crypto_fetcher.clone()));
             let mut http_flow_service = ServiceBuilder::new().service(HttpFlowService::new(rsa_crypto_fetcher));
             let mut framed = Framed::with_capacity(
-                &mut req.client_stream,
+                &mut client_stream,
                 SwitchClientProtocolDecoder,
                 configuration.message_framed_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
             );
@@ -114,9 +123,10 @@ where
                     ready_and_call_service(
                         &mut http_flow_service,
                         HttpFlowRequest {
+                            connection_id,
                             proxy_addresses,
-                            client_stream: req.client_stream,
-                            client_address: req.client_address,
+                            client_stream,
+                            client_address,
                             buffer,
                             configuration,
                         },
@@ -129,9 +139,10 @@ where
                     let flow_result = ready_and_call_service(
                         &mut socks5_flow_service,
                         Socks5FlowRequest {
+                            connection_id,
                             proxy_addresses,
-                            client_stream: req.client_stream,
-                            client_address: req.client_address,
+                            client_stream,
+                            client_address,
                             buffer,
                             configuration,
                         },
@@ -238,6 +249,7 @@ pub(crate) struct TcpRelayServiceRequest<T>
 where
     T: RsaCryptoFetcher,
 {
+    pub connection_id: String,
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,
     pub message_framed_write: MessageFramedWrite<T>,
@@ -310,6 +322,27 @@ where
             let client_address = request.client_address;
             let (client_stream_read_half, client_stream_write_half) = client_stream.into_split();
             let configuration_clone = request.configuration.clone();
+            let connection_id_clone = request.connection_id.clone();
+            tokio::spawn(async move {
+                if let Err((_message_framed_read, mut client_stream_write_half, original_error)) = Self::relay_proxy_to_client(
+                    connection_id_clone,
+                    request.proxy_address,
+                    target_address_t2a,
+                    message_framed_read,
+                    client_stream_write_half,
+                    request.configuration,
+                )
+                .await
+                {
+                    error!("Error happen when relay data from proxy to client, error: {:#?}", original_error);
+                    if let Err(e) = client_stream_write_half.flush().await {
+                        error!("Fail to flush client stream writer when relay data from proxy to client have error:{:#?}", e);
+                    };
+                    if let Err(e) = client_stream_write_half.shutdown().await {
+                        error!("Fail to shutdown client stream writer when relay data from proxy to client have error:{:#?}", e);
+                    };
+                }
+            });
             tokio::spawn(async move {
                 if let Err((mut message_framed_write, _client_stream_read_half, original_error)) = Self::relay_client_to_proxy(
                     request.init_data,
@@ -331,25 +364,7 @@ where
                     };
                 }
             });
-            tokio::spawn(async move {
-                if let Err((_message_framed_read, mut client_stream_write_half, original_error)) = Self::relay_proxy_to_client(
-                    request.proxy_address,
-                    target_address_t2a,
-                    message_framed_read,
-                    client_stream_write_half,
-                    request.configuration,
-                )
-                .await
-                {
-                    error!("Error happen when relay data from proxy to client, error: {:#?}", original_error);
-                    if let Err(e) = client_stream_write_half.flush().await {
-                        error!("Fail to flush client stream writer when relay data from proxy to client have error:{:#?}", e);
-                    };
-                    if let Err(e) = client_stream_write_half.shutdown().await {
-                        error!("Fail to shutdown client stream writer when relay data from proxy to client have error:{:#?}", e);
-                    };
-                }
-            });
+
             Ok(TcpRelayServiceResult { client_address })
         })
     }
@@ -489,14 +504,16 @@ where
     }
 
     async fn relay_proxy_to_client(
-        read_from_address: Option<SocketAddr>, _target_address_t2a: NetAddress, mut message_framed_read: MessageFramedRead<T>,
+        connection_id: String, read_from_address: Option<SocketAddr>, _target_address_t2a: NetAddress, mut message_framed_read: MessageFramedRead<T>,
         mut client_stream_write_half: OwnedWriteHalf, configuration: Arc<AgentConfig>,
     ) -> Result<(), (MessageFramedRead<T>, OwnedWriteHalf, anyhow::Error)> {
         let mut read_proxy_message_service: ReadMessageService = Default::default();
         loop {
+            let connection_id = connection_id.clone();
             let read_proxy_message_result = ready_and_call_service(
                 &mut read_proxy_message_service,
                 ReadMessageServiceRequest {
+                    connection_id,
                     message_framed_read,
                     read_from_address,
                 },

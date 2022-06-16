@@ -28,6 +28,7 @@ pub(crate) struct TcpConnectServiceRequest<T>
 where
     T: RsaCryptoFetcher,
 {
+    pub connection_id: String,
     pub message_framed_read: MessageFramedRead<T>,
     pub message_framed_write: MessageFramedWrite<T>,
     pub agent_address: SocketAddr,
@@ -72,16 +73,17 @@ where
     }
 
     fn call(&mut self, req: TcpConnectServiceRequest<T>) -> Self::Future {
+        let connection_id = req.connection_id;
         Box::pin(async move {
             let mut read_agent_message_service: ReadMessageService = Default::default();
             let mut write_proxy_message_service = WriteMessageService::default();
             let mut connect_to_target_service =
                 ConnectToTargetService::new(req.configuration.target_stream_so_linger().unwrap_or(DEFAULT_TARGET_STREAM_SO_LINGER));
-
             let mut payload_encryption_type_select_service: PayloadEncryptionTypeSelectService = Default::default();
             let read_agent_message_result = ready_and_call_service(
                 &mut read_agent_message_service,
                 ReadMessageServiceRequest {
+                    connection_id: connection_id.clone(),
                     message_framed_read: req.message_framed_read,
                     read_from_address: Some(req.agent_address),
                 },
@@ -123,7 +125,10 @@ where
                 .await;
                 let ConnectToTargetServiceResult { target_stream } = match connect_to_target_result {
                     Err(e) => {
-                        error!("Fail connect to target {:#?} because of error: {:#?}", target_address, e);
+                        error!(
+                            "Connection [{}] fail connect to target {:#?} because of error: {:#?}",
+                            connection_id, target_address, e
+                        );
                         let connect_fail_payload = MessagePayload::new(
                             source_address,
                             target_address,
@@ -155,7 +160,10 @@ where
                     },
                     Ok(v) => v,
                 };
-                debug!("Agent {}, success connect to target {:#?}", req.agent_address, target_address);
+                debug!(
+                    "Connection [{}] agent address: {}, success connect to target {:#?}",
+                    connection_id, req.agent_address, target_address
+                );
                 let connect_success_payload = MessagePayload::new(
                     source_address.clone(),
                     target_address.clone(),

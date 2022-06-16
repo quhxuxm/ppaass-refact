@@ -16,7 +16,7 @@ use common::ready_and_call_service;
 
 use crate::{
     config::ProxyConfig,
-    service::{AgentConnectionInfo, HandleAgentConnectionService, ProxyRsaCryptoFetcher},
+    service::{AgentConnection, ProxyRsaCryptoFetcher},
 };
 
 const DEFAULT_SERVER_PORT: u16 = 80;
@@ -79,9 +79,14 @@ impl ProxyServer {
             let proxy_rsa_crypto_fetcher = proxy_rsa_crypto_fetcher.clone();
             let configuration = self.configuration.clone();
             tokio::spawn(async move {
-                let mut handle_agent_connection_service = HandleAgentConnectionService::new(proxy_rsa_crypto_fetcher.clone(), configuration);
-                if let Err(e) = ready_and_call_service(&mut handle_agent_connection_service, AgentConnectionInfo { agent_stream, agent_address }).await {
-                    error!("Error happen when handle agent connection [{}], error:{:#?}", agent_address, e)
+                let mut agent_connection = AgentConnection::new(proxy_rsa_crypto_fetcher.clone(), configuration, agent_stream, agent_address);
+                if let Err(e) = ready_and_call_service(&mut agent_connection, ()).await {
+                    error!(
+                        "Error happen when handle agent connection: [{}], agent address:[{}], error:{:#?}",
+                        agent_connection.get_id(),
+                        agent_address,
+                        e
+                    )
                 }
             });
         }

@@ -10,15 +10,15 @@ use std::{
     task::{Context, Poll},
 };
 
-use futures::future::BoxFuture;
+use futures::future::{self, BoxFuture};
 use tokio::net::TcpStream;
 
+use anyhow::anyhow;
+use common::{generate_uuid, ready_and_call_service, PpaassError, PrepareMessageFramedService, RsaCrypto, RsaCryptoFetcher};
 use tower::util::BoxCloneService;
 use tower::ServiceBuilder;
 use tower::{service_fn, Service};
 use tracing::{debug, error};
-
-use common::{ready_and_call_service, PpaassError, PrepareMessageFramedService, RsaCrypto, RsaCryptoFetcher};
 
 use crate::service::tcp::relay::{TcpRelayService, TcpRelayServiceRequest};
 use crate::{
@@ -93,38 +93,36 @@ impl RsaCryptoFetcher for ProxyRsaCryptoFetcher {
     }
 }
 
-pub(crate) struct AgentConnectionInfo {
-    pub agent_stream: TcpStream,
-    pub agent_address: SocketAddr,
-}
-
-impl Debug for AgentConnectionInfo {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "AgentConnectionInfo: agent_address={}", self.agent_address)
-    }
-}
-
 #[derive(Debug)]
-pub(crate) struct HandleAgentConnectionService<T>
+pub(crate) struct AgentConnection<T>
 where
     T: RsaCryptoFetcher,
 {
+    id: String,
     rsa_crypto_fetch: Arc<T>,
     configuration: Arc<ProxyConfig>,
+    agent_stream: Option<TcpStream>,
+    agent_address: SocketAddr,
 }
-impl<T> HandleAgentConnectionService<T>
+impl<T> AgentConnection<T>
 where
     T: RsaCryptoFetcher,
 {
-    pub fn new(rsa_crypto_fetch: Arc<T>, configuration: Arc<ProxyConfig>) -> Self {
+    pub fn new(rsa_crypto_fetch: Arc<T>, configuration: Arc<ProxyConfig>, agent_stream: TcpStream, agent_address: SocketAddr) -> Self {
         Self {
+            id: generate_uuid(),
             rsa_crypto_fetch,
             configuration,
+            agent_stream: Some(agent_stream),
+            agent_address,
         }
+    }
+    pub fn get_id(&self) -> &str {
+        self.id.as_str()
     }
 }
 
-impl<T> Service<AgentConnectionInfo> for HandleAgentConnectionService<T>
+impl<T> Service<()> for AgentConnection<T>
 where
     T: RsaCryptoFetcher + Send + Sync + 'static,
 {
@@ -136,33 +134,50 @@ where
         Poll::Ready(Ok(()))
     }
 
-    fn call(&mut self, req: AgentConnectionInfo) -> Self::Future {
+    fn call(&mut self, _: ()) -> Self::Future {
+        let connection_id = self.id.clone();
+        debug!("Begin to handle agent connection: {}", connection_id);
         let rsa_crypto_fetch = self.rsa_crypto_fetch.clone();
         let message_framed_buffer_size = self.configuration.message_framed_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE);
         let compress = self.configuration.compress().unwrap_or(true);
         let configuration = self.configuration.clone();
+        let agent_stream = match std::mem::take(&mut self.agent_stream) {
+            None => {
+                return Box::pin(future::err(anyhow!(
+                    "Connection [{}] fail to take agent stream, can not handle connection stream.",
+                    connection_id
+                )))
+            },
+            Some(v) => v,
+        };
+        let agent_address_clone = self.agent_address.clone();
+        let agent_address = self.agent_address;
         Box::pin(async move {
             let mut prepare_message_frame_service =
                 ServiceBuilder::new().service(PrepareMessageFramedService::new(message_framed_buffer_size, compress, rsa_crypto_fetch.clone()));
             let mut tcp_connect_service: TcpConnectService = Default::default();
             let mut tcp_relay_service: TcpRelayService<T> = Default::default();
-            let framed_result = ready_and_call_service(&mut prepare_message_frame_service, req.agent_stream).await?;
+            let framed_result = ready_and_call_service(&mut prepare_message_frame_service, agent_stream).await?;
+            debug!("Connection [{}] is going to handle tcp connect.", connection_id);
             let tcp_connect_result = ready_and_call_service(
                 &mut tcp_connect_service,
                 TcpConnectServiceRequest {
+                    connection_id: connection_id.clone(),
                     message_framed_read: framed_result.message_framed_read,
                     message_framed_write: framed_result.message_framed_write,
-                    agent_address: req.agent_address,
+                    agent_address: agent_address_clone,
                     configuration: configuration.clone(),
                 },
             )
             .await?;
+            debug!("Connection [{}] is going to handle tcp relay.", connection_id);
             ready_and_call_service(
                 &mut tcp_relay_service,
                 TcpRelayServiceRequest {
+                    connection_id: connection_id.clone(),
                     message_framed_read: tcp_connect_result.message_framed_read,
                     message_framed_write: tcp_connect_result.message_framed_write,
-                    agent_address: req.agent_address,
+                    agent_address,
                     target_stream: tcp_connect_result.target_stream,
                     source_address: tcp_connect_result.source_address,
                     target_address: tcp_connect_result.target_address,
@@ -172,6 +187,7 @@ where
                 },
             )
             .await?;
+            debug!("Connection [{}] is finish relay.", connection_id);
             Ok(())
         })
     }
