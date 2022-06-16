@@ -135,6 +135,7 @@ where
             });
             tokio::spawn(async move {
                 if let Err((mut message_framed_write, _target_stream_read, original_error)) = Self::relay_target_to_proxy(
+                    connection_id.clone(),
                     message_framed_write,
                     agent_tcp_connect_message_id,
                     user_token,
@@ -252,11 +253,12 @@ where
     }
 
     async fn relay_target_to_proxy(
-        mut message_framed_write: MessageFramedWrite<T>, agent_tcp_connect_message_id: String, user_token: String,
+        connection_id: String, mut message_framed_write: MessageFramedWrite<T>, agent_tcp_connect_message_id: String, user_token: String,
         agent_connect_message_source_address: NetAddress, agent_connect_message_target_address: NetAddress, mut target_stream_read: OwnedReadHalf,
         configuration: Arc<ProxyConfig>,
     ) -> Result<(), (MessageFramedWrite<T>, OwnedReadHalf, anyhow::Error)> {
         loop {
+            // let connection_id = connection_id.clone();
             let mut write_proxy_message_service: WriteMessageService = Default::default();
             let mut payload_encryption_type_select_service: PayloadEncryptionTypeSelectService = Default::default();
             let target_buffer_size = configuration.target_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE);
@@ -322,6 +324,7 @@ where
                         user_token: user_token.clone(),
                         payload_encryption_type,
                         message_payload: Some(proxy_message_payload),
+                        connection_id: Some(connection_id.clone()),
                     },
                 )
                 .await

@@ -1,8 +1,11 @@
 #![allow(unused)]
-use std::fmt::{Debug, Display, Formatter};
 use std::net::{IpAddr, SocketAddr};
 use std::ops::Deref;
 use std::sync::Arc;
+use std::{
+    fmt::{Debug, Display, Formatter},
+    mem::size_of,
+};
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use pretty_hex::*;
@@ -429,6 +432,8 @@ pub struct Message {
     pub id: String,
     /// The message id that this message reference to
     pub ref_id: Option<String>,
+    /// The connection id that initial this message
+    pub connection_id: Option<String>,
     /// The user token
     pub user_token: String,
     /// The payload encryption type
@@ -450,7 +455,7 @@ impl Debug for Message {
 }
 
 impl Message {
-    pub fn new_random_id<R, U, PE, P>(ref_id: Option<R>, user_token: U, payload_encryption_type: PE, payload: Option<P>) -> Self
+    pub fn new_random_id<R, U, PE, P>(ref_id: Option<R>, connection_id: Option<String>, user_token: U, payload_encryption_type: PE, payload: Option<P>) -> Self
     where
         R: Into<String>,
         U: Into<String>,
@@ -463,6 +468,7 @@ impl Message {
                 None => None,
                 Some(v) => Some(v.into()),
             },
+            connection_id,
             user_token: user_token.into(),
             payload_encryption_type: payload_encryption_type.into(),
             payload: match payload {
@@ -471,7 +477,7 @@ impl Message {
             },
         }
     }
-    pub fn new<I, R, U, PE, P>(id: I, ref_id: Option<R>, user_token: U, payload_encryption_type: PE, payload: Option<P>) -> Self
+    pub fn new<I, R, U, PE, P>(id: I, ref_id: Option<R>, connection_id: Option<String>, user_token: U, payload_encryption_type: PE, payload: Option<P>) -> Self
     where
         I: Into<String>,
         R: Into<String>,
@@ -485,6 +491,7 @@ impl Message {
                 None => None,
                 Some(v) => Some(v.into()),
             },
+            connection_id,
             user_token: user_token.into(),
             payload_encryption_type: payload_encryption_type.into(),
             payload: match payload {
@@ -508,7 +515,7 @@ impl TryFrom<Bytes> for Message {
     type Error = PpaassError;
 
     fn try_from(mut value: Bytes) -> Result<Self, Self::Error> {
-        if value.remaining() < 4 {
+        if value.remaining() < size_of::<u32>() {
             error!("Fail to parse message because of no remaining");
             return Err(PpaassError::CodecError);
         };
@@ -525,7 +532,7 @@ impl TryFrom<Bytes> for Message {
                 return Err(PpaassError::CodecError);
             },
         };
-        if value.remaining() < 8 {
+        if value.remaining() < size_of::<u32>() {
             error!("Fail to parse message because of no remaining");
             return Err(PpaassError::CodecError);
         };
@@ -542,7 +549,20 @@ impl TryFrom<Bytes> for Message {
                 return Err(PpaassError::CodecError);
             },
         };
-        if value.remaining() < 8 {
+        let connection_id_length = value.get_u32() as usize;
+        if value.remaining() < connection_id_length {
+            error!("Fail to parse message because of no remaining");
+            return Err(PpaassError::CodecError);
+        };
+        let connection_id_bytes = value.copy_to_bytes(connection_id_length as usize);
+        let connection_id = match String::from_utf8(connection_id_bytes.to_vec()) {
+            Ok(v) => v,
+            Err(e) => {
+                error!("Fail to parse message because of error: {:#?}", e);
+                return Err(PpaassError::CodecError);
+            },
+        };
+        if value.remaining() < size_of::<u64>() {
             error!("Fail to parse message because of no remaining");
             return Err(PpaassError::CodecError);
         };
@@ -583,6 +603,7 @@ impl TryFrom<Bytes> for Message {
         Ok(Self {
             id,
             ref_id: Some(ref_id),
+            connection_id: Some(connection_id),
             user_token,
             payload_encryption_type,
             payload,
@@ -596,6 +617,15 @@ impl From<Message> for Bytes {
         result.put_u32(value.id.len() as u32);
         result.put_slice(value.id.as_bytes());
         match value.ref_id {
+            Some(v) => {
+                result.put_u32(v.len() as u32);
+                result.put_slice(v.as_bytes());
+            },
+            None => {
+                result.put_u32(0);
+            },
+        }
+        match value.connection_id {
             Some(v) => {
                 result.put_u32(v.len() as u32);
                 result.put_slice(v.as_bytes());

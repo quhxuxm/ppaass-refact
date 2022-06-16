@@ -212,6 +212,7 @@ where
             let message_framed_write = match ready_and_call_service(
                 &mut write_agent_message_service,
                 WriteMessageServiceRequest {
+                    connection_id: Some(request.connection_id.clone()),
                     message_framed_write: framed_result.message_framed_write,
                     payload_encryption_type,
                     user_token: request.configuration.user_token().clone().unwrap(),

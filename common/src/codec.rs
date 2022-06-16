@@ -171,6 +171,7 @@ where
         let Message {
             id,
             ref_id,
+            connection_id,
             user_token,
             payload_encryption_type,
             payload,
@@ -193,7 +194,7 @@ where
                 )
             },
         };
-        let message_to_encode = Message::new(id, ref_id, user_token, encrypted_payload_encryption_type, encrypted_payload);
+        let message_to_encode = Message::new(id, ref_id, connection_id, user_token, encrypted_payload_encryption_type, encrypted_payload);
         let result_bytes: Bytes = message_to_encode.into();
         let result_bytes = if self.compress {
             Bytes::from(compress(result_bytes.chunk(), None, true)?)

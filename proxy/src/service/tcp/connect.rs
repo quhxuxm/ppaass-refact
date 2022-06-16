@@ -143,6 +143,7 @@ where
                                 payload_encryption_type,
                                 user_token: user_token.clone(),
                                 ref_id: Some(message_id),
+                                connection_id: Some(connection_id),
                             },
                         )
                         .await
@@ -178,6 +179,7 @@ where
                         payload_encryption_type,
                         user_token: user_token.clone(),
                         ref_id: Some(message_id.clone()),
+                        connection_id: Some(connection_id),
                     },
                 )
                 .await

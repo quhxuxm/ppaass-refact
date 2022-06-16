@@ -345,6 +345,7 @@ where
             });
             tokio::spawn(async move {
                 if let Err((mut message_framed_write, _client_stream_read_half, original_error)) = Self::relay_client_to_proxy(
+                    request.connection_id.clone(),
                     request.init_data,
                     request.connect_response_message_id,
                     message_framed_write,
@@ -375,8 +376,8 @@ where
     T: RsaCryptoFetcher + Send + Sync + 'static,
 {
     async fn relay_client_to_proxy(
-        init_data: Option<Vec<u8>>, connect_response_message_id: String, mut message_framed_write: MessageFramedWrite<T>, source_address_a2t: NetAddress,
-        target_address_a2t: NetAddress, mut client_stream_read_half: OwnedReadHalf, configuration: Arc<AgentConfig>,
+        connection_id: String, init_data: Option<Vec<u8>>, connect_response_message_id: String, mut message_framed_write: MessageFramedWrite<T>,
+        source_address_a2t: NetAddress, target_address_a2t: NetAddress, mut client_stream_read_half: OwnedReadHalf, configuration: Arc<AgentConfig>,
     ) -> Result<(), (MessageFramedWrite<T>, OwnedReadHalf, anyhow::Error)> {
         let mut payload_encryption_type_select_service: PayloadEncryptionTypeSelectService = Default::default();
         let mut write_agent_message_service: WriteMessageService = Default::default();
@@ -400,6 +401,7 @@ where
             let write_agent_message_result = ready_and_call_service(
                 &mut write_agent_message_service,
                 WriteMessageServiceRequest {
+                    connection_id: Some(connection_id.clone()),
                     message_framed_write,
                     ref_id: Some(connect_response_message_id.clone()),
                     user_token: configuration.user_token().clone().unwrap(),
@@ -476,6 +478,7 @@ where
                 let write_agent_message_result = ready_and_call_service(
                     &mut write_agent_message_service,
                     WriteMessageServiceRequest {
+                        connection_id: Some(connection_id.clone()),
                         message_framed_write,
                         ref_id: Some(connect_response_message_id.clone()),
                         user_token: configuration.user_token().clone().unwrap(),

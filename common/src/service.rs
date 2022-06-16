@@ -89,6 +89,7 @@ where
     pub message_framed_write: MessageFramedWrite<T>,
     pub message_payload: Option<MessagePayload>,
     pub ref_id: Option<String>,
+    pub connection_id: Option<String>,
     pub user_token: String,
     pub payload_encryption_type: PayloadEncryptionType,
 }
@@ -153,9 +154,23 @@ where
     fn call(&mut self, req: WriteMessageServiceRequest<T>) -> Self::Future {
         Box::pin(async move {
             let message = match req.message_payload {
-                None => Message::new(generate_uuid(), req.ref_id, req.user_token, req.payload_encryption_type, None::<Bytes>),
+                None => Message::new(
+                    generate_uuid(),
+                    req.ref_id,
+                    req.connection_id,
+                    req.user_token,
+                    req.payload_encryption_type,
+                    None::<Bytes>,
+                ),
                 Some(payload) => {
-                    let message = Message::new(generate_uuid(), req.ref_id, req.user_token, req.payload_encryption_type, Some(payload));
+                    let message = Message::new(
+                        generate_uuid(),
+                        req.ref_id,
+                        req.connection_id,
+                        req.user_token,
+                        req.payload_encryption_type,
+                        Some(payload),
+                    );
                     debug!("Write message to remote:\n\n{:?}\n\n", message);
                     trace!("Write message payload to remote:\n\n{:#?}\n\n", message.payload);
                     message
