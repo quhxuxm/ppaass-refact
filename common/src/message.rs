@@ -151,13 +151,13 @@ impl TryFrom<Bytes> for NetAddress {
     }
 }
 
-impl TryFrom<NetAddress> for SocketAddr {
+impl TryFrom<NetAddress> for Vec<SocketAddr> {
     type Error = PpaassError;
     fn try_from(net_address: NetAddress) -> Result<Self, PpaassError> {
         match net_address {
             NetAddress::IpV4(ip, port) => {
                 let socket_addr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(ip[0], ip[1], ip[2], ip[3]), port));
-                Ok(socket_addr)
+                Ok(vec![socket_addr])
             },
             NetAddress::IpV6(ip, port) => {
                 let mut ip_cursor = Cursor::new(ip);
@@ -176,12 +176,11 @@ impl TryFrom<NetAddress> for SocketAddr {
                     0,
                     0,
                 ));
-                Ok(socket_addr)
+                Ok(vec![socket_addr])
             },
             NetAddress::Domain(host, port) => {
                 let addresses = format!("{}:{}", host, port).to_socket_addrs()?.collect::<Vec<_>>();
-                let addr = addresses.into_iter().next().ok_or(PpaassError::CodecError)?;
-                Ok(addr)
+                Ok(addresses)
             },
         }
     }

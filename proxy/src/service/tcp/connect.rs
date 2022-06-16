@@ -90,7 +90,7 @@ impl TcpConnectProcess {
             })
             .await?;
             let connect_to_target_result = TcpConnector::connect(TcpConnectRequest {
-                target_addresses: vec![target_address.clone().try_into()?],
+                target_addresses: target_address.clone().try_into()?,
                 target_stream_so_linger,
             })
             .await;
