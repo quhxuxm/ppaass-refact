@@ -19,8 +19,11 @@ use common::{
     WriteMessageFramedError, WriteMessageFramedRequest, WriteMessageFramedResult,
 };
 
-use crate::service::http::{HttpFlow, HttpFlowRequest};
 use crate::service::socks5::{Socks5FlowProcessor, Socks5FlowRequest};
+use crate::service::{
+    http::{HttpFlow, HttpFlowRequest},
+    socks5::Socks5FlowResult,
+};
 use crate::{
     codec::{Protocol, SwitchClientProtocolDecoder},
     config::AgentConfig,
@@ -89,7 +92,7 @@ impl ClientConnection {
             },
             Some(Ok(Protocol::Socks5)) => {
                 let FramedParts { read_buf: buffer, .. } = framed.into_parts();
-                Socks5FlowProcessor::exec(
+                let Socks5FlowResult { client_address } = Socks5FlowProcessor::exec(
                     Socks5FlowRequest {
                         connection_id: connection_id.clone(),
                         proxy_addresses,
