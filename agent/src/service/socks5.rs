@@ -17,7 +17,7 @@ use crate::{
 
 use self::{
     auth::Socks5AuthenticateFlowResult,
-    init::{Socks5InitFlowResult, Socks5InitFlowResultRelayType, Socks5UdpRelayFlow, Socks5UdpRelayFlowRequest, Socks5UdpRelayFlowResponse},
+    init::{Socks5InitFlowResult, Socks5InitFlowResultRelayType, Socks5UdpRelayFlow, Socks5UdpRelayFlowRequest, Socks5UdpRelayFlowResult},
 };
 
 use super::common::TcpRelayFlowResult;
@@ -103,7 +103,7 @@ impl Socks5FlowProcessor {
                 Ok(Socks5FlowResult { client_address })
             },
             Socks5InitFlowResultRelayType::Udp(port) => {
-                let Socks5UdpRelayFlowResponse { .. } = Socks5UdpRelayFlow::exec(
+                let Socks5UdpRelayFlowResult { .. } = Socks5UdpRelayFlow::exec(
                     Socks5UdpRelayFlowRequest {
                         port,
                         connection_id,
@@ -120,7 +120,7 @@ impl Socks5FlowProcessor {
                     configuration,
                 )
                 .await?;
-                info!("Start socks5 udp relay for client: {:?}", client_address);
+                info!("Start socks5 udp relay for client: {:?} on udp port: {}", client_address, port);
                 Ok(Socks5FlowResult { client_address })
             },
         }

@@ -20,15 +20,13 @@ where
     pub init_data: Option<Vec<u8>>,
     pub proxy_address: Option<SocketAddr>,
 }
-pub struct Socks5UdpRelayFlowResponse {
+pub struct Socks5UdpRelayFlowResult {
     port: u16,
 }
 pub struct Socks5UdpRelayFlow;
 
 impl Socks5UdpRelayFlow {
-    pub async fn exec<T>(
-        request: Socks5UdpRelayFlowRequest<T>, rsa_crypto_fetcher: Arc<T>, configuration: Arc<AgentConfig>,
-    ) -> Result<Socks5UdpRelayFlowResponse>
+    pub async fn exec<T>(request: Socks5UdpRelayFlowRequest<T>, rsa_crypto_fetcher: Arc<T>, configuration: Arc<AgentConfig>) -> Result<Socks5UdpRelayFlowResult>
     where
         T: RsaCryptoFetcher,
     {

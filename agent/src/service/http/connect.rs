@@ -58,7 +58,6 @@ where
     pub init_data: Option<Vec<u8>>,
     pub message_framed_read: MessageFramedRead<T>,
     pub message_framed_write: MessageFramedWrite<T>,
-    pub message_id: String,
     pub source_address: NetAddress,
     pub target_address: NetAddress,
 }
@@ -215,7 +214,6 @@ impl HttpConnectFlow {
                 message_framed_read,
                 content:
                     Some(ReadMessageFramedResultContent {
-                        message_id,
                         message_payload:
                             Some(MessagePayload {
                                 target_address,
@@ -242,7 +240,6 @@ impl HttpConnectFlow {
                         init_data: None,
                         message_framed_read,
                         message_framed_write,
-                        message_id,
                         target_address,
                         source_address,
                     });
@@ -254,7 +251,6 @@ impl HttpConnectFlow {
                     init_data,
                     message_framed_read,
                     message_framed_write,
-                    message_id,
                     target_address,
                     source_address,
                 });

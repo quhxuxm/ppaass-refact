@@ -14,7 +14,7 @@ use tokio_util::codec::{Framed, FramedParts};
 use tracing::{debug, error};
 
 use crate::service::socks5::init::{
-    tcp_connect::Socks5TcpConnectFlowResponse,
+    tcp_connect::Socks5TcpConnectFlowResult,
     udp_associate::{Socks5UdpAssociateFlow, Socks5UdpAssociateFlowRequest, Socks5UdpAssociateFlowResponse},
 };
 
@@ -105,7 +105,7 @@ impl Socks5InitFlow {
                         send_socks5_init_failure(&mut socks5_init_framed).await?;
                         Err(e)
                     },
-                    Ok(Socks5TcpConnectFlowResponse {
+                    Ok(Socks5TcpConnectFlowResult {
                         message_framed_read,
                         message_framed_write,
                         client_address,

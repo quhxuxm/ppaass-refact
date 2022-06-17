@@ -33,7 +33,7 @@ pub(crate) struct Socks5TcpConnectFlowRequest {
     pub dest_address: Socks5Addr,
 }
 
-pub(crate) struct Socks5TcpConnectFlowResponse<T>
+pub(crate) struct Socks5TcpConnectFlowResult<T>
 where
     T: RsaCryptoFetcher,
 {
@@ -48,7 +48,7 @@ where
 impl Socks5TcpConnectFlow {
     pub async fn exec<T>(
         request: Socks5TcpConnectFlowRequest, rsa_crypto_fetcher: Arc<T>, configuration: Arc<AgentConfig>,
-    ) -> Result<Socks5TcpConnectFlowResponse<T>>
+    ) -> Result<Socks5TcpConnectFlowResult<T>>
     where
         T: RsaCryptoFetcher,
     {
@@ -134,7 +134,7 @@ impl Socks5TcpConnectFlow {
                     "Connection [{}] tcp connect process success, response message id: {}",
                     connection_id, message_id
                 );
-                Ok(Socks5TcpConnectFlowResponse {
+                Ok(Socks5TcpConnectFlowResult {
                     client_address,
                     message_framed_read,
                     message_framed_write,

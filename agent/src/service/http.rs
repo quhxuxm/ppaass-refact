@@ -53,7 +53,6 @@ impl HttpFlow {
             init_data,
             message_framed_read,
             message_framed_write,
-            message_id,
             source_address,
             target_address,
         } = HttpConnectFlow::exec(
