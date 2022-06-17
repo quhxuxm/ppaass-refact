@@ -85,6 +85,7 @@ impl TcpRelayProcess {
             if let Err(TcpRelayP2TError {
                 mut target_stream_write,
                 source,
+                connection_closed,
                 ..
             }) = Self::relay_proxy_to_target(
                 connection_id_clone.clone(),
@@ -99,18 +100,20 @@ impl TcpRelayProcess {
                     "Connection [{}] error happen when relay data from proxy to target, error: {:#?}",
                     connection_id_clone, source
                 );
-                if let Err(e) = target_stream_write.flush().await {
-                    error!(
-                        "Connection [{}] fail to flush target stream writer when relay data from proxy to target have error:{:#?}",
-                        connection_id_clone, e
-                    );
-                };
-                if let Err(e) = target_stream_write.shutdown().await {
-                    error!(
-                        "Connection [{}] fail to shutdown target stream writer when relay data from proxy to target have error:{:#?}",
-                        connection_id_clone, e
-                    );
-                };
+                if !connection_closed {
+                    if let Err(e) = target_stream_write.flush().await {
+                        error!(
+                            "Connection [{}] fail to flush target stream writer when relay data from proxy to target have error:{:#?}",
+                            connection_id_clone, e
+                        );
+                    };
+                    if let Err(e) = target_stream_write.shutdown().await {
+                        error!(
+                            "Connection [{}] fail to shutdown target stream writer when relay data from proxy to target have error:{:#?}",
+                            connection_id_clone, e
+                        );
+                    };
+                }
             }
         });
         tokio::spawn(async move {
@@ -135,13 +138,13 @@ impl TcpRelayProcess {
                     "Connection [{}] error happen when relay data from target to proxy, error: {:#?}",
                     connection_id, source
                 );
-                if let Err(e) = message_framed_write.flush().await {
-                    error!(
-                        "Connection [{}] fail to flush proxy writer when relay data from target to proxy have error:{:#?}",
-                        connection_id, e
-                    );
-                };
                 if !connection_closed {
+                    if let Err(e) = message_framed_write.flush().await {
+                        error!(
+                            "Connection [{}] fail to flush proxy writer when relay data from target to proxy have error:{:#?}",
+                            connection_id, e
+                        );
+                    };
                     if let Err(e) = message_framed_write.close().await {
                         error!(
                             "Connection [{}] fail to close proxy writer when relay data from target to proxy have error:{:#?}",
