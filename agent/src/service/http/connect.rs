@@ -11,7 +11,7 @@ use bytes::{Bytes, BytesMut};
 use common::{
     generate_uuid, AgentMessagePayloadTypeValue, MessageFramedGenerator, MessageFramedRead, MessageFramedReader, MessageFramedWrite, MessageFramedWriter,
     MessagePayload, NetAddress, PayloadEncryptionTypeSelectRequest, PayloadEncryptionTypeSelectResult, PayloadEncryptionTypeSelector, PayloadType, PpaassError,
-    ProxyMessagePayloadTypeValue, ReadMessageFramedError, ReadMessageFramedRequest, ReadMessageFramedResult, ReadMessageServiceResultContent, RsaCryptoFetcher,
+    ProxyMessagePayloadTypeValue, ReadMessageFramedError, ReadMessageFramedRequest, ReadMessageFramedResult, ReadMessageFramedResultContent, RsaCryptoFetcher,
     TcpConnectRequest, TcpConnectResult, TcpConnector, WriteMessageFramedError, WriteMessageFramedRequest, WriteMessageFramedResult,
 };
 
@@ -214,7 +214,7 @@ impl HttpConnectFlow {
             Ok(ReadMessageFramedResult {
                 message_framed_read,
                 content:
-                    Some(ReadMessageServiceResultContent {
+                    Some(ReadMessageFramedResultContent {
                         message_id,
                         message_payload:
                             Some(MessagePayload {

@@ -165,7 +165,7 @@ where
     }
 }
 
-pub struct ReadMessageServiceResultContent {
+pub struct ReadMessageFramedResultContent {
     pub message_id: String,
     pub message_payload: Option<MessagePayload>,
     pub user_token: String,
@@ -176,7 +176,7 @@ where
     T: RsaCryptoFetcher,
 {
     pub message_framed_read: MessageFramedRead<T>,
-    pub content: Option<ReadMessageServiceResultContent>,
+    pub content: Option<ReadMessageFramedResultContent>,
 }
 
 pub struct ReadMessageFramedError<T>
@@ -219,7 +219,7 @@ impl MessageFramedReader {
                 });
             },
             Some(Ok(message)) => ReadMessageFramedResult {
-                content: Some(ReadMessageServiceResultContent {
+                content: Some(ReadMessageFramedResultContent {
                     message_id: message.id,
                     user_token: message.user_token,
                     message_payload: match message.payload {

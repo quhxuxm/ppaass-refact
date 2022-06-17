@@ -78,7 +78,6 @@ impl HttpFlow {
                 target_address,
                 source_address,
                 init_data,
-                connect_response_message_id: message_id,
                 proxy_address,
             },
             configuration,

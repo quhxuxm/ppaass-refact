@@ -15,7 +15,7 @@ use tracing::{debug, error};
 use common::{
     generate_uuid, AgentMessagePayloadTypeValue, MessageFramedRead, MessageFramedReader, MessageFramedWrite, MessageFramedWriter, MessagePayload, NetAddress,
     PayloadEncryptionTypeSelectRequest, PayloadEncryptionTypeSelectResult, PayloadEncryptionTypeSelector, PayloadType, PpaassError,
-    ProxyMessagePayloadTypeValue, ReadMessageFramedError, ReadMessageFramedRequest, ReadMessageFramedResult, ReadMessageServiceResultContent, RsaCryptoFetcher,
+    ProxyMessagePayloadTypeValue, ReadMessageFramedError, ReadMessageFramedRequest, ReadMessageFramedResult, ReadMessageFramedResultContent, RsaCryptoFetcher,
     WriteMessageFramedError, WriteMessageFramedRequest, WriteMessageFramedResult,
 };
 
@@ -209,7 +209,7 @@ impl TcpRelayProcess {
                 Ok(ReadMessageFramedResult {
                     message_framed_read,
                     content:
-                        Some(ReadMessageServiceResultContent {
+                        Some(ReadMessageFramedResultContent {
                             message_payload:
                                 Some(MessagePayload {
                                     payload_type: PayloadType::AgentPayload(AgentMessagePayloadTypeValue::TcpData),

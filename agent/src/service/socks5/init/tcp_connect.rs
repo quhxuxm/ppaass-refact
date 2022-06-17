@@ -8,13 +8,13 @@ use bytes::Bytes;
 
 use futures::SinkExt;
 
-use tracing::error;
+use tracing::{debug, error};
 
 use common::{
     generate_uuid, AgentMessagePayloadTypeValue, MessageFramedGenerateResult, MessageFramedGenerator, MessageFramedRead, MessageFramedReader,
     MessageFramedWrite, MessageFramedWriter, MessagePayload, NetAddress, PayloadEncryptionTypeSelectRequest, PayloadEncryptionTypeSelectResult,
     PayloadEncryptionTypeSelector, PayloadType, PpaassError, ProxyMessagePayloadTypeValue, ReadMessageFramedError, ReadMessageFramedRequest,
-    ReadMessageFramedResult, ReadMessageServiceResultContent, RsaCryptoFetcher, TcpConnectRequest, TcpConnectResult, TcpConnector, WriteMessageFramedError,
+    ReadMessageFramedResult, ReadMessageFramedResultContent, RsaCryptoFetcher, TcpConnectRequest, TcpConnectResult, TcpConnector, WriteMessageFramedError,
     WriteMessageFramedRequest, WriteMessageFramedResult,
 };
 
@@ -24,16 +24,16 @@ use crate::{
     service::common::{DEFAULT_BUFFER_SIZE, DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS},
 };
 
-pub(crate) struct Socks5TcpConnectService;
+pub(crate) struct Socks5TcpConnectFlow;
 
-pub(crate) struct Socks5TcpConnectServiceRequest {
+pub(crate) struct Socks5TcpConnectFlowRequest {
     pub connection_id: String,
     pub proxy_addresses: Arc<Vec<SocketAddr>>,
     pub client_address: SocketAddr,
     pub dest_address: Socks5Addr,
 }
 
-pub(crate) struct Socks5TcpConnectServiceResponse<T>
+pub(crate) struct Socks5TcpConnectFlowResponse<T>
 where
     T: RsaCryptoFetcher,
 {
@@ -43,17 +43,16 @@ where
     pub proxy_address: Option<SocketAddr>,
     pub source_address: NetAddress,
     pub target_address: NetAddress,
-    pub connect_response_message_id: String,
 }
 
-impl Socks5TcpConnectService {
+impl Socks5TcpConnectFlow {
     pub async fn exec<T>(
-        request: Socks5TcpConnectServiceRequest, rsa_crypto_fetcher: Arc<T>, configuration: Arc<AgentConfig>,
-    ) -> Result<Socks5TcpConnectServiceResponse<T>>
+        request: Socks5TcpConnectFlowRequest, rsa_crypto_fetcher: Arc<T>, configuration: Arc<AgentConfig>,
+    ) -> Result<Socks5TcpConnectFlowResponse<T>>
     where
         T: RsaCryptoFetcher,
     {
-        let Socks5TcpConnectServiceRequest {
+        let Socks5TcpConnectFlowRequest {
             connection_id,
             proxy_addresses,
             dest_address,
@@ -108,7 +107,7 @@ impl Socks5TcpConnectService {
             },
         };
         match MessageFramedReader::read(ReadMessageFramedRequest {
-            connection_id,
+            connection_id: connection_id.clone(),
             message_framed_read,
             read_from_address: framed_address,
         })
@@ -119,7 +118,7 @@ impl Socks5TcpConnectService {
             Ok(ReadMessageFramedResult {
                 message_framed_read,
                 content:
-                    Some(ReadMessageServiceResultContent {
+                    Some(ReadMessageFramedResultContent {
                         message_id,
                         message_payload:
                             Some(MessagePayload {
@@ -130,18 +129,24 @@ impl Socks5TcpConnectService {
                             }),
                         ..
                     }),
-            }) => Ok(Socks5TcpConnectServiceResponse {
-                client_address,
-                message_framed_read,
-                message_framed_write,
-                source_address,
-                target_address,
-                connect_response_message_id: message_id,
-                proxy_address: framed_address,
-            }),
+            }) => {
+                debug!(
+                    "Connection [{}] tcp connect process success, response message id: {}",
+                    connection_id, message_id
+                );
+                Ok(Socks5TcpConnectFlowResponse {
+                    client_address,
+                    message_framed_read,
+                    message_framed_write,
+                    source_address,
+                    target_address,
+                    proxy_address: framed_address,
+                })
+            },
             Ok(ReadMessageFramedResult {
                 content:
-                    Some(ReadMessageServiceResultContent {
+                    Some(ReadMessageFramedResultContent {
+                        message_id,
                         message_payload:
                             Some(MessagePayload {
                                 payload_type: PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::TcpConnectFail),
@@ -150,13 +155,42 @@ impl Socks5TcpConnectService {
                         ..
                     }),
                 ..
-            }) => Err(anyhow!(PpaassError::IoError {
-                source: std::io::Error::new(ErrorKind::ConnectionReset, "Fail connect to target from proxy",),
-            })),
-            Ok(ReadMessageFramedResult { .. }) => {
-                error!("Invalid payload type read from proxy.");
+            }) => {
+                error!(
+                    "Connection [{}] fail connect to target from proxy, response message id: {}",
+                    connection_id, message_id
+                );
+                Err(anyhow!(PpaassError::IoError {
+                    source: std::io::Error::new(
+                        ErrorKind::ConnectionReset,
+                        format!("Connection [{}] fail connect to target from proxy", connection_id)
+                    ),
+                }))
+            },
+            Ok(ReadMessageFramedResult {
+                content:
+                    Some(ReadMessageFramedResultContent {
+                        message_id,
+                        message_payload: Some(MessagePayload { payload_type, .. }),
+                        ..
+                    }),
+                ..
+            }) => {
+                error!(
+                    "Connection [{}] fail connect to target from proxy because of invalid payload type:{:?}, response message id: {}",
+                    connection_id, payload_type, message_id
+                );
                 Err(anyhow!(PpaassError::IoError {
                     source: std::io::Error::new(ErrorKind::InvalidData, "Invalid payload type read from proxy.",),
+                }))
+            },
+            Ok(ReadMessageFramedResult { .. }) => {
+                error!(
+                    "Connection [{}] fail connect to target from proxy because of unknown response content.",
+                    connection_id
+                );
+                Err(anyhow!(PpaassError::IoError {
+                    source: std::io::Error::new(ErrorKind::InvalidData, "Invalid response content read from proxy.",),
                 }))
             },
         }

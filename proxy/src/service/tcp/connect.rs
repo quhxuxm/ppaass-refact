@@ -4,7 +4,7 @@ use bytes::Bytes;
 use common::{
     generate_uuid, AgentMessagePayloadTypeValue, MessageFramedRead, MessageFramedReader, MessageFramedWrite, MessageFramedWriter, MessagePayload, NetAddress,
     PayloadEncryptionTypeSelectRequest, PayloadEncryptionTypeSelectResult, PayloadEncryptionTypeSelector, PayloadType, PpaassError,
-    ProxyMessagePayloadTypeValue, ReadMessageFramedRequest, ReadMessageFramedResult, ReadMessageServiceResultContent, RsaCryptoFetcher, TcpConnectRequest,
+    ProxyMessagePayloadTypeValue, ReadMessageFramedRequest, ReadMessageFramedResult, ReadMessageFramedResultContent, RsaCryptoFetcher, TcpConnectRequest,
     TcpConnectResult, TcpConnector, WriteMessageFramedError, WriteMessageFramedRequest, WriteMessageFramedResult,
 };
 
@@ -66,7 +66,7 @@ impl TcpConnectProcess {
         if let Ok(ReadMessageFramedResult {
             message_framed_read,
             content:
-                Some(ReadMessageServiceResultContent {
+                Some(ReadMessageFramedResultContent {
                     message_id,
                     user_token,
                     message_payload:

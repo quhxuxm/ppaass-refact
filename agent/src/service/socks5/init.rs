@@ -7,15 +7,18 @@ use bytes::BytesMut;
 use common::{MessageFramedRead, MessageFramedWrite, NetAddress, PpaassError, RsaCryptoFetcher};
 
 use futures::{SinkExt, StreamExt};
-use tcp_connect::Socks5TcpConnectService;
+use tcp_connect::Socks5TcpConnectFlow;
 use tokio::net::TcpStream;
 use tokio_util::codec::{Framed, FramedParts};
 
 use tracing::{debug, error};
 
-use crate::service::socks5::init::tcp_connect::Socks5TcpConnectServiceResponse;
+use crate::service::socks5::init::{
+    tcp_connect::Socks5TcpConnectFlowResponse,
+    udp_associate::{Socks5UdpAssociateFlow, Socks5UdpAssociateFlowRequest, Socks5UdpAssociateFlowResponse},
+};
 
-use crate::{codec::socks5::Socks5InitCommandContentCodec, service::socks5::init::tcp_connect::Socks5TcpConnectServiceRequest};
+use crate::{codec::socks5::Socks5InitCommandContentCodec, service::socks5::init::tcp_connect::Socks5TcpConnectFlowRequest};
 use crate::{
     config::AgentConfig,
     message::socks5::{Socks5InitCommandResultContent, Socks5InitCommandResultStatus, Socks5InitCommandType},
@@ -23,9 +26,17 @@ use crate::{
 use anyhow::Result;
 
 mod tcp_connect;
+mod udp_associate;
+mod udp_relay;
+
+pub use udp_relay::*;
 
 pub(crate) type Socks5InitFramed<'a> = Framed<&'a mut TcpStream, Socks5InitCommandContentCodec>;
 
+pub(crate) enum Socks5InitFlowResultRelayType {
+    Tcp,
+    Udp(u16),
+}
 pub(crate) struct Socks5InitFlowRequest {
     pub connection_id: String,
     pub proxy_addresses: Arc<Vec<SocketAddr>>,
@@ -44,8 +55,8 @@ where
     pub client_address: SocketAddr,
     pub source_address: NetAddress,
     pub target_address: NetAddress,
-    pub connect_response_message_id: String,
     pub proxy_address: Option<SocketAddr>,
+    pub relay_type: Socks5InitFlowResultRelayType,
 }
 
 pub(crate) struct Socks5InitFlow;
@@ -77,15 +88,15 @@ impl Socks5InitFlow {
         let dest_address = init_command.dest_address;
         match init_command.request_type {
             Socks5InitCommandType::Connect => {
-                match Socks5TcpConnectService::exec(
-                    Socks5TcpConnectServiceRequest {
+                match Socks5TcpConnectFlow::exec(
+                    Socks5TcpConnectFlowRequest {
                         connection_id,
                         proxy_addresses,
                         client_address,
                         dest_address: dest_address.clone(),
                     },
                     rsa_crypto_fetcher,
-                    configuration.clone(),
+                    configuration,
                 )
                 .await
                 {
@@ -94,13 +105,12 @@ impl Socks5InitFlow {
                         send_socks5_init_failure(&mut socks5_init_framed).await?;
                         Err(e)
                     },
-                    Ok(Socks5TcpConnectServiceResponse {
+                    Ok(Socks5TcpConnectFlowResponse {
                         message_framed_read,
                         message_framed_write,
                         client_address,
                         source_address,
                         target_address,
-                        connect_response_message_id,
                         proxy_address,
                     }) => {
                         //Response for socks5 connect command
@@ -108,13 +118,13 @@ impl Socks5InitFlow {
                         socks5_init_framed.send(init_command_result).await?;
                         socks5_init_framed.flush().await?;
                         Ok(Socks5InitFlowResult {
+                            relay_type: Socks5InitFlowResultRelayType::Tcp,
                             client_stream,
                             client_address,
                             message_framed_read,
                             message_framed_write,
                             source_address,
                             target_address,
-                            connect_response_message_id,
                             proxy_address,
                         })
                     },
@@ -124,7 +134,37 @@ impl Socks5InitFlow {
                 todo!()
             },
             Socks5InitCommandType::UdpAssociate => {
-                todo!()
+                match Socks5UdpAssociateFlow::exec(Socks5UdpAssociateFlowRequest {}, rsa_crypto_fetcher, configuration).await {
+                    Err(e) => {
+                        error!("Fail to handle socks5 init command (UDP ASSOCIATE) because of error: {:#?}", e);
+                        send_socks5_init_failure(&mut socks5_init_framed).await?;
+                        Err(e)
+                    },
+                    Ok(Socks5UdpAssociateFlowResponse {
+                        port,
+                        message_framed_read,
+                        message_framed_write,
+                        client_address,
+                        proxy_address,
+                        source_address,
+                        target_address,
+                    }) => {
+                        //Response for socks5 udp associate command
+                        let init_command_result = Socks5InitCommandResultContent::new(Socks5InitCommandResultStatus::Succeeded, Some(dest_address));
+                        socks5_init_framed.send(init_command_result).await?;
+                        socks5_init_framed.flush().await?;
+                        Ok(Socks5InitFlowResult {
+                            relay_type: Socks5InitFlowResultRelayType::Udp(port),
+                            client_stream,
+                            client_address,
+                            message_framed_read,
+                            message_framed_write,
+                            source_address,
+                            target_address,
+                            proxy_address,
+                        })
+                    },
+                }
             },
         }
     }

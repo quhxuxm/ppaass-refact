@@ -15,7 +15,7 @@ use tracing::{debug, error};
 use common::{
     generate_uuid, AgentMessagePayloadTypeValue, MessageFramedRead, MessageFramedReader, MessageFramedWrite, MessageFramedWriter, MessagePayload, NetAddress,
     PayloadEncryptionTypeSelectRequest, PayloadEncryptionTypeSelectResult, PayloadEncryptionTypeSelector, PayloadType, PpaassError,
-    ProxyMessagePayloadTypeValue, ReadMessageFramedError, ReadMessageFramedRequest, ReadMessageFramedResult, ReadMessageServiceResultContent, RsaCryptoFetcher,
+    ProxyMessagePayloadTypeValue, ReadMessageFramedError, ReadMessageFramedRequest, ReadMessageFramedResult, ReadMessageFramedResultContent, RsaCryptoFetcher,
     WriteMessageFramedError, WriteMessageFramedRequest, WriteMessageFramedResult,
 };
 
@@ -121,7 +121,6 @@ where
     pub client_address: SocketAddr,
     pub message_framed_write: MessageFramedWrite<T>,
     pub message_framed_read: MessageFramedRead<T>,
-    pub connect_response_message_id: String,
     pub source_address: NetAddress,
     pub target_address: NetAddress,
     pub init_data: Option<Vec<u8>>,
@@ -169,7 +168,6 @@ impl TcpRelayFlow {
             client_address,
             message_framed_write,
             message_framed_read,
-            connect_response_message_id,
             source_address,
             target_address,
             init_data,
@@ -217,7 +215,6 @@ impl TcpRelayFlow {
             }) = Self::relay_client_to_proxy(
                 connection_id,
                 init_data,
-                connect_response_message_id,
                 message_framed_write,
                 source_address,
                 target_address,
@@ -242,8 +239,8 @@ impl TcpRelayFlow {
     }
 
     async fn relay_client_to_proxy<T>(
-        connection_id: String, init_data: Option<Vec<u8>>, connect_response_message_id: String, mut message_framed_write: MessageFramedWrite<T>,
-        source_address_a2t: NetAddress, target_address_a2t: NetAddress, mut client_stream_read: OwnedReadHalf, configuration: Arc<AgentConfig>,
+        connection_id: String, init_data: Option<Vec<u8>>, mut message_framed_write: MessageFramedWrite<T>, source_address_a2t: NetAddress,
+        target_address_a2t: NetAddress, mut client_stream_read: OwnedReadHalf, configuration: Arc<AgentConfig>,
     ) -> Result<(), TcpRelayC2PError<T>>
     where
         T: RsaCryptoFetcher,
@@ -270,7 +267,7 @@ impl TcpRelayFlow {
             let write_agent_message_result = MessageFramedWriter::write(WriteMessageFramedRequest {
                 connection_id: Some(connection_id.clone()),
                 message_framed_write,
-                ref_id: Some(connect_response_message_id.clone()),
+                ref_id: Some(connection_id.clone()),
                 user_token: configuration.user_token().clone().unwrap(),
                 payload_encryption_type,
                 message_payload: Some(MessagePayload::new(
@@ -370,7 +367,7 @@ impl TcpRelayFlow {
                 let write_agent_message_result = MessageFramedWriter::write(WriteMessageFramedRequest {
                     connection_id: Some(connection_id.clone()),
                     message_framed_write,
-                    ref_id: Some(connect_response_message_id.clone()),
+                    ref_id: Some(connection_id.clone()),
                     user_token: configuration.user_token().clone().unwrap(),
                     payload_encryption_type: payload_encryption_type.clone(),
                     message_payload: Some(MessagePayload::new(
@@ -432,7 +429,7 @@ impl TcpRelayFlow {
                 Ok(ReadMessageFramedResult {
                     message_framed_read: message_framed_read_give_back,
                     content:
-                        Some(ReadMessageServiceResultContent {
+                        Some(ReadMessageFramedResultContent {
                             message_payload:
                                 Some(MessagePayload {
                                     data,
