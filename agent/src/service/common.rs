@@ -152,6 +152,7 @@ where
     message_framed_read: MessageFramedRead<T>,
     client_stream_write: OwnedWriteHalf,
     source: anyhow::Error,
+    connection_closed: bool,
 }
 
 #[derive(Default)]
@@ -184,6 +185,7 @@ impl TcpRelayFlow {
             if let Err(TcpRelayP2CError {
                 mut client_stream_write,
                 source,
+                connection_closed,
                 ..
             }) = Self::relay_proxy_to_client(
                 connection_id_p2c,
@@ -199,9 +201,11 @@ impl TcpRelayFlow {
                 if let Err(e) = client_stream_write.flush().await {
                     error!("Fail to flush client stream writer when relay data from proxy to client have error:{:#?}", e);
                 };
-                if let Err(e) = client_stream_write.shutdown().await {
-                    error!("Fail to shutdown client stream writer when relay data from proxy to client have error:{:#?}", e);
-                };
+                if !connection_closed {
+                    if let Err(e) = client_stream_write.shutdown().await {
+                        error!("Fail to shutdown client stream writer when relay data from proxy to client have error:{:#?}", e);
+                    };
+                }
             }
         });
         tokio::spawn(async move {
@@ -284,7 +288,7 @@ impl TcpRelayFlow {
                         message_framed_write,
                         client_stream_read,
                         source: anyhow!(source),
-                        connection_closed: false,
+                        connection_closed: true,
                     });
                 },
                 Ok(WriteMessageFramedResult { mut message_framed_write }) => {
@@ -310,15 +314,11 @@ impl TcpRelayFlow {
                         "Error happen when relay data from client to proxy,  agent address={:?}, target address={:?}, error: {:#?}",
                         source_address_a2t, target_address_a2t, e
                     );
-                    let mut connection_closed = false;
-                    if let ErrorKind::ConnectionReset = e.kind() {
-                        connection_closed = true;
-                    }
                     return Err(TcpRelayC2PError {
                         message_framed_write,
                         client_stream_read,
                         source: anyhow!(e),
-                        connection_closed,
+                        connection_closed: false,
                     });
                 },
                 Ok(0) => {
@@ -336,7 +336,7 @@ impl TcpRelayFlow {
                             message_framed_write,
                             client_stream_read,
                             source: anyhow!(e),
-                            connection_closed: false,
+                            connection_closed: true,
                         });
                     };
                     return Ok(());
@@ -388,7 +388,7 @@ impl TcpRelayFlow {
                             message_framed_write,
                             client_stream_read,
                             source: anyhow!(source),
-                            connection_closed: false,
+                            connection_closed: true,
                         });
                     },
                     Ok(WriteMessageFramedResult { message_framed_write }) => message_framed_write,
@@ -426,6 +426,7 @@ impl TcpRelayFlow {
                         message_framed_read,
                         client_stream_write,
                         source: anyhow!(source),
+                        connection_closed: false,
                     });
                 },
                 Ok(ReadMessageFramedResult {
@@ -454,6 +455,7 @@ impl TcpRelayFlow {
                         message_framed_read,
                         client_stream_write,
                         source: anyhow!(e),
+                        connection_closed: false,
                     })?;
                     return Ok(());
                 },
@@ -462,6 +464,7 @@ impl TcpRelayFlow {
                         message_framed_read,
                         client_stream_write,
                         source: anyhow!(PpaassError::CodecError),
+                        connection_closed: false,
                     })
                 },
             };
@@ -470,10 +473,15 @@ impl TcpRelayFlow {
             let proxy_raw_data_chunks = proxy_raw_data.chunks(client_buffer_size);
             for (_, chunk) in proxy_raw_data_chunks.enumerate() {
                 if let Err(e) = client_stream_write.write(chunk).await {
+                    let mut connection_closed = false;
+                    if let ErrorKind::ConnectionReset = e.kind() {
+                        connection_closed = true;
+                    }
                     return Err(TcpRelayP2CError {
                         message_framed_read,
                         client_stream_write,
                         source: anyhow!(e),
+                        connection_closed,
                     });
                 }
             }
@@ -482,6 +490,7 @@ impl TcpRelayFlow {
                     message_framed_read,
                     client_stream_write,
                     source: anyhow!(e),
+                    connection_closed: false,
                 });
             }
         }

@@ -58,6 +58,7 @@ where
     pub message_framed_read: MessageFramedRead<T>,
     pub target_stream_write: OwnedWriteHalf,
     pub source: anyhow::Error,
+    pub connection_closed: bool,
 }
 pub(crate) struct TcpRelayProcess;
 
@@ -181,6 +182,7 @@ impl TcpRelayProcess {
                         message_framed_read,
                         target_stream_write,
                         source: anyhow!(source),
+                        connection_closed: false,
                     });
                 },
                 Ok(ReadMessageFramedResult {
@@ -197,6 +199,7 @@ impl TcpRelayProcess {
                         message_framed_read,
                         target_stream_write,
                         source: anyhow!(e),
+                        connection_closed: false,
                     })?;
                     return Ok(());
                 },
@@ -224,6 +227,7 @@ impl TcpRelayProcess {
                         message_framed_read,
                         target_stream_write,
                         source: anyhow!(PpaassError::CodecError),
+                        connection_closed: false,
                     });
                 },
             };
@@ -231,18 +235,28 @@ impl TcpRelayProcess {
             let agent_data_chunks = agent_data.chunks(configuration.target_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE) as usize);
             for (_, chunk) in agent_data_chunks.enumerate() {
                 if let Err(e) = target_stream_write.write(chunk).await {
+                    let mut connection_closed = false;
+                    if let ErrorKind::ConnectionReset = e.kind() {
+                        connection_closed = true;
+                    }
                     return Err(TcpRelayP2TError {
                         message_framed_read,
                         target_stream_write,
                         source: anyhow!(e),
+                        connection_closed,
                     });
                 };
             }
             if let Err(e) = target_stream_write.flush().await {
+                let mut connection_closed = false;
+                if let ErrorKind::ConnectionReset = e.kind() {
+                    connection_closed = true;
+                }
                 return Err(TcpRelayP2TError {
                     message_framed_read,
                     target_stream_write,
                     source: anyhow!(e),
+                    connection_closed,
                 });
             }
         }
@@ -267,19 +281,11 @@ impl TcpRelayProcess {
                         "Connection [{}] error happen when relay data from target to proxy, target address={:?}, source address={:?}, error: {:#?}",
                         connection_id, target_address, source_address, e
                     );
-                    let mut connection_closed = false;
-                    if let ErrorKind::ConnectionReset = e.kind() {
-                        debug!(
-                            "Connection [{}] error happen and connection closed from remote already, target address={:?}, source address={:?}, error: {:#?}",
-                            connection_id, target_address, source_address, e
-                        );
-                        connection_closed = true;
-                    }
                     return Err(TcpRelayT2PError {
                         message_framed_write,
                         target_stream_read,
                         source: anyhow!(e),
-                        connection_closed,
+                        connection_closed: false,
                     });
                 },
                 Ok(0) => {
@@ -308,7 +314,7 @@ impl TcpRelayProcess {
                             message_framed_write,
                             target_stream_read,
                             source: anyhow!(e),
-                            connection_closed: false,
+                            connection_closed: true,
                         });
                     };
                     return Ok(());
@@ -370,7 +376,7 @@ impl TcpRelayProcess {
                             message_framed_write,
                             target_stream_read,
                             source: anyhow!(source),
-                            connection_closed: false,
+                            connection_closed: true,
                         });
                     },
                     Ok(WriteMessageFramedResult { message_framed_write, .. }) => message_framed_write,
