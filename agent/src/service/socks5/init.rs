@@ -35,7 +35,7 @@ pub(crate) type Socks5InitFramed<'a> = Framed<&'a mut TcpStream, Socks5InitComma
 
 pub(crate) enum Socks5InitFlowResultRelayType {
     Tcp,
-    Udp(UdpSocket),
+    Udp(UdpSocket, SocketAddr),
 }
 pub(crate) struct Socks5InitFlowRequest {
     pub connection_id: String,
@@ -150,6 +150,7 @@ impl Socks5InitFlow {
                     },
                     Ok(Socks5UdpAssociateFlowResult {
                         associated_udp_socket,
+                        associated_udp_address,
                         message_framed_read,
                         message_framed_write,
                         client_address,
@@ -158,11 +159,12 @@ impl Socks5InitFlow {
                         target_address,
                     }) => {
                         //Response for socks5 udp associate command
-                        let init_command_result = Socks5InitCommandResultContent::new(Socks5InitCommandResultStatus::Succeeded, Some(dest_address));
+                        let init_command_result =
+                            Socks5InitCommandResultContent::new(Socks5InitCommandResultStatus::Succeeded, Some(associated_udp_address.clone()));
                         socks5_init_framed.send(init_command_result).await?;
                         socks5_init_framed.flush().await?;
                         Ok(Socks5InitFlowResult {
-                            relay_type: Socks5InitFlowResultRelayType::Udp(associated_udp_socket),
+                            relay_type: Socks5InitFlowResultRelayType::Udp(associated_udp_socket, associated_udp_address.try_into()?),
                             client_stream,
                             client_address,
                             message_framed_read,

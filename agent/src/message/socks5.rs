@@ -1,6 +1,10 @@
 #![allow(unused)]
 
-use std::fmt::Debug;
+use std::{
+    fmt::Debug,
+    io::Cursor,
+    net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6, ToSocketAddrs},
+};
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use tracing::error;
@@ -125,6 +129,46 @@ pub(crate) enum Socks5Addr {
     Domain(String, u16),
 }
 
+impl TryFrom<Socks5Addr> for SocketAddr {
+    type Error = PpaassError;
+    fn try_from(socks5_addr: Socks5Addr) -> Result<Self, PpaassError> {
+        match socks5_addr {
+            Socks5Addr::IpV4(ip, port) => Ok(SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(ip[0], ip[1], ip[2], ip[3]), port))),
+            Socks5Addr::IpV6(ip, port) => {
+                let mut ip_cursor = Cursor::new(ip);
+                Ok(SocketAddr::V6(SocketAddrV6::new(
+                    Ipv6Addr::new(
+                        ip_cursor.get_u16(),
+                        ip_cursor.get_u16(),
+                        ip_cursor.get_u16(),
+                        ip_cursor.get_u16(),
+                        ip_cursor.get_u16(),
+                        ip_cursor.get_u16(),
+                        ip_cursor.get_u16(),
+                        ip_cursor.get_u16(),
+                    ),
+                    port,
+                    0,
+                    0,
+                )))
+            },
+            Socks5Addr::Domain(host, port) => {
+                let addresses = format!("{}:{}", host, port).to_socket_addrs()?.collect::<Vec<_>>();
+                let result = addresses.get(0).ok_or(PpaassError::CodecError)?;
+                Ok(*result)
+            },
+        }
+    }
+}
+impl From<SocketAddr> for Socks5Addr {
+    fn from(socket_addr: SocketAddr) -> Self {
+        match socket_addr {
+            SocketAddr::V4(addr) => Socks5Addr::IpV4(addr.ip().octets(), addr.port()),
+            SocketAddr::V6(addr) => Socks5Addr::IpV6(addr.ip().octets(), addr.port()),
+        }
+    }
+}
+
 impl ToString for Socks5Addr {
     fn to_string(&self) -> String {
         match self {
@@ -227,6 +271,7 @@ impl TryFrom<Bytes> for Socks5Addr {
         value_mut_ref.try_into()
     }
 }
+
 impl TryFrom<&mut BytesMut> for Socks5Addr {
     type Error = PpaassError;
 
@@ -235,6 +280,7 @@ impl TryFrom<&mut BytesMut> for Socks5Addr {
         value.try_into()
     }
 }
+
 impl From<Socks5Addr> for Bytes {
     fn from(address: Socks5Addr) -> Self {
         let mut result = BytesMut::new();
@@ -259,6 +305,7 @@ impl From<Socks5Addr> for Bytes {
         result.into()
     }
 }
+
 impl From<Socks5Addr> for NetAddress {
     fn from(value: Socks5Addr) -> Self {
         match value {
@@ -268,6 +315,7 @@ impl From<Socks5Addr> for NetAddress {
         }
     }
 }
+
 #[derive(Debug)]
 pub(crate) struct Socks5AuthCommandContent {
     pub version: u8,

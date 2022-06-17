@@ -31,6 +31,7 @@ where
     T: RsaCryptoFetcher,
 {
     pub associated_udp_socket: UdpSocket,
+    pub associated_udp_address: Socks5Addr,
     pub message_framed_read: MessageFramedRead<T>,
     pub message_framed_write: MessageFramedWrite<T>,
     pub client_address: SocketAddr,
@@ -58,7 +59,6 @@ impl Socks5UdpAssociateFlow {
         let initial_udp_address = SocketAddr::new(initial_local_ip, 0);
         let associated_udp_socket = UdpSocket::bind(initial_udp_address).await?;
         let associated_udp_address = associated_udp_socket.local_addr()?;
-        let associated_udp_port = associated_udp_address.port();
 
         let TcpConnectResult {
             connected_stream: proxy_stream,
@@ -136,6 +136,7 @@ impl Socks5UdpAssociateFlow {
                 );
                 Ok(Socks5UdpAssociateFlowResult {
                     associated_udp_socket,
+                    associated_udp_address: associated_udp_address.into(),
                     client_address,
                     message_framed_read,
                     message_framed_write,

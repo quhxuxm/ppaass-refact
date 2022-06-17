@@ -43,15 +43,3 @@ pub fn generate_uuid() -> String {
     let uuid_str = Uuid::new_v4().to_string();
     uuid_str.replace('-', "")
 }
-
-// let mut proxy_addresses: Vec<SocketAddr> = Vec::new();
-//         for address in proxy_addresses_from_config {
-//             match SocketAddr::from_str(address) {
-//                 Ok(r) => {
-//                     proxy_addresses.push(r);
-//                 },
-//                 Err(e) => {
-//                     error!("Fail to convert proxy address to socket address because of error: {:#?}", e)
-//                 },
-//             }
-//         }
