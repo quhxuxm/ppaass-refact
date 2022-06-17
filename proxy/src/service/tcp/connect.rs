@@ -19,7 +19,7 @@ use tracing::error;
 
 use crate::config::{ProxyConfig, DEFAULT_TARGET_STREAM_SO_LINGER};
 
-pub(crate) struct TcpConnectProcessRequest<T>
+pub(crate) struct TcpConnectFlowRequest<T>
 where
     T: RsaCryptoFetcher,
 {
@@ -29,7 +29,7 @@ where
     pub agent_address: SocketAddr,
 }
 
-pub(crate) struct TcpConnectProcessResult<T>
+pub(crate) struct TcpConnectFlowResult<T>
 where
     T: RsaCryptoFetcher,
 {
@@ -43,14 +43,14 @@ where
 }
 
 #[derive(Clone, Default)]
-pub(crate) struct TcpConnectProcess;
+pub(crate) struct TcpConnectFlow;
 
-impl TcpConnectProcess {
-    pub async fn exec<T>(&self, request: TcpConnectProcessRequest<T>, configuration: Arc<ProxyConfig>) -> Result<TcpConnectProcessResult<T>>
+impl TcpConnectFlow {
+    pub async fn exec<T>(&self, request: TcpConnectFlowRequest<T>, configuration: Arc<ProxyConfig>) -> Result<TcpConnectFlowResult<T>>
     where
         T: RsaCryptoFetcher + Send + Sync + 'static,
     {
-        let TcpConnectProcessRequest {
+        let TcpConnectFlowRequest {
             connection_id,
             message_framed_read,
             message_framed_write,
@@ -155,7 +155,7 @@ impl TcpConnectProcess {
                     message_framed_write
                 },
             };
-            return Ok(TcpConnectProcessResult {
+            return Ok(TcpConnectFlowResult {
                 message_framed_write,
                 message_framed_read,
                 target_stream,

@@ -8,14 +8,15 @@ use common::{generate_uuid, MessageFramedGenerator, PpaassError, RsaCrypto, RsaC
 
 use tracing::{debug, error};
 
-use crate::service::tcp::relay::{TcpRelayProcess, TcpRelayRequest};
+use crate::service::tcp::relay::{TcpRelayFlow, TcpRelayFlowRequest};
 use crate::{
     config::ProxyConfig,
-    service::tcp::connect::{TcpConnectProcess, TcpConnectProcessRequest},
+    service::tcp::connect::{TcpConnectFlow, TcpConnectFlowRequest},
 };
 
 use anyhow::Result;
 mod tcp;
+mod udp;
 
 const DEFAULT_BUFFER_SIZE: usize = 1024 * 64;
 
@@ -110,13 +111,13 @@ impl AgentConnection {
         let agent_stream = self.agent_stream;
         let agent_address_clone = self.agent_address.clone();
         let agent_address = self.agent_address;
-        let tcp_connect_process = TcpConnectProcess;
-        let tcp_relay_process = TcpRelayProcess;
+        let tcp_connect_process = TcpConnectFlow;
+        let tcp_relay_process = TcpRelayFlow;
         let framed_result = MessageFramedGenerator::generate(agent_stream, message_framed_buffer_size, compress, rsa_crypto_fetcher.clone()).await?;
         debug!("Connection [{}] is going to handle tcp connect.", connection_id);
         let tcp_connect_result = tcp_connect_process
             .exec(
-                TcpConnectProcessRequest {
+                TcpConnectFlowRequest {
                     connection_id: connection_id.clone(),
                     message_framed_read: framed_result.message_framed_read,
                     message_framed_write: framed_result.message_framed_write,
@@ -128,7 +129,7 @@ impl AgentConnection {
         debug!("Connection [{}] is going to handle tcp relay.", connection_id);
         tcp_relay_process
             .exec(
-                TcpRelayRequest {
+                TcpRelayFlowRequest {
                     connection_id: connection_id.clone(),
                     message_framed_read: tcp_connect_result.message_framed_read,
                     message_framed_write: tcp_connect_result.message_framed_write,

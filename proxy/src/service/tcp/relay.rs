@@ -24,7 +24,7 @@ use crate::config::ProxyConfig;
 const DEFAULT_BUFFER_SIZE: usize = 64 * 1024;
 
 #[allow(unused)]
-pub(crate) struct TcpRelayRequest<T>
+pub(crate) struct TcpRelayFlowRequest<T>
 where
     T: RsaCryptoFetcher,
 {
@@ -60,14 +60,14 @@ where
     pub source: anyhow::Error,
     pub connection_closed: bool,
 }
-pub(crate) struct TcpRelayProcess;
+pub(crate) struct TcpRelayFlow;
 
-impl TcpRelayProcess {
-    pub async fn exec<T>(&self, request: TcpRelayRequest<T>, configuration: Arc<ProxyConfig>) -> Result<()>
+impl TcpRelayFlow {
+    pub async fn exec<T>(&self, request: TcpRelayFlowRequest<T>, configuration: Arc<ProxyConfig>) -> Result<()>
     where
         T: RsaCryptoFetcher + Send + Sync + 'static,
     {
-        let TcpRelayRequest {
+        let TcpRelayFlowRequest {
             connection_id,
             message_framed_read,
             message_framed_write,
