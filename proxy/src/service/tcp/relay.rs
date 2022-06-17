@@ -1,4 +1,4 @@
-use std::fmt::{Debug, Formatter};
+use std::io::ErrorKind;
 
 use std::{net::SocketAddr, sync::Arc};
 
@@ -24,7 +24,7 @@ use crate::config::ProxyConfig;
 const DEFAULT_BUFFER_SIZE: usize = 64 * 1024;
 
 #[allow(unused)]
-pub(crate) struct TcpRelayServiceRequest<T>
+pub(crate) struct TcpRelayRequest<T>
 where
     T: RsaCryptoFetcher,
 {
@@ -37,31 +37,36 @@ where
     pub user_token: String,
     pub source_address: NetAddress,
     pub target_address: NetAddress,
-    pub configuration: Arc<ProxyConfig>,
 }
 
-impl<T> Debug for TcpRelayServiceRequest<T>
+#[allow(unused)]
+struct TcpRelayT2PError<T>
 where
     T: RsaCryptoFetcher,
 {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        writeln!(
-            f,
-            "TcpRelayServiceRequest: gent_address={}, target_address={}",
-            self.agent_address,
-            self.target_address.to_string()
-        )
-    }
+    pub message_framed_write: MessageFramedWrite<T>,
+    pub target_stream_read: OwnedReadHalf,
+    pub source: anyhow::Error,
+    pub connection_closed: bool,
 }
 
+#[allow(unused)]
+struct TcpRelayP2TError<T>
+where
+    T: RsaCryptoFetcher,
+{
+    pub message_framed_read: MessageFramedRead<T>,
+    pub target_stream_write: OwnedWriteHalf,
+    pub source: anyhow::Error,
+}
 pub(crate) struct TcpRelayProcess;
 
 impl TcpRelayProcess {
-    pub async fn exec<T>(&self, request: TcpRelayServiceRequest<T>) -> Result<()>
+    pub async fn exec<T>(&self, request: TcpRelayRequest<T>, configuration: Arc<ProxyConfig>) -> Result<()>
     where
         T: RsaCryptoFetcher + Send + Sync + 'static,
     {
-        let TcpRelayServiceRequest {
+        let TcpRelayRequest {
             connection_id,
             message_framed_read,
             message_framed_write,
@@ -71,13 +76,16 @@ impl TcpRelayProcess {
             user_token,
             source_address,
             target_address,
-            configuration,
         } = request;
         let (target_stream_read, target_stream_write) = target_stream.into_split();
         let configuration_clone = configuration.clone();
         let connection_id_clone = connection_id.clone();
         tokio::spawn(async move {
-            if let Err((_message_framed_read, mut target_stream_write, original_error)) = Self::relay_proxy_to_target(
+            if let Err(TcpRelayP2TError {
+                mut target_stream_write,
+                source,
+                ..
+            }) = Self::relay_proxy_to_target(
                 connection_id_clone.clone(),
                 agent_address,
                 message_framed_read,
@@ -88,7 +96,7 @@ impl TcpRelayProcess {
             {
                 error!(
                     "Connection [{}] error happen when relay data from proxy to target, error: {:#?}",
-                    connection_id_clone, original_error
+                    connection_id_clone, source
                 );
                 if let Err(e) = target_stream_write.flush().await {
                     error!(
@@ -105,7 +113,12 @@ impl TcpRelayProcess {
             }
         });
         tokio::spawn(async move {
-            if let Err((mut message_framed_write, _target_stream_read, original_error)) = Self::relay_target_to_proxy(
+            if let Err(TcpRelayT2PError {
+                mut message_framed_write,
+                source,
+                connection_closed,
+                ..
+            }) = Self::relay_target_to_proxy(
                 connection_id.clone(),
                 message_framed_write,
                 agent_tcp_connect_message_id,
@@ -119,7 +132,7 @@ impl TcpRelayProcess {
             {
                 error!(
                     "Connection [{}] error happen when relay data from target to proxy, error: {:#?}",
-                    connection_id, original_error
+                    connection_id, source
                 );
                 if let Err(e) = message_framed_write.flush().await {
                     error!(
@@ -127,12 +140,14 @@ impl TcpRelayProcess {
                         connection_id, e
                     );
                 };
-                if let Err(e) = message_framed_write.close().await {
-                    error!(
-                        "Connection [{}] fail to close proxy writer when relay data from target to proxy have error:{:#?}",
-                        connection_id, e
-                    );
-                };
+                if !connection_closed {
+                    if let Err(e) = message_framed_write.close().await {
+                        error!(
+                            "Connection [{}] fail to close proxy writer when relay data from target to proxy have error:{:#?}",
+                            connection_id, e
+                        );
+                    };
+                }
             }
         });
         Ok(())
@@ -141,7 +156,7 @@ impl TcpRelayProcess {
     async fn relay_proxy_to_target<T>(
         connection_id: String, agent_address: SocketAddr, mut message_framed_read: MessageFramedRead<T>, mut target_stream_write: OwnedWriteHalf,
         configuration: Arc<ProxyConfig>,
-    ) -> Result<(), (MessageFramedRead<T>, OwnedWriteHalf, anyhow::Error)>
+    ) -> Result<(), TcpRelayP2TError<T>>
     where
         T: RsaCryptoFetcher + Send + Sync + 'static,
     {
@@ -162,7 +177,11 @@ impl TcpRelayProcess {
                         target_stream_write.peer_addr(),
                         source
                     );
-                    return Err((message_framed_read, target_stream_write, anyhow!(source)));
+                    return Err(TcpRelayP2TError {
+                        message_framed_read,
+                        target_stream_write,
+                        source: anyhow!(source),
+                    });
                 },
                 Ok(ReadMessageFramedResult {
                     message_framed_read,
@@ -174,10 +193,11 @@ impl TcpRelayProcess {
                         agent_address,
                         target_stream_write.peer_addr()
                     );
-                    target_stream_write
-                        .flush()
-                        .await
-                        .map_err(|e| (message_framed_read, target_stream_write, anyhow!(e)))?;
+                    target_stream_write.flush().await.map_err(|e| TcpRelayP2TError {
+                        message_framed_read,
+                        target_stream_write,
+                        source: anyhow!(e),
+                    })?;
                     return Ok(());
                 },
                 Ok(ReadMessageFramedResult {
@@ -200,18 +220,30 @@ impl TcpRelayProcess {
                         agent_address,
                         target_stream_write.peer_addr()
                     );
-                    return Err((message_framed_read, target_stream_write, anyhow!(PpaassError::CodecError)));
+                    return Err(TcpRelayP2TError {
+                        message_framed_read,
+                        target_stream_write,
+                        source: anyhow!(PpaassError::CodecError),
+                    });
                 },
             };
             message_framed_read = message_framed_read_move_back;
             let agent_data_chunks = agent_data.chunks(configuration.target_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE) as usize);
             for (_, chunk) in agent_data_chunks.enumerate() {
                 if let Err(e) = target_stream_write.write(chunk).await {
-                    return Err((message_framed_read, target_stream_write, anyhow!(e)));
+                    return Err(TcpRelayP2TError {
+                        message_framed_read,
+                        target_stream_write,
+                        source: anyhow!(e),
+                    });
                 };
             }
             if let Err(e) = target_stream_write.flush().await {
-                return Err((message_framed_read, target_stream_write, anyhow!(e)));
+                return Err(TcpRelayP2TError {
+                    message_framed_read,
+                    target_stream_write,
+                    source: anyhow!(e),
+                });
             }
         }
     }
@@ -220,7 +252,7 @@ impl TcpRelayProcess {
         connection_id: String, mut message_framed_write: MessageFramedWrite<T>, agent_tcp_connect_message_id: String, user_token: String,
         agent_connect_message_source_address: NetAddress, agent_connect_message_target_address: NetAddress, mut target_stream_read: OwnedReadHalf,
         configuration: Arc<ProxyConfig>,
-    ) -> Result<(), (MessageFramedWrite<T>, OwnedReadHalf, anyhow::Error)>
+    ) -> Result<(), TcpRelayT2PError<T>>
     where
         T: RsaCryptoFetcher + Send + Sync + 'static,
     {
@@ -235,7 +267,20 @@ impl TcpRelayProcess {
                         "Connection [{}] error happen when relay data from target to proxy, target address={:?}, source address={:?}, error: {:#?}",
                         connection_id, target_address, source_address, e
                     );
-                    return Err((message_framed_write, target_stream_read, anyhow!(e)));
+                    let mut connection_closed = false;
+                    if let ErrorKind::ConnectionReset = e.kind() {
+                        debug!(
+                            "Connection [{}] error happen and connection closed from remote already, target address={:?}, source address={:?}, error: {:#?}",
+                            connection_id, target_address, source_address, e
+                        );
+                        connection_closed = true;
+                    }
+                    return Err(TcpRelayT2PError {
+                        message_framed_write,
+                        target_stream_read,
+                        source: anyhow!(e),
+                        connection_closed,
+                    });
                 },
                 Ok(0) => {
                     debug!(
@@ -247,14 +292,24 @@ impl TcpRelayProcess {
                             "Connection [{}] fail to flush data from target to proxy when all data read from target, target address={:?}, source address={:?}.",
                             connection_id, target_address, source_address
                         );
-                        return Err((message_framed_write, target_stream_read, anyhow!(e)));
+                        return Err(TcpRelayT2PError {
+                            message_framed_write,
+                            target_stream_read,
+                            source: anyhow!(e),
+                            connection_closed: false,
+                        });
                     };
                     if let Err(e) = message_framed_write.close().await {
                         error!(
                             "Connection [{}] fail to close data from target to proxy when all data read from target, target address={:?}, source address={:?}.",
                             connection_id, target_address, source_address
                         );
-                        return Err((message_framed_write, target_stream_read, anyhow!(e)));
+                        return Err(TcpRelayT2PError {
+                            message_framed_write,
+                            target_stream_read,
+                            source: anyhow!(e),
+                            connection_closed: false,
+                        });
                     };
                     return Ok(());
                 },
@@ -287,7 +342,12 @@ impl TcpRelayProcess {
                             "Connection [{}] fail to select payload encryption type when transfer data from target to proxy, target address={:?}, source address={:?}.",
                             connection_id, target_address, source_address
                         );
-                        return Err((message_framed_write, target_stream_read, anyhow!(e)));
+                        return Err(TcpRelayT2PError {
+                            message_framed_write,
+                            target_stream_read,
+                            source: anyhow!(e),
+                            connection_closed: false,
+                        });
                     },
                     Ok(PayloadEncryptionTypeSelectResult { payload_encryption_type, .. }) => payload_encryption_type,
                 };
@@ -306,7 +366,12 @@ impl TcpRelayProcess {
                             "Connection [{}] fail to write data from target to proxy, target address={:?}, source address={:?}, error: {:#?}.",
                             connection_id, target_address, source_address, source
                         );
-                        return Err((message_framed_write, target_stream_read, anyhow!(source)));
+                        return Err(TcpRelayT2PError {
+                            message_framed_write,
+                            target_stream_read,
+                            source: anyhow!(source),
+                            connection_closed: false,
+                        });
                     },
                     Ok(WriteMessageFramedResult { message_framed_write, .. }) => message_framed_write,
                 };

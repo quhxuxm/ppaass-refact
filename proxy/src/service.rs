@@ -8,7 +8,7 @@ use common::{generate_uuid, MessageFramedGenerator, PpaassError, RsaCrypto, RsaC
 
 use tracing::{debug, error};
 
-use crate::service::tcp::relay::{TcpRelayProcess, TcpRelayServiceRequest};
+use crate::service::tcp::relay::{TcpRelayProcess, TcpRelayRequest};
 use crate::{
     config::ProxyConfig,
     service::tcp::connect::{TcpConnectProcess, TcpConnectProcessRequest},
@@ -127,18 +127,20 @@ impl AgentConnection {
             .await?;
         debug!("Connection [{}] is going to handle tcp relay.", connection_id);
         tcp_relay_process
-            .exec(TcpRelayServiceRequest {
-                connection_id: connection_id.clone(),
-                message_framed_read: tcp_connect_result.message_framed_read,
-                message_framed_write: tcp_connect_result.message_framed_write,
-                agent_address,
-                target_stream: tcp_connect_result.target_stream,
-                source_address: tcp_connect_result.source_address,
-                target_address: tcp_connect_result.target_address,
-                user_token: tcp_connect_result.user_token,
-                agent_tcp_connect_message_id: tcp_connect_result.agent_tcp_connect_message_id,
+            .exec(
+                TcpRelayRequest {
+                    connection_id: connection_id.clone(),
+                    message_framed_read: tcp_connect_result.message_framed_read,
+                    message_framed_write: tcp_connect_result.message_framed_write,
+                    agent_address,
+                    target_stream: tcp_connect_result.target_stream,
+                    source_address: tcp_connect_result.source_address,
+                    target_address: tcp_connect_result.target_address,
+                    user_token: tcp_connect_result.user_token,
+                    agent_tcp_connect_message_id: tcp_connect_result.agent_tcp_connect_message_id,
+                },
                 configuration,
-            })
+            )
             .await?;
         debug!("Connection [{}] is finish relay.", connection_id);
         Ok(())
