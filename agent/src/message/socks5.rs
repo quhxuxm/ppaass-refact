@@ -3,6 +3,7 @@
 use std::{
     fmt::Debug,
     io::Cursor,
+    mem::size_of,
     net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6, ToSocketAddrs},
 };
 
@@ -385,6 +386,34 @@ pub(crate) struct Socks5UdpDataCommandContent {
     pub frag: u8,
     pub address: Socks5Addr,
     pub data: Bytes,
+}
+
+impl TryFrom<Bytes> for Socks5UdpDataCommandContent {
+    type Error = PpaassError;
+    fn try_from(mut src: Bytes) -> Result<Self, Self::Error> {
+        // Check the buffer
+        if !src.has_remaining() {
+            return Err(PpaassError::CodecError);
+        }
+        // Check and skip the revision
+        if src.remaining() < size_of::<u16>() {
+            return Err(PpaassError::CodecError);
+        }
+        src.get_u16();
+        if src.remaining() < size_of::<u8>() {
+            return Err(PpaassError::CodecError);
+        }
+        let frag = src.get_u8();
+        let address: Socks5Addr = match (&mut src).try_into() {
+            Err(e) => {
+                error!("Fail to decode socks5 udp data request because of error: {:#?}", e);
+                return Err(PpaassError::CodecError);
+            },
+            Ok(v) => v,
+        };
+        let data = src.copy_to_bytes(src.remaining());
+        Ok(Socks5UdpDataCommandContent { frag, address, data })
+    }
 }
 
 #[derive(Debug)]

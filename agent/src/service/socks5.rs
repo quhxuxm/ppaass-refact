@@ -107,6 +107,7 @@ impl Socks5FlowProcessor {
                 let Socks5UdpRelayFlowResult { .. } = Socks5UdpRelayFlow::exec(
                     Socks5UdpRelayFlowRequest {
                         associated_udp_socket,
+                        associated_udp_address,
                         connection_id,
                         client_address,
                         client_stream,

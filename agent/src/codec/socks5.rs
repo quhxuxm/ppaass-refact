@@ -1,3 +1,5 @@
+use std::mem::size_of;
+
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use tokio_util::codec::{Decoder, Encoder};
 use tracing::error;
@@ -104,11 +106,11 @@ impl Decoder for Socks5UdpDataCommandContentCodec {
             return Ok(None);
         }
         // Check and skip the revision
-        if src.remaining() < 2 {
+        if src.remaining() < size_of::<u16>() {
             return Err(PpaassError::CodecError);
         }
         src.get_u16();
-        if src.remaining() < 1 {
+        if src.remaining() < size_of::<u8>() {
             return Err(PpaassError::CodecError);
         }
         let frag = src.get_u8();
