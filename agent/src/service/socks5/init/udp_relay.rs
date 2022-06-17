@@ -41,16 +41,10 @@ impl Socks5UdpRelayFlow {
     {
         let Socks5UdpRelayFlowRequest {
             associated_udp_socket,
-            associated_udp_address,
             connection_id,
-            client_stream,
             client_address,
             mut message_framed_write,
-            message_framed_read,
-            source_address,
-            target_address,
-            init_data,
-            proxy_address,
+            ..
         } = request;
         let user_token = configuration.user_token().clone().unwrap();
         let user_token_clone = user_token.clone();
