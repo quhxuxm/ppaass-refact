@@ -55,7 +55,7 @@ where
     pub client_address: SocketAddr,
     pub source_address: NetAddress,
     pub target_address: NetAddress,
-    pub proxy_address: Option<SocketAddr>,
+    pub proxy_address: SocketAddr,
     pub relay_type: Socks5InitFlowResultRelayType,
 }
 

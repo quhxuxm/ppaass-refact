@@ -18,7 +18,7 @@ where
     pub source_address: NetAddress,
     pub target_address: NetAddress,
     pub init_data: Option<Vec<u8>>,
-    pub proxy_address: Option<SocketAddr>,
+    pub proxy_address: SocketAddr,
 }
 pub struct Socks5UdpRelayFlowResult {}
 pub struct Socks5UdpRelayFlow;

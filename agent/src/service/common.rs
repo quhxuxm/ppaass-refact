@@ -124,7 +124,7 @@ where
     pub source_address: NetAddress,
     pub target_address: NetAddress,
     pub init_data: Option<Vec<u8>>,
-    pub proxy_address: Option<SocketAddr>,
+    pub proxy_address: SocketAddr,
 }
 
 #[allow(unused)]
@@ -171,7 +171,7 @@ impl TcpRelayFlow {
             source_address,
             target_address,
             init_data,
-            proxy_address,
+            ..
         } = request;
 
         let (client_stream_read, client_stream_write) = client_stream.into_split();
@@ -187,7 +187,6 @@ impl TcpRelayFlow {
                 ..
             }) = Self::relay_proxy_to_client(
                 connection_id_p2c,
-                proxy_address,
                 target_address_p2c,
                 message_framed_read,
                 client_stream_write,
@@ -403,8 +402,8 @@ impl TcpRelayFlow {
     }
 
     async fn relay_proxy_to_client<T>(
-        connection_id: String, read_from_address: Option<SocketAddr>, _target_address_t2a: NetAddress, mut message_framed_read: MessageFramedRead<T>,
-        mut client_stream_write: OwnedWriteHalf, configuration: Arc<AgentConfig>,
+        connection_id: String, _target_address_t2a: NetAddress, mut message_framed_read: MessageFramedRead<T>, mut client_stream_write: OwnedWriteHalf,
+        configuration: Arc<AgentConfig>,
     ) -> Result<(), TcpRelayP2CError<T>>
     where
         T: RsaCryptoFetcher,
@@ -414,7 +413,6 @@ impl TcpRelayFlow {
             let read_proxy_message_result = MessageFramedReader::read(ReadMessageFramedRequest {
                 connection_id,
                 message_framed_read,
-                read_from_address,
             })
             .await;
             let proxy_raw_data = match read_proxy_message_result {

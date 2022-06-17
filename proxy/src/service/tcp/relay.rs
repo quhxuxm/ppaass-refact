@@ -169,7 +169,6 @@ impl TcpRelayProcess {
             let read_agent_message_result = MessageFramedReader::read(ReadMessageFramedRequest {
                 connection_id: connection_id.clone(),
                 message_framed_read,
-                read_from_address: Some(agent_address),
             })
             .await;
             let (message_framed_read_move_back, agent_data) = match read_agent_message_result {

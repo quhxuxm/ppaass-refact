@@ -54,7 +54,7 @@ where
 {
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,
-    pub proxy_address: Option<SocketAddr>,
+    pub proxy_address: SocketAddr,
     pub init_data: Option<Vec<u8>>,
     pub message_framed_read: MessageFramedRead<T>,
     pub message_framed_write: MessageFramedWrite<T>,
@@ -148,6 +148,8 @@ impl HttpConnectFlow {
             },
             Ok(v) => v,
         };
+        let connected_proxy_address = proxy_stream.peer_addr()?;
+
         let framed_result = match MessageFramedGenerator::generate(
             proxy_stream,
             configuration.message_framed_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
@@ -198,7 +200,6 @@ impl HttpConnectFlow {
         match MessageFramedReader::read(ReadMessageFramedRequest {
             connection_id,
             message_framed_read: framed_result.message_framed_read,
-            read_from_address: framed_result.framed_address,
         })
         .await
         {
@@ -238,7 +239,7 @@ impl HttpConnectFlow {
                     return Ok(HttpConnectFlowResult {
                         client_stream,
                         client_address,
-                        proxy_address: framed_result.framed_address,
+                        proxy_address: connected_proxy_address,
                         init_data: None,
                         message_framed_read,
                         message_framed_write,
@@ -249,7 +250,7 @@ impl HttpConnectFlow {
                 return Ok(HttpConnectFlowResult {
                     client_stream,
                     client_address,
-                    proxy_address: framed_result.framed_address,
+                    proxy_address: connected_proxy_address,
                     init_data,
                     message_framed_read,
                     message_framed_write,

@@ -60,7 +60,6 @@ impl TcpConnectProcess {
         let read_agent_message_result = MessageFramedReader::read(ReadMessageFramedRequest {
             connection_id: connection_id.clone(),
             message_framed_read,
-            read_from_address: Some(agent_address),
         })
         .await;
         if let Ok(ReadMessageFramedResult {

@@ -40,7 +40,7 @@ where
     pub message_framed_read: MessageFramedRead<T>,
     pub message_framed_write: MessageFramedWrite<T>,
     pub client_address: SocketAddr,
-    pub proxy_address: Option<SocketAddr>,
+    pub proxy_address: SocketAddr,
     pub source_address: NetAddress,
     pub target_address: NetAddress,
 }
@@ -71,11 +71,10 @@ impl Socks5TcpConnectFlow {
 
         let message_framed_buffer_size = configuration.message_framed_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE);
         let compress = configuration.compress().unwrap_or(true);
-
+        let connected_proxy_address = proxy_stream.peer_addr()?;
         let MessageFramedGenerateResult {
             message_framed_write,
             message_framed_read,
-            framed_address,
         } = MessageFramedGenerator::generate(proxy_stream, message_framed_buffer_size, compress, rsa_crypto_fetcher).await?;
 
         let PayloadEncryptionTypeSelectResult { payload_encryption_type, .. } = PayloadEncryptionTypeSelector::select(PayloadEncryptionTypeSelectRequest {
@@ -111,7 +110,6 @@ impl Socks5TcpConnectFlow {
         match MessageFramedReader::read(ReadMessageFramedRequest {
             connection_id: connection_id.clone(),
             message_framed_read,
-            read_from_address: framed_address,
         })
         .await
         {
@@ -142,7 +140,7 @@ impl Socks5TcpConnectFlow {
                     message_framed_write,
                     source_address,
                     target_address,
-                    proxy_address: framed_address,
+                    proxy_address: connected_proxy_address,
                 })
             },
             Ok(ReadMessageFramedResult {
