@@ -311,7 +311,7 @@ impl TcpRelayProcess {
                                 if let ErrorKind::ConnectionReset = source.kind() {
                                     return Ok(());
                                 }
-                                error!("Connection [{}] fail to close data from target to proxy when all    data read from target, target address={:?}, source address={:?}, error: {:#?}.",connection_id, target_address, source_address, source
+                                error!("Connection [{}] fail to close data from target to proxy when all data read from target, target address={:?}, source address={:?}, error: {:#?}.",connection_id, target_address, source_address, source
                                 );
                                 return Err(TcpRelayT2PError {
                                     message_framed_write,
