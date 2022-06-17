@@ -134,9 +134,11 @@ impl HttpConnectFlow {
             Some(v) => v.to_string(),
         };
         let target_address = NetAddress::Domain(target_host, target_port);
-        let TcpConnectResult { target_stream: proxy_stream } = match TcpConnector::connect(TcpConnectRequest {
-            target_addresses: proxy_addresses.to_vec(),
-            target_stream_so_linger: proxy_stream_so_linger,
+        let TcpConnectResult {
+            connected_stream: proxy_stream,
+        } = match TcpConnector::connect(TcpConnectRequest {
+            connect_addresses: proxy_addresses.to_vec(),
+            connected_stream_so_linger: proxy_stream_so_linger,
         })
         .await
         {

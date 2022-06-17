@@ -102,10 +102,11 @@ impl Socks5FlowProcessor {
                 info!("Start socks5 tcp relay for client: {:?}", client_address);
                 Ok(Socks5FlowResult { client_address })
             },
-            Socks5InitFlowResultRelayType::Udp(port) => {
+            Socks5InitFlowResultRelayType::Udp(associated_udp_socket) => {
+                let udp_address = associated_udp_socket.local_addr()?;
                 let Socks5UdpRelayFlowResult { .. } = Socks5UdpRelayFlow::exec(
                     Socks5UdpRelayFlowRequest {
-                        port,
+                        associated_udp_socket,
                         connection_id,
                         client_address,
                         client_stream,
@@ -120,7 +121,7 @@ impl Socks5FlowProcessor {
                     configuration,
                 )
                 .await?;
-                info!("Start socks5 udp relay for client: {:?} on udp port: {}", client_address, port);
+                info!("Start socks5 udp relay for client: {:?} on udp address: {:?}", client_address, udp_address);
                 Ok(Socks5FlowResult { client_address })
             },
         }

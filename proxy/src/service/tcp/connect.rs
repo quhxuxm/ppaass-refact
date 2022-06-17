@@ -87,11 +87,13 @@ impl TcpConnectProcess {
             })
             .await?;
             let connect_to_target_result = TcpConnector::connect(TcpConnectRequest {
-                target_addresses: target_address.clone().try_into()?,
-                target_stream_so_linger,
+                connect_addresses: target_address.clone().try_into()?,
+                connected_stream_so_linger: target_stream_so_linger,
             })
             .await;
-            let TcpConnectResult { target_stream } = match connect_to_target_result {
+            let TcpConnectResult {
+                connected_stream: target_stream,
+            } = match connect_to_target_result {
                 Err(e) => {
                     error!(
                         "Connection [{}] fail connect to target {:#?} because of error: {:#?}",

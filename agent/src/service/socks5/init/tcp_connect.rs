@@ -59,11 +59,13 @@ impl Socks5TcpConnectFlow {
             ..
         } = request;
         let client_address = request.client_address;
-        let target_stream_so_linger = configuration.proxy_stream_so_linger().unwrap_or(DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS);
+        let connected_stream_so_linger = configuration.proxy_stream_so_linger().unwrap_or(DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS);
 
-        let TcpConnectResult { target_stream: proxy_stream } = TcpConnector::connect(TcpConnectRequest {
-            target_addresses: proxy_addresses.to_vec(),
-            target_stream_so_linger,
+        let TcpConnectResult {
+            connected_stream: proxy_stream,
+        } = TcpConnector::connect(TcpConnectRequest {
+            connect_addresses: proxy_addresses.to_vec(),
+            connected_stream_so_linger,
         })
         .await?;
 

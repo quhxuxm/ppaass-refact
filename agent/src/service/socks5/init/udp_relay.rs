@@ -2,14 +2,14 @@ use std::{net::SocketAddr, sync::Arc};
 
 use anyhow::Result;
 use common::{MessageFramedRead, MessageFramedWrite, NetAddress, RsaCryptoFetcher};
-use tokio::net::TcpStream;
+use tokio::net::{TcpStream, UdpSocket};
 
 use crate::config::AgentConfig;
 pub struct Socks5UdpRelayFlowRequest<T>
 where
     T: RsaCryptoFetcher,
 {
-    pub port: u16,
+    pub associated_udp_socket: UdpSocket,
     pub connection_id: String,
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,
@@ -20,9 +20,7 @@ where
     pub init_data: Option<Vec<u8>>,
     pub proxy_address: Option<SocketAddr>,
 }
-pub struct Socks5UdpRelayFlowResult {
-    port: u16,
-}
+pub struct Socks5UdpRelayFlowResult {}
 pub struct Socks5UdpRelayFlow;
 
 impl Socks5UdpRelayFlow {

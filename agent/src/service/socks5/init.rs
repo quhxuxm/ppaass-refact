@@ -8,14 +8,14 @@ use common::{MessageFramedRead, MessageFramedWrite, NetAddress, PpaassError, Rsa
 
 use futures::{SinkExt, StreamExt};
 use tcp_connect::Socks5TcpConnectFlow;
-use tokio::net::TcpStream;
+use tokio::net::{TcpStream, UdpSocket};
 use tokio_util::codec::{Framed, FramedParts};
 
 use tracing::{debug, error};
 
 use crate::service::socks5::init::{
     tcp_connect::Socks5TcpConnectFlowResult,
-    udp_associate::{Socks5UdpAssociateFlow, Socks5UdpAssociateFlowRequest, Socks5UdpAssociateFlowResponse},
+    udp_associate::{Socks5UdpAssociateFlow, Socks5UdpAssociateFlowRequest, Socks5UdpAssociateFlowResult},
 };
 
 use crate::{codec::socks5::Socks5InitCommandContentCodec, service::socks5::init::tcp_connect::Socks5TcpConnectFlowRequest};
@@ -35,7 +35,7 @@ pub(crate) type Socks5InitFramed<'a> = Framed<&'a mut TcpStream, Socks5InitComma
 
 pub(crate) enum Socks5InitFlowResultRelayType {
     Tcp,
-    Udp(u16),
+    Udp(UdpSocket),
 }
 pub(crate) struct Socks5InitFlowRequest {
     pub connection_id: String,
@@ -130,18 +130,26 @@ impl Socks5InitFlow {
                     },
                 }
             },
-            Socks5InitCommandType::Bind => {
-                todo!()
-            },
             Socks5InitCommandType::UdpAssociate => {
-                match Socks5UdpAssociateFlow::exec(Socks5UdpAssociateFlowRequest {}, rsa_crypto_fetcher, configuration).await {
+                match Socks5UdpAssociateFlow::exec(
+                    Socks5UdpAssociateFlowRequest {
+                        connection_id,
+                        proxy_addresses,
+                        client_address,
+                        dest_address: dest_address.clone(),
+                    },
+                    rsa_crypto_fetcher,
+                    configuration,
+                )
+                .await
+                {
                     Err(e) => {
                         error!("Fail to handle socks5 init command (UDP ASSOCIATE) because of error: {:#?}", e);
                         send_socks5_init_failure(&mut socks5_init_framed).await?;
                         Err(e)
                     },
-                    Ok(Socks5UdpAssociateFlowResponse {
-                        port,
+                    Ok(Socks5UdpAssociateFlowResult {
+                        associated_udp_socket,
                         message_framed_read,
                         message_framed_write,
                         client_address,
@@ -154,7 +162,7 @@ impl Socks5InitFlow {
                         socks5_init_framed.send(init_command_result).await?;
                         socks5_init_framed.flush().await?;
                         Ok(Socks5InitFlowResult {
-                            relay_type: Socks5InitFlowResultRelayType::Udp(port),
+                            relay_type: Socks5InitFlowResultRelayType::Udp(associated_udp_socket),
                             client_stream,
                             client_address,
                             message_framed_read,
@@ -165,6 +173,9 @@ impl Socks5InitFlow {
                         })
                     },
                 }
+            },
+            Socks5InitCommandType::Bind => {
+                todo!()
             },
         }
     }
@@ -177,5 +188,6 @@ async fn send_socks5_init_failure(socks5_client_framed: &mut Socks5InitFramed<'_
         return Err(e);
     };
     socks5_client_framed.flush().await?;
+    socks5_client_framed.close().await?;
     Ok(())
 }
