@@ -1,5 +1,5 @@
-use std::net::SocketAddr;
 use std::sync::Arc;
+use std::{io::ErrorKind, net::SocketAddr};
 
 use anyhow::anyhow;
 use anyhow::Result;
@@ -133,6 +133,27 @@ pub(crate) struct TcpRelayFlowResult {
     pub client_address: SocketAddr,
 }
 
+#[allow(unused)]
+struct TcpRelayC2PError<T>
+where
+    T: RsaCryptoFetcher,
+{
+    message_framed_write: MessageFramedWrite<T>,
+    client_stream_read: OwnedReadHalf,
+    source: anyhow::Error,
+    connection_closed: bool,
+}
+
+#[allow(unused)]
+struct TcpRelayP2CError<T>
+where
+    T: RsaCryptoFetcher,
+{
+    message_framed_read: MessageFramedRead<T>,
+    client_stream_write: OwnedWriteHalf,
+    source: anyhow::Error,
+}
+
 #[derive(Default)]
 pub(crate) struct TcpRelayFlow;
 
@@ -154,51 +175,62 @@ impl TcpRelayFlow {
             proxy_address,
         } = request;
 
-        let (client_stream_read_half, client_stream_write_half) = client_stream.into_split();
+        let (client_stream_read, client_stream_write) = client_stream.into_split();
         let connection_id_p2c = connection_id.clone();
         let target_address_p2c = target_address.clone();
         let configuration_p2c = configuration.clone();
 
         tokio::spawn(async move {
-            if let Err((_message_framed_read, mut client_stream_write_half, original_error)) = Self::relay_proxy_to_client(
+            if let Err(TcpRelayP2CError {
+                mut client_stream_write,
+                source,
+                ..
+            }) = Self::relay_proxy_to_client(
                 connection_id_p2c,
                 proxy_address,
                 target_address_p2c,
                 message_framed_read,
-                client_stream_write_half,
+                client_stream_write,
                 configuration_p2c,
             )
             .await
             {
-                error!("Error happen when relay data from proxy to client, error: {:#?}", original_error);
-                if let Err(e) = client_stream_write_half.flush().await {
+                error!("Error happen when relay data from proxy to client, error: {:#?}", source);
+                if let Err(e) = client_stream_write.flush().await {
                     error!("Fail to flush client stream writer when relay data from proxy to client have error:{:#?}", e);
                 };
-                if let Err(e) = client_stream_write_half.shutdown().await {
+                if let Err(e) = client_stream_write.shutdown().await {
                     error!("Fail to shutdown client stream writer when relay data from proxy to client have error:{:#?}", e);
                 };
             }
         });
         tokio::spawn(async move {
-            if let Err((mut message_framed_write, _client_stream_read_half, original_error)) = Self::relay_client_to_proxy(
+            if let Err(TcpRelayC2PError {
+                mut message_framed_write,
+                source,
+                connection_closed,
+                ..
+            }) = Self::relay_client_to_proxy(
                 connection_id,
                 init_data,
                 connect_response_message_id,
                 message_framed_write,
                 source_address,
                 target_address,
-                client_stream_read_half,
+                client_stream_read,
                 configuration,
             )
             .await
             {
-                error!("Error happen when relay data from client to proxy, error: {:#?}", original_error);
+                error!("Error happen when relay data from client to proxy, error: {:#?}", source);
                 if let Err(e) = message_framed_write.flush().await {
                     error!("Fail to flush proxy message writer when relay data from client to proxy have error:{:#?}", e);
                 };
-                if let Err(e) = message_framed_write.close().await {
-                    error!("Fail to close proxy message writer when relay data from client to proxy have error:{:#?}", e);
-                };
+                if !connection_closed {
+                    if let Err(e) = message_framed_write.close().await {
+                        error!("Fail to close proxy message writer when relay data from client to proxy have error:{:#?}", e);
+                    };
+                }
             }
         });
 
@@ -207,8 +239,8 @@ impl TcpRelayFlow {
 
     async fn relay_client_to_proxy<T>(
         connection_id: String, init_data: Option<Vec<u8>>, connect_response_message_id: String, mut message_framed_write: MessageFramedWrite<T>,
-        source_address_a2t: NetAddress, target_address_a2t: NetAddress, mut client_stream_read_half: OwnedReadHalf, configuration: Arc<AgentConfig>,
-    ) -> Result<(), (MessageFramedWrite<T>, OwnedReadHalf, anyhow::Error)>
+        source_address_a2t: NetAddress, target_address_a2t: NetAddress, mut client_stream_read: OwnedReadHalf, configuration: Arc<AgentConfig>,
+    ) -> Result<(), TcpRelayC2PError<T>>
     where
         T: RsaCryptoFetcher,
     {
@@ -222,7 +254,12 @@ impl TcpRelayFlow {
             {
                 Err(e) => {
                     error!("Fail to select payload encryption type because of error: {:#?}", e);
-                    return Err((message_framed_write, client_stream_read_half, anyhow!(e)));
+                    return Err(TcpRelayC2PError {
+                        message_framed_write,
+                        client_stream_read,
+                        source: anyhow!(e),
+                        connection_closed: false,
+                    });
                 },
                 Ok(PayloadEncryptionTypeSelectResult { payload_encryption_type, .. }) => payload_encryption_type,
             };
@@ -243,12 +280,22 @@ impl TcpRelayFlow {
             message_framed_write = match write_agent_message_result {
                 Err(WriteMessageFramedError { message_framed_write, source }) => {
                     error!("Fail to write agent message to proxy because of error: {:#?}", source);
-                    return Err((message_framed_write, client_stream_read_half, anyhow!(source)));
+                    return Err(TcpRelayC2PError {
+                        message_framed_write,
+                        client_stream_read,
+                        source: anyhow!(source),
+                        connection_closed: false,
+                    });
                 },
                 Ok(WriteMessageFramedResult { mut message_framed_write }) => {
                     if let Err(e) = message_framed_write.flush().await {
                         error!("Fail to flush agent message to proxy because of error: {:#?}", e);
-                        return Err((message_framed_write, client_stream_read_half, anyhow!(e)));
+                        return Err(TcpRelayC2PError {
+                            message_framed_write,
+                            client_stream_read,
+                            source: anyhow!(e),
+                            connection_closed: false,
+                        });
                     };
                     message_framed_write
                 },
@@ -257,22 +304,40 @@ impl TcpRelayFlow {
         loop {
             let client_buffer_size = configuration.client_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE);
             let mut client_buffer = BytesMut::with_capacity(client_buffer_size);
-
-            match client_stream_read_half.read_buf(&mut client_buffer).await {
+            match client_stream_read.read_buf(&mut client_buffer).await {
                 Err(e) => {
                     error!(
                         "Error happen when relay data from client to proxy,  agent address={:?}, target address={:?}, error: {:#?}",
                         source_address_a2t, target_address_a2t, e
                     );
-                    return Err((message_framed_write, client_stream_read_half, anyhow!(e)));
+                    let mut connection_closed = false;
+                    if let ErrorKind::ConnectionReset = e.kind() {
+                        connection_closed = true;
+                    }
+                    return Err(TcpRelayC2PError {
+                        message_framed_write,
+                        client_stream_read,
+                        source: anyhow!(e),
+                        connection_closed,
+                    });
                 },
                 Ok(0) => {
                     debug!("Read all data from client, target address: {:?}", target_address_a2t);
                     if let Err(e) = message_framed_write.flush().await {
-                        return Err((message_framed_write, client_stream_read_half, anyhow!(e)));
+                        return Err(TcpRelayC2PError {
+                            message_framed_write,
+                            client_stream_read,
+                            source: anyhow!(e),
+                            connection_closed: false,
+                        });
                     };
                     if let Err(e) = message_framed_write.close().await {
-                        return Err((message_framed_write, client_stream_read_half, anyhow!(e)));
+                        return Err(TcpRelayC2PError {
+                            message_framed_write,
+                            client_stream_read,
+                            source: anyhow!(e),
+                            connection_closed: false,
+                        });
                     };
                     return Ok(());
                 },
@@ -289,7 +354,12 @@ impl TcpRelayFlow {
             {
                 Err(e) => {
                     error!("Fail to select payload encryption type because of error: {:#?}", e);
-                    return Err((message_framed_write, client_stream_read_half, anyhow!(e)));
+                    return Err(TcpRelayC2PError {
+                        message_framed_write,
+                        client_stream_read,
+                        source: anyhow!(e),
+                        connection_closed: false,
+                    });
                 },
                 Ok(PayloadEncryptionTypeSelectResult { payload_encryption_type, .. }) => payload_encryption_type,
             };
@@ -314,21 +384,31 @@ impl TcpRelayFlow {
                 message_framed_write = match write_agent_message_result {
                     Err(WriteMessageFramedError { message_framed_write, source }) => {
                         error!("Fail to write agent message to proxy because of error: {:#?}", source);
-                        return Err((message_framed_write, client_stream_read_half, anyhow!(source)));
+                        return Err(TcpRelayC2PError {
+                            message_framed_write,
+                            client_stream_read,
+                            source: anyhow!(source),
+                            connection_closed: false,
+                        });
                     },
                     Ok(WriteMessageFramedResult { message_framed_write }) => message_framed_write,
                 };
             }
             if let Err(e) = message_framed_write.flush().await {
-                return Err((message_framed_write, client_stream_read_half, anyhow!(e)));
+                return Err(TcpRelayC2PError {
+                    message_framed_write,
+                    client_stream_read,
+                    source: anyhow!(e),
+                    connection_closed: false,
+                });
             };
         }
     }
 
     async fn relay_proxy_to_client<T>(
         connection_id: String, read_from_address: Option<SocketAddr>, _target_address_t2a: NetAddress, mut message_framed_read: MessageFramedRead<T>,
-        mut client_stream_write_half: OwnedWriteHalf, configuration: Arc<AgentConfig>,
-    ) -> Result<(), (MessageFramedRead<T>, OwnedWriteHalf, anyhow::Error)>
+        mut client_stream_write: OwnedWriteHalf, configuration: Arc<AgentConfig>,
+    ) -> Result<(), TcpRelayP2CError<T>>
     where
         T: RsaCryptoFetcher,
     {
@@ -342,7 +422,11 @@ impl TcpRelayFlow {
             .await;
             let proxy_raw_data = match read_proxy_message_result {
                 Err(ReadMessageFramedError { message_framed_read, source }) => {
-                    return Err((message_framed_read, client_stream_write_half, anyhow!(source)));
+                    return Err(TcpRelayP2CError {
+                        message_framed_read,
+                        client_stream_write,
+                        source: anyhow!(source),
+                    });
                 },
                 Ok(ReadMessageFramedResult {
                     message_framed_read: message_framed_read_give_back,
@@ -366,26 +450,39 @@ impl TcpRelayFlow {
                     content: None,
                     ..
                 }) => {
-                    client_stream_write_half
-                        .flush()
-                        .await
-                        .map_err(|e| (message_framed_read, client_stream_write_half, anyhow!(e)))?;
+                    client_stream_write.flush().await.map_err(|e| TcpRelayP2CError {
+                        message_framed_read,
+                        client_stream_write,
+                        source: anyhow!(e),
+                    })?;
                     return Ok(());
                 },
                 Ok(ReadMessageFramedResult { message_framed_read, .. }) => {
-                    return Err((message_framed_read, client_stream_write_half, anyhow!(PpaassError::CodecError)))
+                    return Err(TcpRelayP2CError {
+                        message_framed_read,
+                        client_stream_write,
+                        source: anyhow!(PpaassError::CodecError),
+                    })
                 },
             };
 
             let client_buffer_size = configuration.client_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE);
             let proxy_raw_data_chunks = proxy_raw_data.chunks(client_buffer_size);
             for (_, chunk) in proxy_raw_data_chunks.enumerate() {
-                if let Err(e) = client_stream_write_half.write(chunk).await {
-                    return Err((message_framed_read, client_stream_write_half, anyhow!(e)));
+                if let Err(e) = client_stream_write.write(chunk).await {
+                    return Err(TcpRelayP2CError {
+                        message_framed_read,
+                        client_stream_write,
+                        source: anyhow!(e),
+                    });
                 }
             }
-            if let Err(e) = client_stream_write_half.flush().await {
-                return Err((message_framed_read, client_stream_write_half, anyhow!(e)));
+            if let Err(e) = client_stream_write.flush().await {
+                return Err(TcpRelayP2CError {
+                    message_framed_read,
+                    client_stream_write,
+                    source: anyhow!(e),
+                });
             }
         }
     }
