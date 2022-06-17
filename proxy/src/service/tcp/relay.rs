@@ -321,7 +321,7 @@ impl TcpRelayProcess {
                                 });
                             },
                             _ => {
-                                error!("Connection [{}] fail to close data from target to proxy when all    data read from target, target address={:?}, source address={:?}, error: {:#?}.",connection_id, target_address, source_address, e
+                                error!("Connection [{}] fail to close data from target to proxy when all data read from target, target address={:?}, source address={:?}, error: {:#?}.",connection_id, target_address, source_address, e
                                 );
                                 return Err(TcpRelayT2PError {
                                     message_framed_write,
