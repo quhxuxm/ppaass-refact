@@ -295,8 +295,8 @@ impl TcpRelayProcess {
                     );
                     if let Err(e) = message_framed_write.flush().await {
                         error!(
-                            "Connection [{}] fail to flush data from target to proxy when all data read from target, target address={:?}, source address={:?}.",
-                            connection_id, target_address, source_address
+                            "Connection [{}] fail to flush data from target to proxy when all data read from target, target address={:?}, source address={:?}, error: {:#?}.",
+                            connection_id, target_address, source_address, e
                         );
                         return Err(TcpRelayT2PError {
                             message_framed_write,
@@ -306,16 +306,31 @@ impl TcpRelayProcess {
                         });
                     };
                     if let Err(e) = message_framed_write.close().await {
-                        error!(
-                            "Connection [{}] fail to close data from target to proxy when all data read from target, target address={:?}, source address={:?}.",
-                            connection_id, target_address, source_address
-                        );
-                        return Err(TcpRelayT2PError {
-                            message_framed_write,
-                            target_stream_read,
-                            source: anyhow!(e),
-                            connection_closed: true,
-                        });
+                        match e {
+                            PpaassError::IoError { source } => {
+                                if let ErrorKind::ConnectionReset = source.kind() {
+                                    return Ok(());
+                                }
+                                error!("Connection [{}] fail to close data from target to proxy when all    data read from target, target address={:?}, source address={:?}, error: {:#?}.",connection_id, target_address, source_address, source
+                                );
+                                return Err(TcpRelayT2PError {
+                                    message_framed_write,
+                                    target_stream_read,
+                                    source: anyhow!(source),
+                                    connection_closed: false,
+                                });
+                            },
+                            _ => {
+                                error!("Connection [{}] fail to close data from target to proxy when all    data read from target, target address={:?}, source address={:?}, error: {:#?}.",connection_id, target_address, source_address, e
+                                );
+                                return Err(TcpRelayT2PError {
+                                    message_framed_write,
+                                    target_stream_read,
+                                    source: anyhow!(e),
+                                    connection_closed: false,
+                                });
+                            },
+                        }
                     };
                     return Ok(());
                 },
