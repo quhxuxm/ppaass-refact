@@ -141,6 +141,12 @@ impl InitializeFlow {
                     UdpAssociateFlowRequest {
                         message_framed_read,
                         message_framed_write,
+                        agent_address,
+                        connection_id,
+                        message_id,
+                        source_address,
+                        target_address,
+                        user_token,
                     },
                     configuration,
                 )

@@ -1,5 +1,6 @@
 #![allow(unused)]
 use std::{
+    collections::vec_deque::Iter,
     fmt::{Debug, Display, Formatter},
     mem::size_of,
 };
@@ -13,6 +14,7 @@ use std::{ops::Deref, str::FromStr};
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 
 use pretty_hex::*;
+use rsa::pkcs8::der::bigint::generic_array::typenum::PowerOfTwo;
 use tracing::error;
 
 use crate::NetAddress::IpV4;
@@ -43,6 +45,65 @@ impl Default for NetAddress {
     }
 }
 
+pub struct SocketAddrIter {
+    elements: Vec<SocketAddr>,
+    index: usize,
+}
+
+impl SocketAddrIter {
+    pub fn new(elements: Vec<SocketAddr>) -> Self {
+        Self { elements, index: 0 }
+    }
+}
+
+impl Iterator for SocketAddrIter {
+    type Item = SocketAddr;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let mut result = self.elements.get(self.index);
+        self.index += 1;
+        result.map(|item| *item)
+    }
+}
+
+impl ToSocketAddrs for NetAddress {
+    type Iter = SocketAddrIter;
+
+    fn to_socket_addrs(&self) -> std::io::Result<Self::Iter> {
+        match self {
+            Self::IpV4(ip, port) => {
+                let socket_addr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(ip[0], ip[1], ip[2], ip[3]), *port));
+                let elements = vec![socket_addr];
+                Ok(SocketAddrIter::new(elements))
+            },
+            Self::IpV6(ip, port) => {
+                let mut cursor = Cursor::new(ip);
+                let socket_addr = SocketAddr::V6(SocketAddrV6::new(
+                    Ipv6Addr::new(
+                        cursor.get_u16(),
+                        cursor.get_u16(),
+                        cursor.get_u16(),
+                        cursor.get_u16(),
+                        cursor.get_u16(),
+                        cursor.get_u16(),
+                        cursor.get_u16(),
+                        cursor.get_u16(),
+                    ),
+                    *port,
+                    0,
+                    0,
+                ));
+                let elements = vec![socket_addr];
+                Ok(SocketAddrIter::new(elements))
+            },
+            Self::Domain(host, port) => {
+                let addresses = format!("{}:{}", host, port).to_socket_addrs()?.collect::<Vec<_>>();
+                Ok(SocketAddrIter::new(addresses))
+            },
+        }
+    }
+}
+
 impl ToString for NetAddress {
     fn to_string(&self) -> String {
         match self {
@@ -50,17 +111,17 @@ impl ToString for NetAddress {
                 format!("{}.{}.{}.{}:{}", ip_content[0], ip_content[1], ip_content[2], ip_content[3], port)
             },
             Self::IpV6(ip_content, port) => {
-                let mut ip_content_bytes = Bytes::from(ip_content.to_vec());
+                let mut cursor = Cursor::new(ip_content);
                 format!(
                     "{:x}:{:x}:{:x}:{:x}:{:x}:{:x}:{:x}:{:x}:{}",
-                    ip_content_bytes.get_u16(),
-                    ip_content_bytes.get_u16(),
-                    ip_content_bytes.get_u16(),
-                    ip_content_bytes.get_u16(),
-                    ip_content_bytes.get_u16(),
-                    ip_content_bytes.get_u16(),
-                    ip_content_bytes.get_u16(),
-                    ip_content_bytes.get_u16(),
+                    cursor.get_u16(),
+                    cursor.get_u16(),
+                    cursor.get_u16(),
+                    cursor.get_u16(),
+                    cursor.get_u16(),
+                    cursor.get_u16(),
+                    cursor.get_u16(),
+                    cursor.get_u16(),
                     port
                 )
             },
