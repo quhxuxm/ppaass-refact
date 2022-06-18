@@ -137,7 +137,14 @@ impl InitializeFlow {
                     }),
                 ..
             }) => {
-                let UdpAssociateFlowResult { .. } = UdpAssociateFlow::exec(UdpAssociateFlowRequest {}, configuration).await?;
+                let UdpAssociateFlowResult { .. } = UdpAssociateFlow::exec(
+                    UdpAssociateFlowRequest {
+                        message_framed_read,
+                        message_framed_write,
+                    },
+                    configuration,
+                )
+                .await?;
                 todo!()
             },
             _ => Err(anyhow!(PpaassError::CodecError)),
