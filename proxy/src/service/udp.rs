@@ -1,2 +1,2 @@
-mod associate;
-mod relay;
+pub(crate) mod associate;
+pub(crate) mod relay;

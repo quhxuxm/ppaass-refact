@@ -63,7 +63,7 @@ where
 pub(crate) struct TcpRelayFlow;
 
 impl TcpRelayFlow {
-    pub async fn exec<T>(&self, request: TcpRelayFlowRequest<T>, configuration: Arc<ProxyConfig>) -> Result<()>
+    pub async fn exec<T>(request: TcpRelayFlowRequest<T>, configuration: Arc<ProxyConfig>) -> Result<()>
     where
         T: RsaCryptoFetcher + Send + Sync + 'static,
     {

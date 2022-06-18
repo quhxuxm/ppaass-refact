@@ -4,17 +4,18 @@ use std::{fs, path::Path};
 
 use tokio::net::TcpStream;
 
-use common::{generate_uuid, MessageFramedGenerator, PpaassError, RsaCrypto, RsaCryptoFetcher};
+use common::{generate_uuid, MessageFramedGenerateResult, MessageFramedGenerator, PpaassError, RsaCrypto, RsaCryptoFetcher};
 
 use tracing::{debug, error};
 
-use crate::service::tcp::relay::{TcpRelayFlow, TcpRelayFlowRequest};
-use crate::{
-    config::ProxyConfig,
-    service::tcp::connect::{TcpConnectFlow, TcpConnectFlowRequest},
+use crate::service::{
+    init::{InitFlowRequest, InitFlowResult, RelayType},
+    tcp::relay::{TcpRelayFlow, TcpRelayFlowRequest},
 };
+use crate::{config::ProxyConfig, service::init::InitializeFlow};
 
 use anyhow::Result;
+mod init;
 mod tcp;
 mod udp;
 
@@ -105,45 +106,61 @@ impl AgentConnection {
     {
         let connection_id = self.id.clone();
         debug!("Begin to handle agent connection: {}", connection_id);
-
         let message_framed_buffer_size = configuration.message_framed_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE);
         let compress = configuration.compress().unwrap_or(true);
         let agent_stream = self.agent_stream;
         let agent_address_clone = self.agent_address.clone();
         let agent_address = self.agent_address;
-        let tcp_connect_process = TcpConnectFlow;
-        let tcp_relay_process = TcpRelayFlow;
-        let framed_result = MessageFramedGenerator::generate(agent_stream, message_framed_buffer_size, compress, rsa_crypto_fetcher.clone()).await?;
+        let MessageFramedGenerateResult {
+            message_framed_write,
+            message_framed_read,
+        } = MessageFramedGenerator::generate(agent_stream, message_framed_buffer_size, compress, rsa_crypto_fetcher.clone()).await?;
         debug!("Connection [{}] is going to handle tcp connect.", connection_id);
-        let tcp_connect_result = tcp_connect_process
-            .exec(
-                TcpConnectFlowRequest {
-                    connection_id: connection_id.clone(),
-                    message_framed_read: framed_result.message_framed_read,
-                    message_framed_write: framed_result.message_framed_write,
-                    agent_address: agent_address_clone,
-                },
-                configuration.clone(),
-            )
-            .await?;
-        debug!("Connection [{}] is going to handle tcp relay.", connection_id);
-        tcp_relay_process
-            .exec(
-                TcpRelayFlowRequest {
-                    connection_id: connection_id.clone(),
-                    message_framed_read: tcp_connect_result.message_framed_read,
-                    message_framed_write: tcp_connect_result.message_framed_write,
-                    agent_address,
-                    target_stream: tcp_connect_result.target_stream,
-                    source_address: tcp_connect_result.source_address,
-                    target_address: tcp_connect_result.target_address,
-                    user_token: tcp_connect_result.user_token,
-                    agent_tcp_connect_message_id: tcp_connect_result.agent_tcp_connect_message_id,
-                },
-                configuration,
-            )
-            .await?;
-        debug!("Connection [{}] is finish relay.", connection_id);
+
+        let InitFlowResult {
+            target_stream,
+            message_framed_read,
+            message_framed_write,
+            message_id: agent_tcp_connect_message_id,
+            source_address,
+            target_address,
+            user_token,
+            relay_type,
+        } = InitializeFlow::exec(
+            InitFlowRequest {
+                connection_id: connection_id.clone(),
+                message_framed_read,
+                message_framed_write,
+                agent_address: agent_address_clone,
+            },
+            configuration.clone(),
+        )
+        .await?;
+        match relay_type {
+            RelayType::Tcp => {
+                debug!("Connection [{}] is going to handle tcp relay.", connection_id);
+                TcpRelayFlow::exec(
+                    TcpRelayFlowRequest {
+                        connection_id: connection_id.clone(),
+                        message_framed_read,
+                        message_framed_write,
+                        agent_address,
+                        target_stream,
+                        source_address,
+                        target_address,
+                        user_token,
+                        agent_tcp_connect_message_id,
+                    },
+                    configuration,
+                )
+                .await?;
+                debug!("Connection [{}] is finish tcp relay.", connection_id);
+            },
+            RelayType::Udp => {
+                todo!()
+            },
+        }
+
         Ok(())
     }
 }
