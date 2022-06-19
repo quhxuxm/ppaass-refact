@@ -14,7 +14,7 @@ use common::{
 };
 use futures::SinkExt;
 use tokio::net::{TcpStream, UdpSocket};
-use tracing::error;
+use tracing::{error, info};
 
 use crate::{config::AgentConfig, message::socks5::Socks5UdpDataPacket};
 
@@ -161,12 +161,20 @@ impl Socks5UdpRelayFlow {
                     }) => {
                         let send_to_address = match source_address.to_socket_addrs() {
                             Err(e) => {
-                                error!("Connection [{}] fail to forward proxy udp message to client", connection_id);
-                                message_framed_read = message_framed_read_from_result;
-                                continue;
+                                error!(
+                                    "Connection [{}] fail to forward proxy udp message to client [{:?}], error: {:#?}",
+                                    connection_id, source_address, e
+                                );
+                                return;
                             },
                             Ok(v) => v,
                         };
+                        println!(
+                            "Connection [{}] receive udp data from target, forward udp packet to client [{:?}]:\n\n{}\n",
+                            connection_id,
+                            client_address,
+                            pretty_hex::pretty_hex(&data)
+                        );
                         let socks5_udp_packet = Socks5UdpDataPacket {
                             frag: 0,
                             address: client_address.clone().into(),

@@ -246,7 +246,13 @@ impl TryFrom<&mut Bytes> for Socks5Addr {
                 }
                 let domain_name_bytes = value.copy_to_bytes(domain_name_length);
                 let domain_name = match String::from_utf8(domain_name_bytes.to_vec()) {
-                    Ok(v) => v,
+                    Ok(v) => {
+                        if "0".eq(&v) {
+                            "0.0.0.0".to_string()
+                        } else {
+                            v
+                        }
+                    },
                     Err(e) => {
                         error!("Fail to parse socks5 address(Domain) because of error: {:#?}.", e);
                         return Err(PpaassError::CodecError);

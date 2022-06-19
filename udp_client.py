@@ -1,7 +1,7 @@
 import socket
 import socks
 
-host = "127.0.0.1"
+host = "192.168.31.200"
 port = 888
 
 sock = socks.socksocket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -13,9 +13,9 @@ i = 0
 while True:
     message = bytes('This is the message.  It will be repeated: %s' % i, 'utf-8')
     i = i + 1
-    print('sending [%s]' % message)
+    print('UDP CLIENT: sending [%s]' % message)
     sock.send(message)
     data = sock.recv(65535)
-    print('received [%s]' % data)
+    print('UDP CLIENT: received [%s]' % data)
 
 sock.close()

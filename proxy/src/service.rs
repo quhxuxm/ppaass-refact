@@ -11,6 +11,7 @@ use tracing::{debug, error};
 use crate::service::{
     init::{InitFlowRequest, InitFlowResult},
     tcp::relay::{TcpRelayFlow, TcpRelayFlowRequest},
+    udp::relay::{UdpRelayFlow, UdpRelayFlowRequest},
 };
 use crate::{config::ProxyConfig, service::init::InitializeFlow};
 
@@ -160,10 +161,20 @@ impl AgentConnection {
                 message_framed_write,
                 message_id,
                 source_address,
-
                 user_token,
             } => {
-                todo!()
+                UdpRelayFlow::exec(
+                    UdpRelayFlowRequest {
+                        connection_id: connection_id.clone(),
+                        message_framed_read,
+                        message_framed_write,
+                        message_id,
+                        user_token,
+                    },
+                    configuration,
+                )
+                .await?;
+                debug!("Connection [{}] is finish udp relay.", connection_id);
             },
         }
 

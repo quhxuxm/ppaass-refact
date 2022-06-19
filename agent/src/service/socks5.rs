@@ -115,7 +115,7 @@ impl Socks5FlowProcessor {
                     Socks5UdpRelayFlowRequest {
                         associated_udp_socket,
                         associated_udp_address,
-                        connection_id,
+                        connection_id: connection_id.clone(),
                         client_address: client_address.clone(),
                         client_stream,
                         message_framed_write,
@@ -128,7 +128,10 @@ impl Socks5FlowProcessor {
                     configuration,
                 )
                 .await?;
-                info!("Start socks5 udp relay for client: {:?} on udp address: {:?}", client_address, udp_address);
+                info!(
+                    "Connection [{}] start socks5 udp relay for client: {:?} on udp address: {:?}",
+                    connection_id, client_address, udp_address
+                );
                 Ok(Socks5FlowResult)
             },
         }

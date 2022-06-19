@@ -1,8 +1,15 @@
 use std::{net::SocketAddr, sync::Arc};
 
+use anyhow::anyhow;
 use anyhow::Result;
-use common::{MessageFramedRead, MessageFramedWrite, NetAddress, RsaCryptoFetcher};
+use bytes::Bytes;
+use common::{
+    generate_uuid, MessageFramedRead, MessageFramedWrite, MessageFramedWriter, MessagePayload, NetAddress, PayloadEncryptionTypeSelectRequest,
+    PayloadEncryptionTypeSelectResult, PayloadEncryptionTypeSelector, PayloadType, ProxyMessagePayloadTypeValue, RsaCryptoFetcher, WriteMessageFramedError,
+    WriteMessageFramedRequest, WriteMessageFramedResult,
+};
 
+use futures::SinkExt;
 use tracing::info;
 
 use crate::config::ProxyConfig;
@@ -51,6 +58,37 @@ impl UdpAssociateFlow {
             ..
         } = request;
         info!("Connection [{}] associate udp success.", connection_id);
+
+        let PayloadEncryptionTypeSelectResult { payload_encryption_type, .. } = PayloadEncryptionTypeSelector::select(PayloadEncryptionTypeSelectRequest {
+            encryption_token: generate_uuid().into(),
+            user_token: user_token.clone(),
+        })
+        .await?;
+
+        let udp_associate_success_payload = MessagePayload {
+            source_address: Some(source_address.clone()),
+            target_address: None,
+            payload_type: PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::UdpAssociateSuccess),
+            data: Bytes::new(),
+        };
+        let message_framed_write = match MessageFramedWriter::write(WriteMessageFramedRequest {
+            message_framed_write,
+            message_payload: Some(udp_associate_success_payload),
+            payload_encryption_type,
+            user_token: user_token.clone(),
+            ref_id: Some(message_id.clone()),
+            connection_id: Some(connection_id.clone()),
+        })
+        .await
+        {
+            Err(WriteMessageFramedError { source, .. }) => return Err(anyhow!(source)),
+            Ok(WriteMessageFramedResult { mut message_framed_write }) => {
+                if let Err(e) = message_framed_write.flush().await {
+                    return Err(anyhow!(e));
+                }
+                message_framed_write
+            },
+        };
         Ok(UdpAssociateFlowResult {
             connection_id,
             message_framed_read,

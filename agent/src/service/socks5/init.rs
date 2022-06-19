@@ -95,7 +95,7 @@ impl Socks5InitFlow {
             Socks5InitCommandType::Connect => {
                 match Socks5TcpConnectFlow::exec(
                     Socks5TcpConnectFlowRequest {
-                        connection_id,
+                        connection_id: connection_id.clone(),
                         proxy_addresses,
                         client_address,
                         dest_address: dest_address_in_init_command.clone(),
@@ -106,7 +106,10 @@ impl Socks5InitFlow {
                 .await
                 {
                     Err(e) => {
-                        error!("Fail to handle socks5 init command (CONNECT) because of error: {:#?}", e);
+                        error!(
+                            "Connection [{}] fail to handle socks5 init command (CONNECT) because of error: {:#?}",
+                            connection_id, e
+                        );
                         send_socks5_init_failure(&mut socks5_init_framed).await?;
                         Err(e)
                     },
@@ -138,7 +141,7 @@ impl Socks5InitFlow {
             Socks5InitCommandType::UdpAssociate => {
                 match Socks5UdpAssociateFlow::exec(
                     Socks5UdpAssociateFlowRequest {
-                        connection_id,
+                        connection_id: connection_id.clone(),
                         proxy_addresses,
                         client_address: dest_address_in_init_command.clone(),
                     },
@@ -148,7 +151,10 @@ impl Socks5InitFlow {
                 .await
                 {
                     Err(e) => {
-                        error!("Fail to handle socks5 init command (UDP ASSOCIATE) because of error: {:#?}", e);
+                        error!(
+                            "Connection [{}] fail to handle socks5 init command (UDP ASSOCIATE) because of error: {:#?}",
+                            connection_id, e
+                        );
                         send_socks5_init_failure(&mut socks5_init_framed).await?;
                         Err(e)
                     },

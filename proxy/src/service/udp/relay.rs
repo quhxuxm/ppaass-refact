@@ -13,8 +13,9 @@ use common::{
     WriteMessageFramedRequest, WriteMessageFramedResult,
 };
 use futures::StreamExt;
+use pretty_hex;
 use tokio::net::UdpSocket;
-use tracing::{debug, error};
+use tracing::{debug, error, info};
 
 use crate::config::ProxyConfig;
 
@@ -34,7 +35,7 @@ pub(crate) struct UdpRelayFlowResult;
 pub(crate) struct UdpRelayFlow;
 
 impl UdpRelayFlow {
-    pub async fn exec<T>(request: UdpRelayFlowRequest<T>, rsa_crypto_fetcher: Arc<T>, configuration: Arc<ProxyConfig>) -> Result<UdpRelayFlowResult>
+    pub async fn exec<T>(request: UdpRelayFlowRequest<T>, configuration: Arc<ProxyConfig>) -> Result<UdpRelayFlowResult>
     where
         T: RsaCryptoFetcher + Send + Sync + 'static,
     {
@@ -112,6 +113,7 @@ impl UdpRelayFlow {
                             message_framed_read = message_framed_read_return_back;
                             continue;
                         };
+                        println!("Connection [{}] send udp data to target:\n{}\n", connection_id, pretty_hex::pretty_hex(&data));
                         if let Err(e) = udp_socket.send(&data).await {
                             message_framed_read = message_framed_read_return_back;
                             continue;
@@ -125,7 +127,11 @@ impl UdpRelayFlow {
                             Ok(v) => v,
                         };
                         let received_data = &receive_buffer[0..received_data_size];
-
+                        println!(
+                            "Connection [{}] receive udp data from target:\n{}\n",
+                            connection_id,
+                            pretty_hex::pretty_hex(&received_data)
+                        );
                         let PayloadEncryptionTypeSelectResult {
                             user_token,
                             encryption_token,

@@ -1,6 +1,6 @@
 import socket
 
-host = "127.0.0.1"
+host = "192.168.31.200"
 port = 888
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -10,9 +10,9 @@ i = 0
 
 while True:
     message, client_address = sock.recvfrom(65535)
-    print('connection from', client_address)
-    print('received "%s"' % message)
-    print('sending data back to the client [%s]' % i)
-    sock.sendto(bytes("server echo: [%s]" % i, "utf-8"), client_address)
-    print('finish', client_address)
+    print('UDP SERVER: connection from', client_address)
+    print('UDP SERVER: received "%s"' % message)
+    print('UDP SERVER: sending data back to the client [%s]' % i)
+    sock.sendto(bytes("UDP SERVER: server echo: [%s]" % i, "utf-8"), client_address)
+    print('UDP SERVER: finish', client_address)
     i = i + 1
