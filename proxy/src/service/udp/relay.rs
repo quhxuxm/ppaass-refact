@@ -49,24 +49,16 @@ impl UdpRelayFlow {
                 })
                 .await
                 {
-                    Err(ReadMessageFramedError {
-                        message_framed_read: message_framed_read_return_back,
-                        source,
-                    }) => {
+                    Err(ReadMessageFramedError { source, .. }) => {
                         error!("Connection [{}] has a error when read from agent, error: {:#?}.", connection_id, source);
-                        message_framed_read = message_framed_read_return_back;
-                        continue;
+                        return;
                     },
-                    Ok(ReadMessageFramedResult {
-                        message_framed_read: message_framed_read_return_back,
-                        content: None,
-                    }) => {
+                    Ok(ReadMessageFramedResult { content: None, .. }) => {
                         debug!(
                             "Connection [{}] nothing to read, message id:{}, user token:{}",
                             connection_id, message_id, user_token
                         );
-                        message_framed_read = message_framed_read_return_back;
-                        continue;
+                        return;
                     },
                     Ok(ReadMessageFramedResult {
                         message_framed_read: message_framed_read_return_back,
@@ -86,16 +78,14 @@ impl UdpRelayFlow {
                         let udp_socket = match UdpSocket::bind(SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), 0))).await {
                             Err(e) => {
                                 error!("Connection [{}] fail to create udp socket because of error : {:#?}", connection_id, e);
-                                message_framed_read = message_framed_read_return_back;
-                                continue;
+                                return;
                             },
                             Ok(v) => v,
                         };
                         let udp_target_addresses = match target_address.clone().to_socket_addrs() {
                             Err(e) => {
                                 error!("Connection [{}] fail to convert addresses because of error : {:#?}", connection_id, e);
-                                message_framed_read = message_framed_read_return_back;
-                                continue;
+                                return;
                             },
                             Ok(v) => v,
                         };
@@ -104,8 +94,7 @@ impl UdpRelayFlow {
                                 "Connection [{}] fail to connect target address [{:?}] because of error : {:#?}",
                                 connection_id, target_address, e
                             );
-                            message_framed_read = message_framed_read_return_back;
-                            continue;
+                            return;
                         };
                         debug!(
                             "Connection [{}] begin to send udp data from agent to target:\n{}\n",
@@ -114,8 +103,7 @@ impl UdpRelayFlow {
                         );
                         if let Err(e) = udp_socket.send(&data).await {
                             error!("Connection [{}] fail to send udp packet to target because of error:{:#?}", connection_id, e);
-                            message_framed_read = message_framed_read_return_back;
-                            continue;
+                            return;
                         };
                         let mut receive_buffer = [0u8; SIZE_64KB];
                         let received_data_size = match udp_socket.recv(&mut receive_buffer).await {
@@ -124,8 +112,7 @@ impl UdpRelayFlow {
                                     "Connection [{}] fail to receive udp packet from target because of error:{:#?}",
                                     connection_id, e
                                 );
-                                message_framed_read = message_framed_read_return_back;
-                                continue;
+                                return;
                             },
                             Ok(v) => v,
                         };
@@ -147,8 +134,7 @@ impl UdpRelayFlow {
                         {
                             Err(e) => {
                                 error!("Connection [{}] fail to select payload encryption because of error:{:#?}", connection_id, e);
-                                message_framed_read = message_framed_read_return_back;
-                                continue;
+                                return;
                             },
                             Ok(v) => v,
                         };
@@ -176,16 +162,13 @@ impl UdpRelayFlow {
                         };
                         message_framed_read = message_framed_read_return_back;
                     },
-                    Ok(ReadMessageFramedResult {
-                        message_framed_read: message_framed_read_return_back,
-                        ..
-                    }) => {
+                    Ok(ReadMessageFramedResult { .. }) => {
                         error!(
                             "Connection [{}] has a invalid payload when read from agent, message id:{}, user token:{}.",
                             connection_id, message_id, user_token
                         );
-                        message_framed_read = message_framed_read_return_back;
-                        continue;
+
+                        return;
                     },
                 };
             }
