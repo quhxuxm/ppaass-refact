@@ -31,6 +31,7 @@ where
     pub user_token: String,
     pub message_framed_read: MessageFramedRead<T>,
     pub message_framed_write: MessageFramedWrite<T>,
+    pub source_address: NetAddress,
 }
 
 pub(crate) struct UdpAssociateFlow;
@@ -46,6 +47,7 @@ impl UdpAssociateFlow {
             user_token,
             message_framed_read,
             message_framed_write,
+            source_address,
             ..
         } = request;
         info!("Connection [{}] associate udp success.", connection_id);
@@ -55,6 +57,7 @@ impl UdpAssociateFlow {
             message_framed_write,
             message_id,
             user_token,
+            source_address,
         })
     }
 }

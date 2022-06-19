@@ -21,10 +21,6 @@ use super::{
     udp::associate::{UdpAssociateFlow, UdpAssociateFlowRequest, UdpAssociateFlowResult},
 };
 
-pub(crate) enum RelayType {
-    Tcp,
-    Udp,
-}
 pub(crate) struct InitFlowRequest<T>
 where
     T: RsaCryptoFetcher,
@@ -35,18 +31,26 @@ where
     pub agent_address: SocketAddr,
 }
 
-pub(crate) struct InitFlowResult<T>
+pub(crate) enum InitFlowResult<T>
 where
     T: RsaCryptoFetcher,
 {
-    pub target_stream: TcpStream,
-    pub message_framed_read: MessageFramedRead<T>,
-    pub message_framed_write: MessageFramedWrite<T>,
-    pub message_id: String,
-    pub source_address: NetAddress,
-    pub target_address: NetAddress,
-    pub user_token: String,
-    pub relay_type: RelayType,
+    Tcp {
+        target_stream: TcpStream,
+        message_framed_read: MessageFramedRead<T>,
+        message_framed_write: MessageFramedWrite<T>,
+        message_id: String,
+        source_address: NetAddress,
+        target_address: NetAddress,
+        user_token: String,
+    },
+    Udp {
+        message_framed_read: MessageFramedRead<T>,
+        message_framed_write: MessageFramedWrite<T>,
+        message_id: String,
+        source_address: NetAddress,
+        user_token: String,
+    },
 }
 
 #[derive(Clone, Default)]
@@ -109,7 +113,7 @@ impl InitializeFlow {
                     configuration,
                 )
                 .await?;
-                return Ok(InitFlowResult {
+                return Ok(InitFlowResult::Tcp {
                     message_framed_write,
                     message_framed_read,
                     target_stream,
@@ -117,7 +121,6 @@ impl InitializeFlow {
                     source_address,
                     target_address,
                     user_token,
-                    relay_type: RelayType::Tcp,
                 });
             },
             Ok(ReadMessageFramedResult {
@@ -137,7 +140,14 @@ impl InitializeFlow {
                     }),
                 ..
             }) => {
-                let UdpAssociateFlowResult { .. } = UdpAssociateFlow::exec(
+                let UdpAssociateFlowResult {
+                    connection_id,
+                    message_id,
+                    user_token,
+                    message_framed_read,
+                    message_framed_write,
+                    source_address,
+                } = UdpAssociateFlow::exec(
                     UdpAssociateFlowRequest {
                         message_framed_read,
                         message_framed_write,
@@ -150,7 +160,13 @@ impl InitializeFlow {
                     configuration,
                 )
                 .await?;
-                todo!()
+                return Ok(InitFlowResult::Udp {
+                    message_framed_write,
+                    message_framed_read,
+                    message_id,
+                    source_address,
+                    user_token,
+                });
             },
             _ => Err(anyhow!(PpaassError::CodecError)),
         }
