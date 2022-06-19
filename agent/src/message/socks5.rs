@@ -317,6 +317,16 @@ impl From<Socks5Addr> for NetAddress {
     }
 }
 
+impl From<NetAddress> for Socks5Addr {
+    fn from(net_addr: NetAddress) -> Self {
+        match net_addr {
+            NetAddress::IpV4(ip, port) => Socks5Addr::IpV4(ip, port),
+            NetAddress::IpV6(ip, port) => Socks5Addr::IpV6(ip, port),
+            NetAddress::Domain(host, port) => Socks5Addr::Domain(host, port),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct Socks5AuthCommandContent {
     pub version: u8,
@@ -382,13 +392,13 @@ impl Socks5InitCommandResultContent {
 
 /// Socks5 udp data request
 #[derive(Debug)]
-pub(crate) struct Socks5UdpDataCommandContent {
+pub(crate) struct Socks5UdpDataPacket {
     pub frag: u8,
     pub address: Socks5Addr,
     pub data: Bytes,
 }
 
-impl TryFrom<Bytes> for Socks5UdpDataCommandContent {
+impl TryFrom<Bytes> for Socks5UdpDataPacket {
     type Error = PpaassError;
     fn try_from(mut src: Bytes) -> Result<Self, Self::Error> {
         // Check the buffer
@@ -412,20 +422,17 @@ impl TryFrom<Bytes> for Socks5UdpDataCommandContent {
             Ok(v) => v,
         };
         let data = src.copy_to_bytes(src.remaining());
-        Ok(Socks5UdpDataCommandContent { frag, address, data })
+        Ok(Socks5UdpDataPacket { frag, address, data })
     }
 }
 
-#[derive(Debug)]
-pub(crate) struct Socks5UdpDataCommandResultContent {
-    pub frag: u8,
-    pub dest_address: Socks5Addr,
-    pub data: Bytes,
-}
-
-impl Socks5UdpDataCommandResultContent {
-    pub fn new(frag: u8, dest_address: Socks5Addr, data: Bytes) -> Self {
-        Self { frag, dest_address, data }
+impl From<Socks5UdpDataPacket> for Bytes {
+    fn from(packet: Socks5UdpDataPacket) -> Self {
+        let mut result = BytesMut::new();
+        result.put_u16(0);
+        result.put_u8(packet.frag);
+        result.put(packet.data);
+        result.freeze()
     }
 }
 

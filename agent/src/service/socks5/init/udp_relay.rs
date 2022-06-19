@@ -1,18 +1,22 @@
-use std::{net::SocketAddr, sync::Arc};
+use std::{
+    net::{SocketAddr, ToSocketAddrs},
+    sync::Arc,
+};
 
 use anyhow::anyhow;
 use anyhow::Result;
-use bytes::Bytes;
+use bytes::{Buf, Bytes};
 use common::{
-    generate_uuid, AgentMessagePayloadTypeValue, MessageFramedRead, MessageFramedWrite, MessageFramedWriter, MessagePayload, NetAddress,
-    PayloadEncryptionTypeSelectRequest, PayloadEncryptionTypeSelectResult, PayloadEncryptionTypeSelector, PayloadType, RsaCryptoFetcher,
-    WriteMessageFramedError, WriteMessageFramedRequest, WriteMessageFramedResult,
+    generate_uuid, AgentMessagePayloadTypeValue, MessageFramedRead, MessageFramedReader, MessageFramedWrite, MessageFramedWriter, MessagePayload, NetAddress,
+    PayloadEncryptionTypeSelectRequest, PayloadEncryptionTypeSelectResult, PayloadEncryptionTypeSelector, PayloadType, ProxyMessagePayloadTypeValue,
+    ReadMessageFramedError, ReadMessageFramedResult, ReadMessageFramedResultContent, RsaCryptoFetcher, WriteMessageFramedError, WriteMessageFramedRequest,
+    WriteMessageFramedResult,
 };
 use futures::SinkExt;
 use tokio::net::{TcpStream, UdpSocket};
 use tracing::error;
 
-use crate::{config::AgentConfig, message::socks5::Socks5UdpDataCommandContent};
+use crate::{config::AgentConfig, message::socks5::Socks5UdpDataPacket};
 
 const SIZE_64KB: usize = 1024 * 64;
 pub struct Socks5UdpRelayFlowRequest<T>
@@ -43,28 +47,33 @@ impl Socks5UdpRelayFlow {
             connection_id,
             client_address,
             mut message_framed_write,
+            mut message_framed_read,
             ..
         } = request;
         let user_token = configuration.user_token().clone().unwrap();
         let user_token_clone = user_token.clone();
+        let connection_id_a2p = connection_id.clone();
+        let associated_udp_socket = Arc::new(associated_udp_socket);
+        let associated_udp_socket_a2p = associated_udp_socket.clone();
+        let client_address_a2p = client_address.clone();
         tokio::spawn(async move {
             loop {
                 let mut buffer = [0u8; SIZE_64KB];
-                match associated_udp_socket.recv(&mut buffer).await {
+                match associated_udp_socket_a2p.recv(&mut buffer).await {
                     Err(e) => {
                         error!(
                             "Connection [{}] fail to receive udp package from client, because of error: {:#?}",
-                            connection_id, e
+                            connection_id_a2p, e
                         );
                         continue;
                     },
                     Ok(size) => {
                         let received_data = Bytes::copy_from_slice(&buffer[0..size]);
-                        let socks5_udp_data: Socks5UdpDataCommandContent = match received_data.try_into() {
+                        let socks5_udp_data: Socks5UdpDataPacket = match received_data.try_into() {
                             Err(e) => {
                                 error!(
                                     "Connection [{}] fail to convert socks5 udp data packet because of error: {:#?}",
-                                    connection_id, e
+                                    connection_id_a2p, e
                                 );
                                 continue;
                             },
@@ -84,13 +93,13 @@ impl Socks5UdpRelayFlow {
                             Ok(PayloadEncryptionTypeSelectResult { payload_encryption_type, .. }) => payload_encryption_type,
                         };
                         let write_agent_message_result = MessageFramedWriter::write(WriteMessageFramedRequest {
-                            connection_id: Some(connection_id.clone()),
+                            connection_id: Some(connection_id_a2p.clone()),
                             message_framed_write,
-                            ref_id: Some(connection_id.clone()),
+                            ref_id: Some(connection_id_a2p.clone()),
                             user_token: configuration.user_token().clone().unwrap(),
                             payload_encryption_type,
                             message_payload: Some(MessagePayload {
-                                source_address: Some(client_address.clone()),
+                                source_address: Some(client_address_a2p.clone()),
                                 target_address: Some(udp_destination_address.into()),
                                 payload_type: PayloadType::AgentPayload(AgentMessagePayloadTypeValue::UdpData),
                                 data: socks5_udp_data.data,
@@ -116,6 +125,65 @@ impl Socks5UdpRelayFlow {
                                 };
                             },
                         };
+                    },
+                };
+            }
+        });
+        tokio::spawn(async move {
+            loop {
+                match MessageFramedReader::read(common::ReadMessageFramedRequest {
+                    connection_id: connection_id.clone(),
+                    message_framed_read,
+                })
+                .await
+                {
+                    Err(ReadMessageFramedError {
+                        message_framed_read: message_framed_read_from_result,
+                        source,
+                    }) => {
+                        message_framed_read = message_framed_read_from_result;
+                        continue;
+                    },
+                    Ok(ReadMessageFramedResult {
+                        message_framed_read: message_framed_read_from_result,
+                        content:
+                            Some(ReadMessageFramedResultContent {
+                                message_id,
+                                message_payload:
+                                    Some(MessagePayload {
+                                        source_address: Some(source_address),
+                                        target_address,
+                                        payload_type: PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::UdpData),
+                                        data,
+                                    }),
+                                user_token,
+                            }),
+                    }) => {
+                        let send_to_address = match source_address.to_socket_addrs() {
+                            Err(e) => {
+                                error!("Connection [{}] fail to forward proxy udp message to client", connection_id);
+                                message_framed_read = message_framed_read_from_result;
+                                continue;
+                            },
+                            Ok(v) => v,
+                        };
+                        let socks5_udp_packet = Socks5UdpDataPacket {
+                            frag: 0,
+                            address: client_address.clone().into(),
+                            data,
+                        };
+                        let socks5_udp_packet_bytes: Bytes = socks5_udp_packet.into();
+                        associated_udp_socket
+                            .send_to(socks5_udp_packet_bytes.chunk(), send_to_address.collect::<Vec<_>>().as_slice())
+                            .await;
+                        message_framed_read = message_framed_read_from_result;
+                    },
+                    Ok(ReadMessageFramedResult {
+                        message_framed_read: message_framed_read_from_result,
+                        ..
+                    }) => {
+                        message_framed_read = message_framed_read_from_result;
+                        continue;
                     },
                 };
             }

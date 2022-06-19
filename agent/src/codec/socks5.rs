@@ -8,7 +8,7 @@ use common::PpaassError;
 
 use crate::message::socks5::{
     Socks5Addr, Socks5AuthCommandContent, Socks5AuthCommandResultContent, Socks5AuthMethod, Socks5InitCommandContent, Socks5InitCommandResultContent,
-    Socks5InitCommandType, Socks5UdpDataCommandContent, Socks5UdpDataCommandResultContent,
+    Socks5InitCommandType, Socks5UdpDataPacket,
 };
 
 use super::SOCKS5_FLAG;
@@ -94,46 +94,46 @@ impl Encoder<Socks5InitCommandResultContent> for Socks5InitCommandContentCodec {
     }
 }
 
-pub(crate) struct Socks5UdpDataCommandContentCodec;
+// pub(crate) struct Socks5UdpDataCommandContentCodec;
 
-impl Decoder for Socks5UdpDataCommandContentCodec {
-    type Item = Socks5UdpDataCommandContent;
-    type Error = PpaassError;
+// impl Decoder for Socks5UdpDataCommandContentCodec {
+//     type Item = Socks5UdpDataPacket;
+//     type Error = PpaassError;
 
-    fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
-        // Check the buffer
-        if !src.has_remaining() {
-            return Ok(None);
-        }
-        // Check and skip the revision
-        if src.remaining() < size_of::<u16>() {
-            return Err(PpaassError::CodecError);
-        }
-        src.get_u16();
-        if src.remaining() < size_of::<u8>() {
-            return Err(PpaassError::CodecError);
-        }
-        let frag = src.get_u8();
-        let address: Socks5Addr = match src.try_into() {
-            Err(e) => {
-                error!("Fail to decode socks5 udp data request because of error: {:#?}", e);
-                return Err(PpaassError::CodecError);
-            },
-            Ok(v) => v,
-        };
-        let data = src.copy_to_bytes(src.remaining());
-        Ok(Some(Socks5UdpDataCommandContent { frag, address, data }))
-    }
-}
+//     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
+//         // Check the buffer
+//         if !src.has_remaining() {
+//             return Ok(None);
+//         }
+//         // Check and skip the revision
+//         if src.remaining() < size_of::<u16>() {
+//             return Err(PpaassError::CodecError);
+//         }
+//         src.get_u16();
+//         if src.remaining() < size_of::<u8>() {
+//             return Err(PpaassError::CodecError);
+//         }
+//         let frag = src.get_u8();
+//         let address: Socks5Addr = match src.try_into() {
+//             Err(e) => {
+//                 error!("Fail to decode socks5 udp data request because of error: {:#?}", e);
+//                 return Err(PpaassError::CodecError);
+//             },
+//             Ok(v) => v,
+//         };
+//         let data = src.copy_to_bytes(src.remaining());
+//         Ok(Some(Socks5UdpDataPacket { frag, address, data }))
+//     }
+// }
 
-impl Encoder<Socks5UdpDataCommandResultContent> for Socks5UdpDataCommandContentCodec {
-    type Error = PpaassError;
+// impl Encoder<Socks5UdpDataPacket> for Socks5UdpDataCommandContentCodec {
+//     type Error = PpaassError;
 
-    fn encode(&mut self, item: Socks5UdpDataCommandResultContent, dst: &mut BytesMut) -> Result<(), Self::Error> {
-        dst.put_u16(0);
-        dst.put_u8(item.frag);
-        dst.put::<Bytes>(item.dest_address.into());
-        dst.put_slice(item.data.chunk());
-        Ok(())
-    }
-}
+//     fn encode(&mut self, item: Socks5UdpDataPacket, dst: &mut BytesMut) -> Result<(), Self::Error> {
+//         dst.put_u16(0);
+//         dst.put_u8(item.frag);
+//         dst.put::<Bytes>(item.dest_address.into());
+//         dst.put_slice(item.data.chunk());
+//         Ok(())
+//     }
+// }
