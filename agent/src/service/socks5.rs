@@ -4,10 +4,9 @@ use std::sync::Arc;
 use bytes::BytesMut;
 use tokio::net::TcpStream;
 
-use anyhow::anyhow;
 use anyhow::Result;
 use common::RsaCryptoFetcher;
-use tracing::{error, info};
+use tracing::info;
 
 use crate::service::socks5::auth::{Socks5AuthenticateFlow, Socks5AuthenticateFlowRequest};
 use crate::service::socks5::init::{Socks5InitFlow, Socks5InitFlowRequest};
@@ -62,7 +61,7 @@ impl Socks5FlowProcessor {
             buffer,
         })
         .await?;
-
+        info!("Connection [{}] success to do authenticate, begin to init.", connection_id);
         let init_flow_result = Socks5InitFlow::exec(
             Socks5InitFlowRequest {
                 connection_id: connection_id.clone(),
@@ -114,7 +113,6 @@ impl Socks5FlowProcessor {
                 proxy_address,
             } => {
                 let udp_address = associated_udp_socket.local_addr()?;
-
                 let target_address = common::NetAddress::IpV4([0, 0, 0, 0], 0);
                 let Socks5UdpRelayFlowResult { .. } = Socks5UdpRelayFlow::exec(
                     Socks5UdpRelayFlowRequest {
