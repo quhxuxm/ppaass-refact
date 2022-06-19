@@ -19,7 +19,7 @@ use tracing::{debug, error, info};
 
 use crate::config::ProxyConfig;
 
-const SIZE_64KB: usize = 65536;
+const SIZE_64KB: usize = 65535;
 #[allow(unused)]
 pub(crate) struct UdpRelayFlowRequest<T>
 where

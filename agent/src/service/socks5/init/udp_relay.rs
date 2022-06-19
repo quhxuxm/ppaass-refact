@@ -18,7 +18,7 @@ use tracing::{error, info};
 
 use crate::{config::AgentConfig, message::socks5::Socks5UdpDataPacket};
 
-const SIZE_64KB: usize = 1024 * 64;
+const SIZE_64KB: usize = 65535;
 pub struct Socks5UdpRelayFlowRequest<T>
 where
     T: RsaCryptoFetcher,
