@@ -152,7 +152,7 @@ impl Socks5UdpRelayFlow {
                                 message_payload:
                                     Some(MessagePayload {
                                         source_address: Some(source_address),
-                                        target_address,
+                                        target_address: Some(target_address),
                                         payload_type: PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::UdpData),
                                         data,
                                     }),
@@ -177,7 +177,7 @@ impl Socks5UdpRelayFlow {
                         );
                         let socks5_udp_packet = Socks5UdpDataPacket {
                             frag: 0,
-                            address: client_address.clone().into(),
+                            address: target_address.clone().into(),
                             data,
                         };
                         let socks5_udp_packet_bytes: Bytes = socks5_udp_packet.into();

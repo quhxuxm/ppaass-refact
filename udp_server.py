@@ -1,7 +1,7 @@
 import socket
 
 if __name__ == "__main__":
-    host = "192.168.31.200"
+    host = "127.0.0.1"
     port = 888
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
