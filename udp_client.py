@@ -6,7 +6,7 @@ if __name__ == "__main__":
     port = 888
 
     sock = socks.socksocket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.set_proxy(socks.SOCKS5, "127.0.0.1", 10081)
+    sock.set_proxy(socks.SOCKS5, "127.0.0.1", 10080)
     sock.connect((host, port))
 
     i = 0
