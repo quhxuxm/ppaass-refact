@@ -1,5 +1,3 @@
-use std::mem::size_of;
-
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use tokio_util::codec::{Decoder, Encoder};
 use tracing::error;
@@ -8,7 +6,7 @@ use common::PpaassError;
 
 use crate::message::socks5::{
     Socks5Addr, Socks5AuthCommandContent, Socks5AuthCommandResultContent, Socks5AuthMethod, Socks5InitCommandContent, Socks5InitCommandResultContent,
-    Socks5InitCommandType, Socks5UdpDataPacket,
+    Socks5InitCommandType,
 };
 
 use super::SOCKS5_FLAG;

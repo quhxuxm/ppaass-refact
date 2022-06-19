@@ -160,19 +160,17 @@ impl AgentConnection {
                 message_framed_read,
                 message_framed_write,
                 message_id,
-                source_address,
                 user_token,
+                ..
             } => {
-                UdpRelayFlow::exec(
-                    UdpRelayFlowRequest {
-                        connection_id: connection_id.clone(),
-                        message_framed_read,
-                        message_framed_write,
-                        message_id,
-                        user_token,
-                    },
-                    configuration,
-                )
+                debug!("Connection [{}] is going to handle udp relay.", connection_id);
+                UdpRelayFlow::exec(UdpRelayFlowRequest {
+                    connection_id: connection_id.clone(),
+                    message_framed_read,
+                    message_framed_write,
+                    message_id,
+                    user_token,
+                })
                 .await?;
                 debug!("Connection [{}] is finish udp relay.", connection_id);
             },

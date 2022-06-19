@@ -1,24 +1,18 @@
-use std::{
-    net::{Ipv4Addr, SocketAddr, SocketAddrV4, ToSocketAddrs},
-    sync::Arc,
-};
+use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4, ToSocketAddrs};
 
-use anyhow::anyhow;
 use anyhow::Result;
 use bytes::Bytes;
 use common::{
-    generate_uuid, AgentMessagePayloadTypeValue, Message, MessageFramedRead, MessageFramedReader, MessageFramedWrite, MessageFramedWriter, MessagePayload,
+    generate_uuid, AgentMessagePayloadTypeValue, MessageFramedRead, MessageFramedReader, MessageFramedWrite, MessageFramedWriter, MessagePayload,
     PayloadEncryptionTypeSelectRequest, PayloadEncryptionTypeSelectResult, PayloadEncryptionTypeSelector, PayloadType, ProxyMessagePayloadTypeValue,
     ReadMessageFramedError, ReadMessageFramedRequest, ReadMessageFramedResult, ReadMessageFramedResultContent, RsaCryptoFetcher, WriteMessageFramedError,
     WriteMessageFramedRequest, WriteMessageFramedResult,
 };
-use futures::StreamExt;
 use pretty_hex;
 use tokio::net::UdpSocket;
-use tracing::{debug, error, info};
+use tracing::{debug, error};
 
-use crate::config::ProxyConfig;
-
+use pretty_hex::*;
 const SIZE_64KB: usize = 65535;
 #[allow(unused)]
 pub(crate) struct UdpRelayFlowRequest<T>
@@ -35,7 +29,7 @@ pub(crate) struct UdpRelayFlowResult;
 pub(crate) struct UdpRelayFlow;
 
 impl UdpRelayFlow {
-    pub async fn exec<T>(request: UdpRelayFlowRequest<T>, configuration: Arc<ProxyConfig>) -> Result<UdpRelayFlowResult>
+    pub async fn exec<T>(request: UdpRelayFlowRequest<T>) -> Result<UdpRelayFlowResult>
     where
         T: RsaCryptoFetcher + Send + Sync + 'static,
     {
@@ -113,29 +107,38 @@ impl UdpRelayFlow {
                             message_framed_read = message_framed_read_return_back;
                             continue;
                         };
-                        println!("Connection [{}] send udp data to target:\n{}\n", connection_id, pretty_hex::pretty_hex(&data));
+                        debug!(
+                            "Connection [{}] begin to send udp data from agent to target:\n{}\n",
+                            connection_id,
+                            pretty_hex::pretty_hex(&data)
+                        );
                         if let Err(e) = udp_socket.send(&data).await {
+                            error!("Connection [{}] fail to send udp packet to target because of error:{:#?}", connection_id, e);
                             message_framed_read = message_framed_read_return_back;
                             continue;
                         };
                         let mut receive_buffer = [0u8; SIZE_64KB];
                         let received_data_size = match udp_socket.recv(&mut receive_buffer).await {
                             Err(e) => {
+                                error!(
+                                    "Connection [{}] fail to receive udp packet from target because of error:{:#?}",
+                                    connection_id, e
+                                );
                                 message_framed_read = message_framed_read_return_back;
                                 continue;
                             },
                             Ok(v) => v,
                         };
                         let received_data = &receive_buffer[0..received_data_size];
-                        println!(
-                            "Connection [{}] receive udp data from target:\n{}\n",
+                        debug!(
+                            "Connection [{}] receive udp data from target:\n\n{}\n\n",
                             connection_id,
-                            pretty_hex::pretty_hex(&received_data)
+                            pretty_hex(&received_data)
                         );
                         let PayloadEncryptionTypeSelectResult {
                             user_token,
-                            encryption_token,
                             payload_encryption_type,
+                            ..
                         } = match PayloadEncryptionTypeSelector::select(PayloadEncryptionTypeSelectRequest {
                             encryption_token: generate_uuid().into(),
                             user_token: user_token.clone(),
@@ -143,6 +146,7 @@ impl UdpRelayFlow {
                         .await
                         {
                             Err(e) => {
+                                error!("Connection [{}] fail to select payload encryption because of error:{:#?}", connection_id, e);
                                 message_framed_read = message_framed_read_return_back;
                                 continue;
                             },
@@ -164,7 +168,10 @@ impl UdpRelayFlow {
                         })
                         .await
                         {
-                            Err(WriteMessageFramedError { message_framed_write, source }) => message_framed_write,
+                            Err(WriteMessageFramedError { message_framed_write, source }) => {
+                                error!("Connection [{}] fail to write udp data because of error:{:#?}", connection_id, source);
+                                message_framed_write
+                            },
                             Ok(WriteMessageFramedResult { message_framed_write }) => message_framed_write,
                         };
                         message_framed_read = message_framed_read_return_back;

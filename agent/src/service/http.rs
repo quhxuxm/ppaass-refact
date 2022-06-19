@@ -65,7 +65,7 @@ impl HttpFlow {
             configuration.clone(),
         )
         .await?;
-        let TcpRelayFlowResult { client_address } = TcpRelayFlow::exec(
+        let TcpRelayFlowResult { .. } = TcpRelayFlow::exec(
             TcpRelayFlowRequest {
                 connection_id,
                 client_address,

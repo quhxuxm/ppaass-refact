@@ -124,7 +124,6 @@ impl Socks5FlowProcessor {
                         init_data: None,
                         proxy_address,
                     },
-                    rsa_crypto_fetcher,
                     configuration,
                 )
                 .await?;

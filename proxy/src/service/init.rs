@@ -12,7 +12,6 @@ use std::sync::Arc;
 use tokio::net::TcpStream;
 
 use tracing::debug;
-use tracing::error;
 
 use crate::config::ProxyConfig;
 
@@ -31,6 +30,7 @@ where
     pub agent_address: SocketAddr,
 }
 
+#[allow(unused)]
 pub(crate) enum InitFlowResult<T>
 where
     T: RsaCryptoFetcher,
@@ -90,6 +90,10 @@ impl InitializeFlow {
                     }),
                 ..
             }) => {
+                debug!(
+                    "Connection [{}] begin tcp connect, source address: {:?}, target address: {:?}, client address: {:?}",
+                    connection_id, source_address, target_address, agent_address
+                );
                 let TcpConnectFlowResult {
                     target_stream,
                     message_framed_read,
@@ -101,7 +105,7 @@ impl InitializeFlow {
                     ..
                 } = TcpConnectFlow::exec(
                     TcpConnectFlowRequest {
-                        connection_id,
+                        connection_id: connection_id.clone(),
                         message_id,
                         message_framed_read,
                         message_framed_write,
@@ -113,6 +117,10 @@ impl InitializeFlow {
                     configuration,
                 )
                 .await?;
+                debug!(
+                    "Connection [{}] complete tcp connect, source address: {:?}, target address: {:?}, client address: {:?}",
+                    connection_id, source_address, target_address, agent_address
+                );
                 return Ok(InitFlowResult::Tcp {
                     message_framed_write,
                     message_framed_read,
@@ -140,6 +148,7 @@ impl InitializeFlow {
                     }),
                 ..
             }) => {
+                debug!("Connection [{}] begin udp associate, client address: {:?}", connection_id, source_address);
                 let UdpAssociateFlowResult {
                     connection_id,
                     message_id,
@@ -160,6 +169,7 @@ impl InitializeFlow {
                     configuration,
                 )
                 .await?;
+                debug!("Connection [{}] complete udp associate, client address: {:?}", connection_id, source_address);
                 return Ok(InitFlowResult::Udp {
                     message_framed_write,
                     message_framed_read,

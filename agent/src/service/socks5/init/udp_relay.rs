@@ -3,7 +3,6 @@ use std::{
     sync::Arc,
 };
 
-use anyhow::anyhow;
 use anyhow::Result;
 use bytes::{Buf, Bytes};
 use common::{
@@ -13,8 +12,9 @@ use common::{
     WriteMessageFramedResult,
 };
 use futures::SinkExt;
+use pretty_hex::*;
 use tokio::net::{TcpStream, UdpSocket};
-use tracing::{error, info};
+use tracing::{debug, error};
 
 use crate::{config::AgentConfig, message::socks5::Socks5UdpDataPacket};
 
@@ -38,7 +38,7 @@ pub struct Socks5UdpRelayFlowResult {}
 pub struct Socks5UdpRelayFlow;
 
 impl Socks5UdpRelayFlow {
-    pub async fn exec<T>(request: Socks5UdpRelayFlowRequest<T>, rsa_crypto_fetcher: Arc<T>, configuration: Arc<AgentConfig>) -> Result<Socks5UdpRelayFlowResult>
+    pub async fn exec<T>(request: Socks5UdpRelayFlowRequest<T>, configuration: Arc<AgentConfig>) -> Result<Socks5UdpRelayFlowResult>
     where
         T: RsaCryptoFetcher + Send + Sync + 'static,
     {
@@ -65,17 +65,22 @@ impl Socks5UdpRelayFlow {
                             "Connection [{}] fail to receive udp package from client, because of error: {:#?}",
                             connection_id_a2p, e
                         );
-                        continue;
+                        return;
                     },
                     Ok(size) => {
                         let received_data = Bytes::copy_from_slice(&buffer[0..size]);
+                        debug!(
+                            "Connection [{}] receive client udp packet: \n\n{}\n\n",
+                            connection_id_a2p,
+                            pretty_hex(&received_data)
+                        );
                         let socks5_udp_data: Socks5UdpDataPacket = match received_data.try_into() {
                             Err(e) => {
                                 error!(
                                     "Connection [{}] fail to convert socks5 udp data packet because of error: {:#?}",
                                     connection_id_a2p, e
                                 );
-                                continue;
+                                return;
                             },
                             Ok(v) => v,
                         };
@@ -88,7 +93,7 @@ impl Socks5UdpRelayFlow {
                         {
                             Err(e) => {
                                 error!("Fail to select payload encryption type because of error: {:#?}", e);
-                                continue;
+                                return;
                             },
                             Ok(PayloadEncryptionTypeSelectResult { payload_encryption_type, .. }) => payload_encryption_type,
                         };
@@ -107,13 +112,9 @@ impl Socks5UdpRelayFlow {
                         })
                         .await;
                         match write_agent_message_result {
-                            Err(WriteMessageFramedError {
-                                message_framed_write: message_framed_write_from_error,
-                                source,
-                            }) => {
+                            Err(WriteMessageFramedError { source, .. }) => {
                                 error!("Fail to write agent message to proxy because of error: {:#?}", source);
-                                message_framed_write = message_framed_write_from_error;
-                                continue;
+                                return;
                             },
                             Ok(WriteMessageFramedResult {
                                 message_framed_write: message_framed_write_from_result,
@@ -121,7 +122,7 @@ impl Socks5UdpRelayFlow {
                                 message_framed_write = message_framed_write_from_result;
                                 if let Err(e) = message_framed_write.flush().await {
                                     error!("Fail to flush agent message to proxy because of error: {:#?}", e);
-                                    continue;
+                                    return;
                                 };
                             },
                         };
@@ -137,18 +138,14 @@ impl Socks5UdpRelayFlow {
                 })
                 .await
                 {
-                    Err(ReadMessageFramedError {
-                        message_framed_read: message_framed_read_from_result,
-                        source,
-                    }) => {
-                        message_framed_read = message_framed_read_from_result;
-                        continue;
+                    Err(ReadMessageFramedError { source, .. }) => {
+                        error!("Connection [{}] fail to read data from proxy because of error:{:#?}", connection_id, source);
+                        return;
                     },
                     Ok(ReadMessageFramedResult {
                         message_framed_read: message_framed_read_from_result,
                         content:
                             Some(ReadMessageFramedResultContent {
-                                message_id,
                                 message_payload:
                                     Some(MessagePayload {
                                         source_address: Some(source_address),
@@ -156,7 +153,7 @@ impl Socks5UdpRelayFlow {
                                         payload_type: PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::UdpData),
                                         data,
                                     }),
-                                user_token,
+                                ..
                             }),
                     }) => {
                         let send_to_address = match source_address.to_socket_addrs() {
@@ -169,8 +166,8 @@ impl Socks5UdpRelayFlow {
                             },
                             Ok(v) => v,
                         };
-                        println!(
-                            "Connection [{}] receive udp data from target, forward udp packet to client [{:?}]:\n\n{}\n",
+                        debug!(
+                            "Connection [{}] receive udp data from target, forward udp packet to client [{:?}]:\n\n{}\n\n",
                             connection_id,
                             client_address,
                             pretty_hex::pretty_hex(&data)
@@ -181,20 +178,6 @@ impl Socks5UdpRelayFlow {
                             data,
                         };
                         let socks5_udp_packet_bytes: Bytes = socks5_udp_packet.into();
-                        // if let Err(e) = associated_udp_socket.connect(send_to_address.collect::<Vec<_>>().as_slice()).await {
-                        //     error!(
-                        //         "Connection [{}] fail to forward proxy udp message to client [{:?}], because of can not connect error: {:#?}",
-                        //         connection_id, source_address, e
-                        //     );
-                        //     return;
-                        // }
-                        // if let Err(e) = associated_udp_socket.send(socks5_udp_packet_bytes.chunk()).await {
-                        //     error!(
-                        //         "Connection [{}] fail to forward proxy udp message to client [{:?}], error: {:#?}",
-                        //         connection_id, source_address, e
-                        //     );
-                        //     return;
-                        // };
                         if let Err(e) = associated_udp_socket
                             .send_to(socks5_udp_packet_bytes.chunk(), send_to_address.collect::<Vec<_>>().as_slice())
                             .await
@@ -207,12 +190,13 @@ impl Socks5UdpRelayFlow {
                         };
                         message_framed_read = message_framed_read_from_result;
                     },
-                    Ok(ReadMessageFramedResult {
-                        message_framed_read: message_framed_read_from_result,
-                        ..
-                    }) => {
-                        message_framed_read = message_framed_read_from_result;
-                        continue;
+                    Ok(ReadMessageFramedResult { .. }) => {
+                        error!(
+                            "Connection [{}] fail to forward proxy udp message because of invalid proxy message payload",
+                            connection_id
+                        );
+
+                        return;
                     },
                 };
             }
