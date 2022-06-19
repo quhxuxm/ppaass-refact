@@ -248,7 +248,7 @@ impl TryFrom<&mut Bytes> for Socks5Addr {
                 let domain_name = match String::from_utf8(domain_name_bytes.to_vec()) {
                     Ok(v) => {
                         if "0".eq(&v) {
-                            "0.0.0.0".to_string()
+                            "127.0.0.1".to_string()
                         } else {
                             v
                         }
@@ -437,6 +437,7 @@ impl From<Socks5UdpDataPacket> for Bytes {
         let mut result = BytesMut::new();
         result.put_u16(0);
         result.put_u8(packet.frag);
+        result.put::<Bytes>(packet.address.into());
         result.put(packet.data);
         result.freeze()
     }

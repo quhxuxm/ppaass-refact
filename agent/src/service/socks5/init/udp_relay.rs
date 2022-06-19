@@ -162,7 +162,7 @@ impl Socks5UdpRelayFlow {
                         let send_to_address = match source_address.to_socket_addrs() {
                             Err(e) => {
                                 error!(
-                                    "Connection [{}] fail to forward proxy udp message to client [{:?}], error: {:#?}",
+                                    "Connection [{}] fail to forward proxy udp message to client [{:?}] because of fail to convert socket address, error: {:#?}",
                                     connection_id, source_address, e
                                 );
                                 return;
@@ -181,9 +181,30 @@ impl Socks5UdpRelayFlow {
                             data,
                         };
                         let socks5_udp_packet_bytes: Bytes = socks5_udp_packet.into();
-                        associated_udp_socket
+                        // if let Err(e) = associated_udp_socket.connect(send_to_address.collect::<Vec<_>>().as_slice()).await {
+                        //     error!(
+                        //         "Connection [{}] fail to forward proxy udp message to client [{:?}], because of can not connect error: {:#?}",
+                        //         connection_id, source_address, e
+                        //     );
+                        //     return;
+                        // }
+                        // if let Err(e) = associated_udp_socket.send(socks5_udp_packet_bytes.chunk()).await {
+                        //     error!(
+                        //         "Connection [{}] fail to forward proxy udp message to client [{:?}], error: {:#?}",
+                        //         connection_id, source_address, e
+                        //     );
+                        //     return;
+                        // };
+                        if let Err(e) = associated_udp_socket
                             .send_to(socks5_udp_packet_bytes.chunk(), send_to_address.collect::<Vec<_>>().as_slice())
-                            .await;
+                            .await
+                        {
+                            error!(
+                                "Connection [{}] fail to forward proxy udp message to client [{:?}], error: {:#?}",
+                                connection_id, source_address, e
+                            );
+                            return;
+                        };
                         message_framed_read = message_framed_read_from_result;
                     },
                     Ok(ReadMessageFramedResult {
