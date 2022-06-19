@@ -464,6 +464,7 @@ impl From<MessagePayload> for Bytes {
                 result.put_u8(0);
             },
             Some(source_address) => {
+                result.put_u8(1);
                 result.put::<Bytes>(source_address.into());
             },
         }
@@ -472,6 +473,7 @@ impl From<MessagePayload> for Bytes {
                 result.put_u8(0);
             },
             Some(target_address) => {
+                result.put_u8(1);
                 result.put::<Bytes>(target_address.into());
             },
         }
