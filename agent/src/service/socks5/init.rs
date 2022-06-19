@@ -52,8 +52,7 @@ where
         client_stream: TcpStream,
         message_framed_read: MessageFramedRead<T>,
         message_framed_write: MessageFramedWrite<T>,
-        client_address: SocketAddr,
-        source_address: NetAddress,
+        client_address: NetAddress,
         proxy_address: SocketAddr,
     },
 }
@@ -160,7 +159,6 @@ impl Socks5InitFlow {
                         message_framed_write,
                         client_address,
                         proxy_address,
-                        source_address,
                     }) => {
                         //Response for socks5 udp associate command
                         let init_command_result =
@@ -174,7 +172,6 @@ impl Socks5InitFlow {
                             client_address,
                             message_framed_read,
                             message_framed_write,
-                            source_address,
                             proxy_address,
                         })
                     },

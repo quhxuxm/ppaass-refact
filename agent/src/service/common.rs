@@ -75,7 +75,7 @@ impl ClientConnection {
             },
             Some(Ok(Protocol::Http)) => {
                 let FramedParts { read_buf: buffer, .. } = framed.into_parts();
-                let HttpFlowResult { client_address } = HttpFlow::exec(
+                let HttpFlowResult = HttpFlow::exec(
                     HttpFlowRequest {
                         connection_id: connection_id.clone(),
                         proxy_addresses,
@@ -92,7 +92,7 @@ impl ClientConnection {
             },
             Some(Ok(Protocol::Socks5)) => {
                 let FramedParts { read_buf: buffer, .. } = framed.into_parts();
-                let Socks5FlowResult { client_address } = Socks5FlowProcessor::exec(
+                let Socks5FlowResult = Socks5FlowProcessor::exec(
                     Socks5FlowRequest {
                         connection_id: connection_id.clone(),
                         proxy_addresses,

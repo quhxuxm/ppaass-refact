@@ -33,9 +33,8 @@ where
     pub associated_udp_address: Socks5Addr,
     pub message_framed_read: MessageFramedRead<T>,
     pub message_framed_write: MessageFramedWrite<T>,
-    pub client_address: SocketAddr,
     pub proxy_address: SocketAddr,
-    pub source_address: NetAddress,
+    pub client_address: NetAddress,
 }
 pub(crate) struct Socks5UdpAssociateFlow;
 
@@ -85,6 +84,8 @@ impl Socks5UdpAssociateFlow {
             user_token: configuration.user_token().clone().unwrap(),
             ref_id: None,
             message_payload: Some(MessagePayload {
+                // The source address is the udp address that the
+                // client side receiving the udp packets
                 source_address: Some(client_address.clone().into()),
                 target_address: None,
                 payload_type: PayloadType::AgentPayload(AgentMessagePayloadTypeValue::UdpAssociate),
@@ -120,8 +121,7 @@ impl Socks5UdpAssociateFlow {
                         message_payload:
                             Some(MessagePayload {
                                 payload_type: PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::UdpAssociateSuccess),
-                                source_address: Some(source_address),
-                                target_address,
+                                source_address: Some(client_address),
                                 ..
                             }),
                         ..
@@ -134,10 +134,9 @@ impl Socks5UdpAssociateFlow {
                 Ok(Socks5UdpAssociateFlowResult {
                     associated_udp_socket,
                     associated_udp_address: associated_udp_address.into(),
-                    client_address: client_address.try_into()?,
+                    client_address,
                     message_framed_read,
                     message_framed_write,
-                    source_address,
                     proxy_address: connected_proxy_address,
                 })
             },

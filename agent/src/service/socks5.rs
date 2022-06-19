@@ -33,9 +33,7 @@ pub(crate) struct Socks5FlowRequest {
     pub buffer: BytesMut,
 }
 
-pub(crate) struct Socks5FlowResult {
-    pub client_address: SocketAddr,
-}
+pub(crate) struct Socks5FlowResult;
 
 pub(crate) struct Socks5FlowProcessor;
 impl Socks5FlowProcessor {
@@ -100,7 +98,7 @@ impl Socks5FlowProcessor {
                 )
                 .await?;
                 info!("Connection [{}] start socks5 tcp relay for client: {:?}", connection_id, client_address);
-                Ok(Socks5FlowResult { client_address })
+                Ok(Socks5FlowResult)
             },
             Socks5InitFlowResult::Udp {
                 associated_udp_socket,
@@ -109,7 +107,6 @@ impl Socks5FlowProcessor {
                 message_framed_read,
                 message_framed_write,
                 client_address,
-                source_address,
                 proxy_address,
             } => {
                 let udp_address = associated_udp_socket.local_addr()?;
@@ -119,11 +116,10 @@ impl Socks5FlowProcessor {
                         associated_udp_socket,
                         associated_udp_address,
                         connection_id,
-                        client_address,
+                        client_address: client_address.clone(),
                         client_stream,
                         message_framed_write,
                         message_framed_read,
-                        source_address,
                         target_address,
                         init_data: None,
                         proxy_address,
@@ -133,7 +129,7 @@ impl Socks5FlowProcessor {
                 )
                 .await?;
                 info!("Start socks5 udp relay for client: {:?} on udp address: {:?}", client_address, udp_address);
-                Ok(Socks5FlowResult { client_address })
+                Ok(Socks5FlowResult)
             },
         }
     }

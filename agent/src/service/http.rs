@@ -28,9 +28,7 @@ pub(crate) struct HttpFlowRequest {
 }
 #[derive(Debug)]
 #[allow(unused)]
-pub(crate) struct HttpFlowResult {
-    pub client_address: SocketAddr,
-}
+pub(crate) struct HttpFlowResult;
 
 pub(crate) struct HttpFlow;
 
@@ -82,6 +80,6 @@ impl HttpFlow {
             configuration,
         )
         .await?;
-        Ok(HttpFlowResult { client_address })
+        Ok(HttpFlowResult)
     }
 }
