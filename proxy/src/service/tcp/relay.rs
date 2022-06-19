@@ -348,12 +348,12 @@ impl TcpRelayFlow {
             let payload_data_chunks = payload_data.chunks(configuration.message_framed_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE));
             for (_, chunk) in payload_data_chunks.enumerate() {
                 let chunk_data = Bytes::copy_from_slice(chunk);
-                let proxy_message_payload = MessagePayload::new(
-                    source_address.clone(),
-                    target_address.clone(),
-                    PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::TcpData),
-                    chunk_data,
-                );
+                let proxy_message_payload = MessagePayload {
+                    source_address: Some(source_address.clone()),
+                    target_address: Some(target_address.clone()),
+                    payload_type: PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::TcpData),
+                    data: chunk_data,
+                };
                 let payload_encryption_type = match PayloadEncryptionTypeSelector::select(PayloadEncryptionTypeSelectRequest {
                     encryption_token: generate_uuid().into(),
                     user_token: user_token.clone(),

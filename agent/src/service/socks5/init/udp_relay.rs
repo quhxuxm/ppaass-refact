@@ -14,7 +14,7 @@ use tracing::error;
 
 use crate::{config::AgentConfig, message::socks5::Socks5UdpDataCommandContent};
 
-const BUFFER_SIZE_64KB: usize = 1024 * 64;
+const SIZE_64KB: usize = 1024 * 64;
 pub struct Socks5UdpRelayFlowRequest<T>
 where
     T: RsaCryptoFetcher,
@@ -50,7 +50,7 @@ impl Socks5UdpRelayFlow {
         let user_token_clone = user_token.clone();
         tokio::spawn(async move {
             loop {
-                let mut buffer = [0u8; BUFFER_SIZE_64KB];
+                let mut buffer = [0u8; SIZE_64KB];
                 match associated_udp_socket.recv(&mut buffer).await {
                     Err(e) => {
                         error!(
@@ -71,7 +71,7 @@ impl Socks5UdpRelayFlow {
                             },
                             Ok(v) => v,
                         };
-                        let destination_address = socks5_udp_data.address;
+                        let udp_destination_address = socks5_udp_data.address;
                         let payload_encryption_type = match PayloadEncryptionTypeSelector::select(PayloadEncryptionTypeSelectRequest {
                             encryption_token: generate_uuid().into(),
                             user_token: user_token_clone.clone(),
@@ -90,12 +90,12 @@ impl Socks5UdpRelayFlow {
                             ref_id: Some(connection_id.clone()),
                             user_token: configuration.user_token().clone().unwrap(),
                             payload_encryption_type,
-                            message_payload: Some(MessagePayload::new(
-                                client_address.into(),
-                                destination_address.into(),
-                                PayloadType::AgentPayload(AgentMessagePayloadTypeValue::UdpData),
-                                socks5_udp_data.data,
-                            )),
+                            message_payload: Some(MessagePayload {
+                                source_address: Some(client_address.into()),
+                                target_address: Some(udp_destination_address.into()),
+                                payload_type: PayloadType::AgentPayload(AgentMessagePayloadTypeValue::UdpData),
+                                data: socks5_udp_data.data,
+                            }),
                         })
                         .await;
                         match write_agent_message_result {

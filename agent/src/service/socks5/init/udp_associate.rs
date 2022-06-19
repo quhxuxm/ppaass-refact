@@ -23,8 +23,7 @@ use crate::{config::AgentConfig, message::socks5::Socks5Addr};
 pub(crate) struct Socks5UdpAssociateFlowRequest {
     pub connection_id: String,
     pub proxy_addresses: Arc<Vec<SocketAddr>>,
-    pub client_address: SocketAddr,
-    pub dest_address: Socks5Addr,
+    pub client_address: Socks5Addr,
 }
 pub(crate) struct Socks5UdpAssociateFlowResult<T>
 where
@@ -37,7 +36,6 @@ where
     pub client_address: SocketAddr,
     pub proxy_address: SocketAddr,
     pub source_address: NetAddress,
-    pub target_address: NetAddress,
 }
 pub(crate) struct Socks5UdpAssociateFlow;
 
@@ -52,7 +50,6 @@ impl Socks5UdpAssociateFlow {
             connection_id,
             proxy_addresses,
             client_address,
-            dest_address,
         } = request;
         let target_stream_so_linger = configuration.proxy_stream_so_linger().unwrap_or(DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS);
         let initial_local_ip = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
@@ -87,12 +84,12 @@ impl Socks5UdpAssociateFlow {
             payload_encryption_type,
             user_token: configuration.user_token().clone().unwrap(),
             ref_id: None,
-            message_payload: Some(MessagePayload::new(
-                client_address.into(),
-                dest_address.clone().into(),
-                PayloadType::AgentPayload(AgentMessagePayloadTypeValue::UdpAssociate),
-                Bytes::new(),
-            )),
+            message_payload: Some(MessagePayload {
+                source_address: Some(client_address.clone().into()),
+                target_address: None,
+                payload_type: PayloadType::AgentPayload(AgentMessagePayloadTypeValue::UdpAssociate),
+                data: Bytes::new(),
+            }),
         })
         .await
         {
@@ -123,7 +120,7 @@ impl Socks5UdpAssociateFlow {
                         message_payload:
                             Some(MessagePayload {
                                 payload_type: PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::UdpAssociateSuccess),
-                                source_address,
+                                source_address: Some(source_address),
                                 target_address,
                                 ..
                             }),
@@ -137,11 +134,10 @@ impl Socks5UdpAssociateFlow {
                 Ok(Socks5UdpAssociateFlowResult {
                     associated_udp_socket,
                     associated_udp_address: associated_udp_address.into(),
-                    client_address,
+                    client_address: client_address.try_into()?,
                     message_framed_read,
                     message_framed_write,
                     source_address,
-                    target_address,
                     proxy_address: connected_proxy_address,
                 })
             },

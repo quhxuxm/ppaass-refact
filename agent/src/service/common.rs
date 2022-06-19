@@ -269,12 +269,12 @@ impl TcpRelayFlow {
                 ref_id: Some(connection_id.clone()),
                 user_token: configuration.user_token().clone().unwrap(),
                 payload_encryption_type,
-                message_payload: Some(MessagePayload::new(
-                    source_address_a2t.clone(),
-                    target_address_a2t.clone(),
-                    PayloadType::AgentPayload(AgentMessagePayloadTypeValue::TcpData),
-                    init_data.into(),
-                )),
+                message_payload: Some(MessagePayload {
+                    source_address: Some(source_address_a2t.clone()),
+                    target_address: Some(target_address_a2t.clone()),
+                    payload_type: PayloadType::AgentPayload(AgentMessagePayloadTypeValue::TcpData),
+                    data: init_data.into(),
+                }),
             })
             .await;
             message_framed_write = match write_agent_message_result {
@@ -369,12 +369,12 @@ impl TcpRelayFlow {
                     ref_id: Some(connection_id.clone()),
                     user_token: configuration.user_token().clone().unwrap(),
                     payload_encryption_type: payload_encryption_type.clone(),
-                    message_payload: Some(MessagePayload::new(
-                        source_address_a2t.clone(),
-                        target_address_a2t.clone(),
-                        PayloadType::AgentPayload(AgentMessagePayloadTypeValue::TcpData),
-                        chunk_data,
-                    )),
+                    message_payload: Some(MessagePayload {
+                        source_address: Some(source_address_a2t.clone()),
+                        target_address: Some(target_address_a2t.clone()),
+                        payload_type: PayloadType::AgentPayload(AgentMessagePayloadTypeValue::TcpData),
+                        data: chunk_data,
+                    }),
                 })
                 .await;
                 message_framed_write = match write_agent_message_result {

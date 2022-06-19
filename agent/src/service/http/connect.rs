@@ -176,12 +176,12 @@ impl HttpConnectFlow {
             payload_encryption_type,
             user_token: configuration.user_token().clone().unwrap(),
             ref_id: None,
-            message_payload: Some(MessagePayload::new(
-                request.client_address.into(),
-                target_address,
-                PayloadType::AgentPayload(AgentMessagePayloadTypeValue::TcpConnect),
-                Bytes::new(),
-            )),
+            message_payload: Some(MessagePayload {
+                source_address: Some(request.client_address.into()),
+                target_address: Some(target_address),
+                payload_type: PayloadType::AgentPayload(AgentMessagePayloadTypeValue::TcpConnect),
+                data: Bytes::new(),
+            }),
         })
         .await
         {
@@ -219,8 +219,8 @@ impl HttpConnectFlow {
                     Some(ReadMessageFramedResultContent {
                         message_payload:
                             Some(MessagePayload {
-                                target_address,
-                                source_address,
+                                target_address: Some(target_address),
+                                source_address: Some(source_address),
                                 payload_type: PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::TcpConnectSuccess),
                                 ..
                             }),

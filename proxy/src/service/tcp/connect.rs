@@ -77,12 +77,12 @@ impl TcpConnectFlow {
                     "Connection [{}] fail connect to target {:#?} because of error: {:#?}",
                     connection_id, target_address, e
                 );
-                let connect_fail_payload = MessagePayload::new(
-                    source_address,
-                    target_address,
-                    PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::TcpConnectFail),
-                    Bytes::new(),
-                );
+                let connect_fail_payload = MessagePayload {
+                    source_address: Some(source_address),
+                    target_address: Some(target_address),
+                    payload_type: PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::TcpConnectFail),
+                    data: Bytes::new(),
+                };
                 match MessageFramedWriter::write(WriteMessageFramedRequest {
                     message_framed_write,
                     message_payload: Some(connect_fail_payload),
@@ -110,12 +110,13 @@ impl TcpConnectFlow {
             "Connection [{}] agent address: {}, success connect to target {:#?}",
             connection_id, agent_address, target_address
         );
-        let connect_success_payload = MessagePayload::new(
-            source_address.clone(),
-            target_address.clone(),
-            PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::TcpConnectSuccess),
-            Bytes::new(),
-        );
+
+        let connect_success_payload = MessagePayload {
+            source_address: Some(source_address.clone()),
+            target_address: Some(target_address.clone()),
+            payload_type: PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::TcpConnectSuccess),
+            data: Bytes::new(),
+        };
         let message_framed_write = match MessageFramedWriter::write(WriteMessageFramedRequest {
             message_framed_write,
             message_payload: Some(connect_success_payload),

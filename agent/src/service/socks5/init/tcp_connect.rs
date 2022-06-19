@@ -88,12 +88,12 @@ impl Socks5TcpConnectFlow {
             payload_encryption_type,
             user_token: configuration.user_token().clone().unwrap(),
             ref_id: None,
-            message_payload: Some(MessagePayload::new(
-                client_address.into(),
-                dest_address.clone().into(),
-                PayloadType::AgentPayload(AgentMessagePayloadTypeValue::TcpConnect),
-                Bytes::new(),
-            )),
+            message_payload: Some(MessagePayload {
+                source_address: Some(client_address.into()),
+                target_address: Some(dest_address.clone().into()),
+                payload_type: PayloadType::AgentPayload(AgentMessagePayloadTypeValue::TcpConnect),
+                data: Bytes::new(),
+            }),
         })
         .await
         {
@@ -123,8 +123,8 @@ impl Socks5TcpConnectFlow {
                         message_payload:
                             Some(MessagePayload {
                                 payload_type: PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::TcpConnectSuccess),
-                                source_address,
-                                target_address,
+                                source_address: Some(source_address),
+                                target_address: Some(target_address),
                                 ..
                             }),
                         ..

@@ -7,9 +7,10 @@ use anyhow::anyhow;
 use anyhow::Result;
 use bytes::Bytes;
 use common::{
-    generate_uuid, Message, MessageFramedRead, MessageFramedReader, MessageFramedWrite, MessageFramedWriter, MessagePayload,
-    PayloadEncryptionTypeSelectRequest, PayloadEncryptionTypeSelectResult, PayloadEncryptionTypeSelector, ReadMessageFramedError, ReadMessageFramedRequest,
-    ReadMessageFramedResult, ReadMessageFramedResultContent, RsaCryptoFetcher, WriteMessageFramedError, WriteMessageFramedRequest, WriteMessageFramedResult,
+    generate_uuid, AgentMessagePayloadTypeValue, Message, MessageFramedRead, MessageFramedReader, MessageFramedWrite, MessageFramedWriter, MessagePayload,
+    PayloadEncryptionTypeSelectRequest, PayloadEncryptionTypeSelectResult, PayloadEncryptionTypeSelector, PayloadType, ProxyMessagePayloadTypeValue,
+    ReadMessageFramedError, ReadMessageFramedRequest, ReadMessageFramedResult, ReadMessageFramedResultContent, RsaCryptoFetcher, WriteMessageFramedError,
+    WriteMessageFramedRequest, WriteMessageFramedResult,
 };
 use futures::StreamExt;
 use tokio::net::UdpSocket;
@@ -77,27 +78,11 @@ impl UdpRelayFlow {
                         content:
                             Some(ReadMessageFramedResultContent {
                                 message_id,
-                                message_payload: None,
-                                user_token,
-                            }),
-                    }) => {
-                        error!(
-                            "Connection [{}] has a invalid payload when read from agent, message id:{}, user token:{}.",
-                            connection_id, message_id, user_token
-                        );
-                        message_framed_read = message_framed_read_return_back;
-                        continue;
-                    },
-                    Ok(ReadMessageFramedResult {
-                        message_framed_read: message_framed_read_return_back,
-                        content:
-                            Some(ReadMessageFramedResultContent {
-                                message_id,
                                 message_payload:
                                     Some(MessagePayload {
                                         source_address,
-                                        target_address,
-                                        payload_type,
+                                        target_address: Some(target_address),
+                                        payload_type: PayloadType::AgentPayload(AgentMessagePayloadTypeValue::UdpData),
                                         data,
                                     }),
                                 user_token,
@@ -163,9 +148,9 @@ impl UdpRelayFlow {
                             message_framed_write,
                             message_payload: Some(MessagePayload {
                                 data: Bytes::copy_from_slice(received_data),
-                                payload_type,
+                                payload_type: PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::UdpData),
                                 source_address,
-                                target_address,
+                                target_address: Some(target_address),
                             }),
                             payload_encryption_type,
                             ref_id: Some(message_id),
@@ -176,8 +161,18 @@ impl UdpRelayFlow {
                             Err(WriteMessageFramedError { message_framed_write, source }) => message_framed_write,
                             Ok(WriteMessageFramedResult { message_framed_write }) => message_framed_write,
                         };
-
                         message_framed_read = message_framed_read_return_back;
+                    },
+                    Ok(ReadMessageFramedResult {
+                        message_framed_read: message_framed_read_return_back,
+                        ..
+                    }) => {
+                        error!(
+                            "Connection [{}] has a invalid payload when read from agent, message id:{}, user token:{}.",
+                            connection_id, message_id, user_token
+                        );
+                        message_framed_read = message_framed_read_return_back;
+                        continue;
                     },
                 };
             }

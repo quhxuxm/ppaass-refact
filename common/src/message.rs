@@ -435,9 +435,9 @@ impl From<PayloadEncryptionType> for Bytes {
 
 pub struct MessagePayload {
     /// The source address
-    pub source_address: NetAddress,
+    pub source_address: Option<NetAddress>,
     /// The target address
-    pub target_address: NetAddress,
+    pub target_address: Option<NetAddress>,
     /// The payload type
     pub payload_type: PayloadType,
     /// The data
@@ -455,23 +455,26 @@ impl Debug for MessagePayload {
     }
 }
 
-impl MessagePayload {
-    pub fn new(source_address: NetAddress, target_address: NetAddress, payload_type: PayloadType, data: Bytes) -> Self {
-        Self {
-            source_address,
-            target_address,
-            payload_type,
-            data,
-        }
-    }
-}
-
 impl From<MessagePayload> for Bytes {
     fn from(value: MessagePayload) -> Self {
         let mut result = BytesMut::new();
         result.put_u8(value.payload_type.into());
-        result.put::<Bytes>(value.source_address.into());
-        result.put::<Bytes>(value.target_address.into());
+        match value.source_address {
+            None => {
+                result.put_u8(0);
+            },
+            Some(source_address) => {
+                result.put::<Bytes>(source_address.into());
+            },
+        }
+        match value.target_address {
+            None => {
+                result.put_u8(0);
+            },
+            Some(target_address) => {
+                result.put::<Bytes>(target_address.into());
+            },
+        }
         result.put_u64(value.data.len() as u64);
         result.put(value.data);
         result.into()
@@ -493,19 +496,37 @@ impl TryFrom<Bytes> for MessagePayload {
                 return Err(PpaassError::CodecError);
             },
         };
-        let source_address: NetAddress = match (&mut value).try_into() {
-            Ok(v) => v,
-            Err(e) => {
-                error!("Fail to parse source address because of error: {:#?}", e);
-                return Err(PpaassError::CodecError);
-            },
+        if value.remaining() < 1 {
+            error!("Fail to parse message payload because of no remaining");
+            return Err(PpaassError::CodecError);
+        }
+        let source_address_exist = value.get_u8();
+        let source_address = if source_address_exist == 0 {
+            None
+        } else {
+            Some(match (&mut value).try_into() {
+                Ok(v) => v,
+                Err(e) => {
+                    error!("Fail to parse source address because of error: {:#?}", e);
+                    return Err(PpaassError::CodecError);
+                },
+            })
         };
-        let target_address: NetAddress = match (&mut value).try_into() {
-            Ok(v) => v,
-            Err(e) => {
-                error!("Fail to parse target address because of error: {:#?}", e);
-                return Err(PpaassError::CodecError);
-            },
+        if value.remaining() < 1 {
+            error!("Fail to parse message payload because of no remaining");
+            return Err(PpaassError::CodecError);
+        }
+        let target_address_exist = value.get_u8();
+        let target_address = if target_address_exist == 0 {
+            None
+        } else {
+            Some(match (&mut value).try_into() {
+                Ok(v) => v,
+                Err(e) => {
+                    error!("Fail to parse target address because of error: {:#?}", e);
+                    return Err(PpaassError::CodecError);
+                },
+            })
         };
         if value.remaining() < 8 {
             error!("Fail to parse message payload because of no remaining");

@@ -78,8 +78,8 @@ impl InitializeFlow {
                         message_payload:
                             Some(MessagePayload {
                                 payload_type: PayloadType::AgentPayload(AgentMessagePayloadTypeValue::TcpConnect),
-                                target_address,
-                                source_address,
+                                target_address: Some(target_address),
+                                source_address: Some(source_address),
                                 ..
                             }),
                         ..
@@ -129,8 +129,8 @@ impl InitializeFlow {
                         message_payload:
                             Some(MessagePayload {
                                 payload_type: PayloadType::AgentPayload(AgentMessagePayloadTypeValue::UdpAssociate),
-                                target_address,
-                                source_address,
+                                target_address: None,
+                                source_address: Some(source_address),
                                 ..
                             }),
                         ..
@@ -145,7 +145,6 @@ impl InitializeFlow {
                         connection_id,
                         message_id,
                         source_address,
-                        target_address,
                         user_token,
                     },
                     configuration,

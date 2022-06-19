@@ -16,7 +16,6 @@ where
     pub message_id: String,
     pub user_token: String,
     pub source_address: NetAddress,
-    pub target_address: NetAddress,
     pub agent_address: SocketAddr,
     pub message_framed_read: MessageFramedRead<T>,
     pub message_framed_write: MessageFramedWrite<T>,
