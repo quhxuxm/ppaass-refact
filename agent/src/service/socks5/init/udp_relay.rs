@@ -92,7 +92,10 @@ impl Socks5UdpRelayFlow {
                         .await
                         {
                             Err(e) => {
-                                error!("Fail to select payload encryption type because of error: {:#?}", e);
+                                error!(
+                                    "Connection [{}] fail to select payload encryption type because of error: {:#?}",
+                                    connection_id_a2p, e
+                                );
                                 return;
                             },
                             Ok(PayloadEncryptionTypeSelectResult { payload_encryption_type, .. }) => payload_encryption_type,
@@ -113,7 +116,10 @@ impl Socks5UdpRelayFlow {
                         .await;
                         match write_agent_message_result {
                             Err(WriteMessageFramedError { source, .. }) => {
-                                error!("Fail to write agent message to proxy because of error: {:#?}", source);
+                                error!(
+                                    "Connection [{}] fail to write agent message to proxy because of error: {:#?}",
+                                    connection_id_a2p, source
+                                );
                                 return;
                             },
                             Ok(WriteMessageFramedResult {
@@ -121,7 +127,10 @@ impl Socks5UdpRelayFlow {
                             }) => {
                                 message_framed_write = message_framed_write_from_result;
                                 if let Err(e) = message_framed_write.flush().await {
-                                    error!("Fail to flush agent message to proxy because of error: {:#?}", e);
+                                    error!(
+                                        "Connection [{}] fail to flush agent message to proxy because of error: {:#?}",
+                                        connection_id_a2p, e
+                                    );
                                     return;
                                 };
                             },
