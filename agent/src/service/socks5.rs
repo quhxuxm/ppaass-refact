@@ -129,7 +129,7 @@ impl Socks5FlowProcessor {
                 )
                 .await?;
                 info!(
-                    "Connection [{}] start socks5 udp relay for client: {:?} on udp address: {:?}",
+                    "Connection [{}] complete socks5 udp relay for client: {:?} on udp address: {:?}",
                     connection_id, client_address, udp_address
                 );
                 Ok(Socks5FlowResult)
