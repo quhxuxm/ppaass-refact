@@ -9,6 +9,7 @@ max_log_level = "INFO"
 message_framed_buffer_size = 2097152
 port = 10080
 #proxy_addresses = ["127.0.0.1:80"]
+init_proxy_connection_number = 32
 proxy_addresses = ["149.28.219.182:80"]
 proxy_public_key_file = "ProxyPublicKey.pem"
 proxy_stream_so_linger = 20

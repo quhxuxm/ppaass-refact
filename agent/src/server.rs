@@ -4,13 +4,13 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
-use tokio::net::TcpSocket;
 use tokio::runtime::{Builder as TokioRuntimeBuilder, Runtime};
+use tokio::{net::TcpSocket, sync::Mutex};
 
 use tracing::error;
 
-use crate::config::AgentConfig;
 use crate::service::{common::ClientConnection, AgentRsaCryptoFetcher};
+use crate::{config::AgentConfig, service::common::ProxyConnectionPool};
 
 const DEFAULT_SERVER_PORT: u16 = 10080;
 
@@ -65,6 +65,7 @@ impl AgentServer {
         let agent_rsa_crypto_fetcher = AgentRsaCryptoFetcher::new(self.configuration.clone())?;
         let agent_rsa_crypto_fetcher = Arc::new(agent_rsa_crypto_fetcher);
         println!("ppaass-agent is listening port: {} ", local_socket_address.port());
+        let proxy_connection_pool = Arc::new(Mutex::new(ProxyConnectionPool::new(proxy_addresses.clone(), self.configuration.clone()).await?));
         loop {
             let agent_rsa_crypto_fetcher = agent_rsa_crypto_fetcher.clone();
             let (client_stream, client_address) = match listener.accept().await {
@@ -85,9 +86,13 @@ impl AgentServer {
             }
             let proxy_addresses = proxy_addresses.clone();
             let configuration = self.configuration.clone();
+            let proxy_connection_pool = proxy_connection_pool.clone();
             tokio::spawn(async move {
                 let client_connection = ClientConnection::new(client_stream, client_address, proxy_addresses);
-                if let Err(e) = client_connection.exec(agent_rsa_crypto_fetcher.clone(), configuration.clone()).await {
+                if let Err(e) = client_connection
+                    .exec(agent_rsa_crypto_fetcher.clone(), configuration.clone(), proxy_connection_pool)
+                    .await
+                {
                     error!("Error happen when handle client connection [{}], error:{:#?}", client_address, e);
                 }
             });

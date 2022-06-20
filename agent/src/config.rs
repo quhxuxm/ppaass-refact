@@ -29,6 +29,7 @@ pub struct AgentConfig {
     so_backlog: Option<u32>,
     agent_private_key_file: Option<String>,
     proxy_public_key_file: Option<String>,
+    init_proxy_connection_number: Option<usize>,
 }
 
 impl AgentConfig {
@@ -124,6 +125,9 @@ impl AgentConfig {
     }
     pub fn set_proxy_public_key_file(&mut self, proxy_public_key_file: String) {
         self.proxy_public_key_file = Some(proxy_public_key_file)
+    }
+    pub fn init_proxy_connection_number(&self) -> Option<usize> {
+        self.init_proxy_connection_number
     }
 }
 

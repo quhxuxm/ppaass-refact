@@ -1,22 +1,25 @@
-use std::sync::Arc;
+use std::{collections::VecDeque, sync::Arc};
 use std::{io::ErrorKind, net::SocketAddr};
 
 use anyhow::anyhow;
 use anyhow::Result;
 use bytes::{Bytes, BytesMut};
 use futures::{SinkExt, StreamExt};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::net::TcpStream;
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    sync::Mutex,
+};
 use tokio_util::codec::{Framed, FramedParts};
 
-use tracing::{debug, error};
+use tracing::{debug, error, info};
 
 use common::{
     generate_uuid, AgentMessagePayloadTypeValue, MessageFramedRead, MessageFramedReader, MessageFramedWrite, MessageFramedWriter, MessagePayload, NetAddress,
     PayloadEncryptionTypeSelectRequest, PayloadEncryptionTypeSelectResult, PayloadEncryptionTypeSelector, PayloadType, PpaassError,
     ProxyMessagePayloadTypeValue, ReadMessageFramedError, ReadMessageFramedRequest, ReadMessageFramedResult, ReadMessageFramedResultContent, RsaCryptoFetcher,
-    WriteMessageFramedError, WriteMessageFramedRequest, WriteMessageFramedResult,
+    TcpConnectRequest, TcpConnectResult, TcpConnector, WriteMessageFramedError, WriteMessageFramedRequest, WriteMessageFramedResult,
 };
 
 use crate::service::socks5::{Socks5FlowProcessor, Socks5FlowRequest};
@@ -52,7 +55,9 @@ impl ClientConnection {
         }
     }
 
-    pub async fn exec<T>(self, rsa_crypto_fetcher: Arc<T>, confiugration: Arc<AgentConfig>) -> Result<()>
+    pub async fn exec<T>(
+        self, rsa_crypto_fetcher: Arc<T>, confiugration: Arc<AgentConfig>, proxy_connection_pool: Arc<Mutex<ProxyConnectionPool>>,
+    ) -> Result<()>
     where
         T: RsaCryptoFetcher + Send + Sync + 'static,
     {
@@ -102,6 +107,7 @@ impl ClientConnection {
                     },
                     rsa_crypto_fetcher,
                     configuration,
+                    proxy_connection_pool,
                 )
                 .await?;
                 debug!("Connection [{}] complete socks5 flow for client: {}", connection_id, client_address);
@@ -489,5 +495,65 @@ impl TcpRelayFlow {
                 });
             }
         }
+    }
+}
+
+const DEFAULT_INIT_PROXY_CONNECTION_NUMBER: usize = 32;
+
+pub struct ProxyConnectionPool {
+    pool: VecDeque<TcpStream>,
+    proxy_addresses: Arc<Vec<SocketAddr>>,
+    configuration: Arc<AgentConfig>,
+}
+
+impl ProxyConnectionPool {
+    pub async fn new(proxy_addresses: Arc<Vec<SocketAddr>>, configuration: Arc<AgentConfig>) -> Result<Self> {
+        let mut result = Self {
+            proxy_addresses: proxy_addresses.clone(),
+            configuration: configuration.clone(),
+            pool: VecDeque::new(),
+        };
+        Self::initialize_pool(proxy_addresses, configuration, &mut result.pool).await?;
+        Ok(result)
+    }
+
+    async fn initialize_pool(proxy_addresses: Arc<Vec<SocketAddr>>, configuration: Arc<AgentConfig>, pool: &mut VecDeque<TcpStream>) -> Result<()> {
+        let proxy_stream_so_linger = configuration.proxy_stream_so_linger().unwrap_or(DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS);
+        let init_proxy_connection_number = configuration.init_proxy_connection_number().unwrap_or(DEFAULT_INIT_PROXY_CONNECTION_NUMBER);
+        let pool_size = pool.len();
+        if pool_size >= init_proxy_connection_number {
+            return Ok(());
+        }
+        for _ in pool_size..init_proxy_connection_number {
+            let TcpConnectResult { connected_stream } = TcpConnector::connect(TcpConnectRequest {
+                connect_addresses: proxy_addresses.to_vec(),
+                connected_stream_so_linger: proxy_stream_so_linger,
+            })
+            .await?;
+            pool.push_back(connected_stream);
+            println!("Initialize a proxy tcp connection, current pool size: {}", pool.len());
+        }
+        Ok(())
+    }
+
+    pub async fn fetch_connection(&mut self) -> Result<TcpStream> {
+        let connection = self.pool.pop_front();
+        println!("Fetch a proxy tcp connection from the pool, current pool size: {}", self.pool.len());
+        let init_proxy_connection_number = self
+            .configuration
+            .init_proxy_connection_number()
+            .unwrap_or(DEFAULT_INIT_PROXY_CONNECTION_NUMBER);
+        let connection = match connection {
+            None => {
+                Self::initialize_pool(self.proxy_addresses.clone(), self.configuration.clone(), &mut self.pool).await?;
+                self.pool.pop_front().ok_or(anyhow!("Fail to initialize connection pool."))?
+            },
+            Some(v) => v,
+        };
+        if self.pool.len() < init_proxy_connection_number {
+            println!("Begin to fill the proxy connection pool, current pool size: {}", self.pool.len());
+            Self::initialize_pool(self.proxy_addresses.clone(), self.configuration.clone(), &mut self.pool).await?;
+        }
+        Ok(connection)
     }
 }

@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use bytes::BytesMut;
-use tokio::net::TcpStream;
+use tokio::{net::TcpStream, sync::Mutex};
 
 use anyhow::Result;
 use common::RsaCryptoFetcher;
@@ -20,7 +20,7 @@ use self::{
     init::{Socks5InitFlowResult, Socks5UdpRelayFlow, Socks5UdpRelayFlowRequest, Socks5UdpRelayFlowResult},
 };
 
-use super::common::TcpRelayFlowResult;
+use super::common::{ProxyConnectionPool, TcpRelayFlowResult};
 
 mod auth;
 mod init;
@@ -37,7 +37,9 @@ pub(crate) struct Socks5FlowResult;
 
 pub(crate) struct Socks5FlowProcessor;
 impl Socks5FlowProcessor {
-    pub async fn exec<T>(request: Socks5FlowRequest, rsa_crypto_fetcher: Arc<T>, configuration: Arc<AgentConfig>) -> Result<Socks5FlowResult>
+    pub async fn exec<T>(
+        request: Socks5FlowRequest, rsa_crypto_fetcher: Arc<T>, configuration: Arc<AgentConfig>, proxy_connection_pool: Arc<Mutex<ProxyConnectionPool>>,
+    ) -> Result<Socks5FlowResult>
     where
         T: RsaCryptoFetcher + Send + Sync + 'static,
     {
@@ -71,6 +73,7 @@ impl Socks5FlowProcessor {
             },
             rsa_crypto_fetcher.clone(),
             configuration.clone(),
+            proxy_connection_pool,
         )
         .await?;
         match init_flow_result {

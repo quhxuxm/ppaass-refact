@@ -8,27 +8,26 @@ use bytes::Bytes;
 
 use futures::SinkExt;
 
+use tokio::sync::Mutex;
 use tracing::{debug, error};
 
 use common::{
     generate_uuid, AgentMessagePayloadTypeValue, MessageFramedGenerateResult, MessageFramedGenerator, MessageFramedRead, MessageFramedReader,
     MessageFramedWrite, MessageFramedWriter, MessagePayload, NetAddress, PayloadEncryptionTypeSelectRequest, PayloadEncryptionTypeSelectResult,
     PayloadEncryptionTypeSelector, PayloadType, PpaassError, ProxyMessagePayloadTypeValue, ReadMessageFramedError, ReadMessageFramedRequest,
-    ReadMessageFramedResult, ReadMessageFramedResultContent, RsaCryptoFetcher, TcpConnectRequest, TcpConnectResult, TcpConnector, WriteMessageFramedError,
-    WriteMessageFramedRequest, WriteMessageFramedResult,
+    ReadMessageFramedResult, ReadMessageFramedResultContent, RsaCryptoFetcher, WriteMessageFramedError, WriteMessageFramedRequest, WriteMessageFramedResult,
 };
 
 use crate::{
     config::AgentConfig,
     message::socks5::Socks5Addr,
-    service::common::{DEFAULT_BUFFER_SIZE, DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS},
+    service::common::{ProxyConnectionPool, DEFAULT_BUFFER_SIZE},
 };
 
 pub(crate) struct Socks5TcpConnectFlow;
 
 pub(crate) struct Socks5TcpConnectFlowRequest {
     pub connection_id: String,
-    pub proxy_addresses: Arc<Vec<SocketAddr>>,
     pub client_address: SocketAddr,
     pub dest_address: Socks5Addr,
 }
@@ -48,27 +47,19 @@ where
 impl Socks5TcpConnectFlow {
     pub async fn exec<T>(
         request: Socks5TcpConnectFlowRequest, rsa_crypto_fetcher: Arc<T>, configuration: Arc<AgentConfig>,
+        proxy_connection_pool: Arc<Mutex<ProxyConnectionPool>>,
     ) -> Result<Socks5TcpConnectFlowResult<T>>
     where
         T: RsaCryptoFetcher,
     {
         let Socks5TcpConnectFlowRequest {
-            connection_id,
-            proxy_addresses,
-            dest_address,
-            ..
+            connection_id, dest_address, ..
         } = request;
         let client_address = request.client_address;
-        let connected_stream_so_linger = configuration.proxy_stream_so_linger().unwrap_or(DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS);
-
-        let TcpConnectResult {
-            connected_stream: proxy_stream,
-        } = TcpConnector::connect(TcpConnectRequest {
-            connect_addresses: proxy_addresses.to_vec(),
-            connected_stream_so_linger,
-        })
-        .await?;
-
+        let proxy_stream = {
+            let mut proxy_connection_pool = proxy_connection_pool.lock().await;
+            proxy_connection_pool.fetch_connection().await?
+        };
         let message_framed_buffer_size = configuration.message_framed_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE);
         let compress = configuration.compress().unwrap_or(true);
         let connected_proxy_address = proxy_stream.peer_addr()?;

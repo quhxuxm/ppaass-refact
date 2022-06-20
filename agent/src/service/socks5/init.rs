@@ -8,14 +8,20 @@ use common::{MessageFramedRead, MessageFramedWrite, NetAddress, PpaassError, Rsa
 
 use futures::{SinkExt, StreamExt};
 use tcp_connect::Socks5TcpConnectFlow;
-use tokio::net::{TcpStream, UdpSocket};
+use tokio::{
+    net::{TcpStream, UdpSocket},
+    sync::Mutex,
+};
 use tokio_util::codec::{Framed, FramedParts};
 
 use tracing::{debug, error};
 
-use crate::service::socks5::init::{
-    tcp_connect::Socks5TcpConnectFlowResult,
-    udp_associate::{Socks5UdpAssociateFlow, Socks5UdpAssociateFlowRequest, Socks5UdpAssociateFlowResult},
+use crate::service::{
+    common::ProxyConnectionPool,
+    socks5::init::{
+        tcp_connect::Socks5TcpConnectFlowResult,
+        udp_associate::{Socks5UdpAssociateFlow, Socks5UdpAssociateFlowRequest, Socks5UdpAssociateFlowResult},
+    },
 };
 
 use crate::{codec::socks5::Socks5InitCommandContentCodec, service::socks5::init::tcp_connect::Socks5TcpConnectFlowRequest};
@@ -67,7 +73,9 @@ pub(crate) struct Socks5InitFlowRequest {
 pub(crate) struct Socks5InitFlow;
 
 impl Socks5InitFlow {
-    pub async fn exec<T>(request: Socks5InitFlowRequest, rsa_crypto_fetcher: Arc<T>, configuration: Arc<AgentConfig>) -> Result<Socks5InitFlowResult<T>>
+    pub async fn exec<T>(
+        request: Socks5InitFlowRequest, rsa_crypto_fetcher: Arc<T>, configuration: Arc<AgentConfig>, proxy_connection_pool: Arc<Mutex<ProxyConnectionPool>>,
+    ) -> Result<Socks5InitFlowResult<T>>
     where
         T: RsaCryptoFetcher,
     {
@@ -103,12 +111,12 @@ impl Socks5InitFlow {
                 match Socks5TcpConnectFlow::exec(
                     Socks5TcpConnectFlowRequest {
                         connection_id: connection_id.clone(),
-                        proxy_addresses,
                         client_address,
                         dest_address: dest_address_in_init_command.clone(),
                     },
                     rsa_crypto_fetcher,
                     configuration,
+                    proxy_connection_pool,
                 )
                 .await
                 {
