@@ -54,6 +54,7 @@ impl Socks5FlowProcessor {
             buffer,
             ..
         } = Socks5AuthenticateFlow::exec(Socks5AuthenticateFlowRequest {
+            connection_id: connection_id.clone(),
             client_stream,
             client_address,
             buffer,
