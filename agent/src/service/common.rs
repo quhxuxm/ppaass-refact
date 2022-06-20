@@ -13,7 +13,7 @@ use tokio::{
 };
 use tokio_util::codec::{Framed, FramedParts};
 
-use tracing::{debug, error, info};
+use tracing::{debug, error};
 
 use common::{
     generate_uuid, AgentMessagePayloadTypeValue, MessageFramedRead, MessageFramedReader, MessageFramedWrite, MessageFramedWriter, MessagePayload, NetAddress,
