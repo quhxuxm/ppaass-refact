@@ -8,7 +8,7 @@ use bytes::{Buf, BufMut, Bytes, BytesMut};
 use lz4::block::{compress, decompress};
 use pretty_hex::*;
 use tokio_util::codec::{Decoder, Encoder};
-use tracing::{debug, error};
+use tracing::{debug, error, trace};
 
 use crate::crypto::{decrypt_with_aes, decrypt_with_blowfish, encrypt_with_aes, encrypt_with_blowfish, RsaCryptoFetcher};
 use crate::{Message, PayloadEncryptionType, PpaassError};
@@ -90,7 +90,7 @@ where
             );
             return Ok(None);
         }
-        debug!(
+        trace!(
             "Input message has enough bytes to decode body, buffer remaining: {}, body length: {}, remaining bytes:\n\n{}\n\n",
             src.remaining(),
             body_length,
@@ -98,7 +98,7 @@ where
         );
         self.status = DecodeStatus::Data(body_is_compressed, body_length);
         let body_bytes = src.copy_to_bytes(body_length as usize);
-        debug!("Input message body bytes:\n\n{}\n\n", pretty_hex(&body_bytes));
+        trace!("Input message body bytes:\n\n{}\n\n", pretty_hex(&body_bytes));
         let mut message: Message = if body_is_compressed {
             debug!("Input message body is compressed.");
             let decompress_result = decompress(body_bytes.chunk(), None)?;
