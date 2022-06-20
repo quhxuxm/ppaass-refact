@@ -531,27 +531,28 @@ impl ProxyConnectionPool {
             })
             .await?;
             pool.push_back(connected_stream);
-            println!("Initialize a proxy tcp connection, current pool size: {}", pool.len());
+            debug!("Initialize a proxy tcp connection, current pool size: {}", pool.len());
         }
         Ok(())
     }
 
     pub async fn fetch_connection(&mut self) -> Result<TcpStream> {
         let connection = self.pool.pop_front();
-        println!("Fetch a proxy tcp connection from the pool, current pool size: {}", self.pool.len());
+        debug!("Fetch a proxy tcp connection from the pool, current pool size: {}", self.pool.len());
         let init_proxy_connection_number = self
             .configuration
             .init_proxy_connection_number()
             .unwrap_or(DEFAULT_INIT_PROXY_CONNECTION_NUMBER);
         let connection = match connection {
             None => {
+                debug!("Begin to fill the proxy connection pool(on empty), current pool size: {}", self.pool.len());
                 Self::initialize_pool(self.proxy_addresses.clone(), self.configuration.clone(), &mut self.pool).await?;
                 self.pool.pop_front().ok_or(anyhow!("Fail to initialize connection pool."))?
             },
             Some(v) => v,
         };
         if self.pool.len() < init_proxy_connection_number {
-            println!("Begin to fill the proxy connection pool, current pool size: {}", self.pool.len());
+            debug!("Begin to fill the proxy connection pool, current pool size: {}", self.pool.len());
             Self::initialize_pool(self.proxy_addresses.clone(), self.configuration.clone(), &mut self.pool).await?;
         }
         Ok(connection)
