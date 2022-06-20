@@ -85,11 +85,18 @@ impl Socks5InitFlow {
         let init_command = match socks5_init_framed.next().await {
             Some(Ok(v)) => v,
             _ => {
+                error!(
+                    "Connection [{}] fail to handle socks 5 init command from client {}",
+                    connection_id, client_address
+                );
                 send_socks5_init_failure(&mut socks5_init_framed).await?;
                 return Err(anyhow!(PpaassError::CodecError));
             },
         };
-        debug!("Client {} send socks 5 connect command: {:#?}", client_address, init_command);
+        debug!(
+            "Connection [{}] send socks 5 connect command to client {} : {:#?}",
+            connection_id, client_address, init_command
+        );
         let dest_address_in_init_command = init_command.dest_address;
         match init_command.request_type {
             Socks5InitCommandType::Connect => {
