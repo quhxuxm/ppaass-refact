@@ -30,6 +30,7 @@ pub struct AgentConfig {
     agent_private_key_file: Option<String>,
     proxy_public_key_file: Option<String>,
     init_proxy_connection_number: Option<usize>,
+    min_proxy_connection_number: Option<usize>,
 }
 
 impl AgentConfig {
@@ -128,6 +129,9 @@ impl AgentConfig {
     }
     pub fn init_proxy_connection_number(&self) -> Option<usize> {
         self.init_proxy_connection_number
+    }
+    pub fn min_proxy_connection_number(&self) -> Option<usize> {
+        self.min_proxy_connection_number
     }
 }
 

@@ -499,6 +499,7 @@ impl TcpRelayFlow {
 }
 
 const DEFAULT_INIT_PROXY_CONNECTION_NUMBER: usize = 32;
+const DEFAULT_MIN_PROXY_CONNECTION_NUMBER: usize = 16;
 
 pub struct ProxyConnectionPool {
     pool: VecDeque<TcpStream>,
@@ -520,8 +521,9 @@ impl ProxyConnectionPool {
     async fn initialize_pool(proxy_addresses: Arc<Vec<SocketAddr>>, configuration: Arc<AgentConfig>, pool: &mut VecDeque<TcpStream>) -> Result<()> {
         let proxy_stream_so_linger = configuration.proxy_stream_so_linger().unwrap_or(DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS);
         let init_proxy_connection_number = configuration.init_proxy_connection_number().unwrap_or(DEFAULT_INIT_PROXY_CONNECTION_NUMBER);
+        let min_proxy_connection_number = configuration.min_proxy_connection_number().unwrap_or(DEFAULT_MIN_PROXY_CONNECTION_NUMBER);
         let pool_size = pool.len();
-        if pool_size >= init_proxy_connection_number {
+        if pool_size >= min_proxy_connection_number {
             return Ok(());
         }
         for _ in pool_size..init_proxy_connection_number {
@@ -539,10 +541,7 @@ impl ProxyConnectionPool {
     pub async fn fetch_connection(&mut self) -> Result<TcpStream> {
         let connection = self.pool.pop_front();
         debug!("Fetch a proxy tcp connection from the pool, current pool size: {}", self.pool.len());
-        let init_proxy_connection_number = self
-            .configuration
-            .init_proxy_connection_number()
-            .unwrap_or(DEFAULT_INIT_PROXY_CONNECTION_NUMBER);
+        let min_proxy_connection_number = self.configuration.min_proxy_connection_number().unwrap_or(DEFAULT_MIN_PROXY_CONNECTION_NUMBER);
         let connection = match connection {
             None => {
                 debug!("Begin to fill the proxy connection pool(on empty), current pool size: {}", self.pool.len());
@@ -551,7 +550,7 @@ impl ProxyConnectionPool {
             },
             Some(v) => v,
         };
-        if self.pool.len() < init_proxy_connection_number {
+        if self.pool.len() < min_proxy_connection_number {
             debug!("Begin to fill the proxy connection pool, current pool size: {}", self.pool.len());
             Self::initialize_pool(self.proxy_addresses.clone(), self.configuration.clone(), &mut self.pool).await?;
         }
