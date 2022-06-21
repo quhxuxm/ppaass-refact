@@ -47,6 +47,7 @@ impl ProxyConnectionPool {
                 let mut pool = pool_clone_for_timer.lock().await;
                 let mut remove_indexes = vec![];
                 for (i, stream) in pool.iter_mut().enumerate() {
+                    info!("Checking proxy connection: {:?}", stream);
                     if let Err(e) = stream.write(&[0u8; 0]).await {
                         error!(
                             "Proxy connection {:?} has error(write), mark it to be remove from the pool, error:{:?}.",
@@ -63,13 +64,23 @@ impl ProxyConnectionPool {
                     };
                 }
                 for i in remove_indexes.iter() {
-                    let target_stream = pool.get(*i);
+                    let target_stream = pool.remove(*i);
                     error!(
                         "Proxy connection {:?} has error, remove it from the pool, current pool size: {}.",
                         target_stream,
                         pool.len()
                     );
-                    pool.remove(*i);
+                    if let Some(mut target_stream) = target_stream {
+                        if let Err(e) = target_stream.shutdown().await {
+                            error!(
+                                "Fail to close proxy connection {:?} because of error, current pool size: {}, error: {:#?}.",
+                                target_stream,
+                                pool.len(),
+                                e
+                            );
+                        }
+                        drop(target_stream);
+                    }
                 }
 
                 if let Err(e) = Self::initialize_pool(proxy_addresses.clone(), configuration.clone(), &mut pool).await {
@@ -129,6 +140,7 @@ impl ProxyConnectionPool {
         while let Some(element) = pool_initialize_channel_receiver.recv().await {
             pool.push_back(element);
         }
+        info!("Success to initialize proxy connection pool: {}", pool.len());
         Ok(())
     }
 
