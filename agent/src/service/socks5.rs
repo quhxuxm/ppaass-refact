@@ -20,7 +20,7 @@ use self::{
     init::{Socks5InitFlowResult, Socks5UdpRelayFlow, Socks5UdpRelayFlowRequest, Socks5UdpRelayFlowResult},
 };
 
-use super::common::{ProxyConnectionPool, TcpRelayFlowResult};
+use super::{common::TcpRelayFlowResult, pool::ProxyConnectionPool};
 
 mod auth;
 mod init;

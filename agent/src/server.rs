@@ -10,7 +10,7 @@ use tokio::{net::TcpSocket, sync::Mutex};
 use tracing::error;
 
 use crate::service::{common::ClientConnection, AgentRsaCryptoFetcher};
-use crate::{config::AgentConfig, service::common::ProxyConnectionPool};
+use crate::{config::AgentConfig, service::pool::ProxyConnectionPool};
 
 const DEFAULT_SERVER_PORT: u16 = 10080;
 

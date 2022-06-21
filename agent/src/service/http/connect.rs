@@ -24,7 +24,7 @@ use tokio_util::codec::{Framed, FramedParts};
 use tracing::error;
 use url::Url;
 
-use crate::{codec::http::HttpCodec, config::AgentConfig, service::common::ProxyConnectionPool};
+use crate::{codec::http::HttpCodec, config::AgentConfig, service::pool::ProxyConnectionPool};
 const DEFAULT_BUFFER_SIZE: usize = 65536;
 const HTTPS_SCHEMA: &str = "https";
 const SCHEMA_SEP: &str = "://";

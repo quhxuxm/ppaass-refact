@@ -21,7 +21,7 @@ use common::{
 use crate::{
     config::AgentConfig,
     message::socks5::Socks5Addr,
-    service::common::{ProxyConnectionPool, DEFAULT_BUFFER_SIZE},
+    service::{common::DEFAULT_BUFFER_SIZE, pool::ProxyConnectionPool},
 };
 
 pub(crate) struct Socks5TcpConnectFlow;

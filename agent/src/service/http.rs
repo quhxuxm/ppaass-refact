@@ -14,7 +14,7 @@ use crate::{
 
 use self::connect::HttpConnectFlowResult;
 
-use super::common::{ProxyConnectionPool, TcpRelayFlowResult};
+use super::{common::TcpRelayFlowResult, pool::ProxyConnectionPool};
 
 mod connect;
 

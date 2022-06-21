@@ -17,7 +17,7 @@ use tokio_util::codec::{Framed, FramedParts};
 use tracing::{debug, error};
 
 use crate::service::{
-    common::ProxyConnectionPool,
+    pool::ProxyConnectionPool,
     socks5::init::{
         tcp_connect::Socks5TcpConnectFlowResult,
         udp_associate::{Socks5UdpAssociateFlow, Socks5UdpAssociateFlowRequest, Socks5UdpAssociateFlowResult},
