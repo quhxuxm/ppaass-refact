@@ -2,7 +2,7 @@ use std::{collections::VecDeque, net::SocketAddr, sync::Arc, time::Duration};
 
 use common::{TcpConnectRequest, TcpConnectResult, TcpConnector};
 use tokio::{io::AsyncWriteExt, net::TcpStream, sync::Mutex};
-use tracing::{debug, error};
+use tracing::{debug, error, info};
 
 use crate::config::AgentConfig;
 use anyhow::anyhow;
@@ -100,7 +100,7 @@ impl ProxyConnectionPool {
                 Ok(TcpConnectResult { connected_stream }) => connected_stream,
             };
             pool.push_back(connected_stream);
-            debug!("Initialize a proxy tcp connection, current pool size: {}", pool.len());
+            info!("Initialize a proxy tcp connection, current pool size: {}", pool.len());
         }
         Ok(())
     }
@@ -108,18 +108,18 @@ impl ProxyConnectionPool {
     pub async fn fetch_connection(&mut self) -> Result<TcpStream> {
         let mut pool = self.pool.lock().await;
         let connection = pool.pop_front();
-        debug!("Fetch a proxy tcp connection from the pool, current pool size: {}", pool.len());
+        info!("Fetch a proxy tcp connection from the pool, current pool size: {}", pool.len());
         let min_proxy_connection_number = self.configuration.min_proxy_connection_number().unwrap_or(DEFAULT_MIN_PROXY_CONNECTION_NUMBER);
         let connection = match connection {
             None => {
-                debug!("Begin to fill the proxy connection pool(on empty), current pool size: {}", pool.len());
+                info!("Begin to fill the proxy connection pool(on empty), current pool size: {}", pool.len());
                 Self::initialize_pool(self.proxy_addresses.clone(), self.configuration.clone(), &mut pool).await?;
                 pool.pop_front().ok_or(anyhow!("Fail to initialize connection pool."))?
             },
             Some(v) => v,
         };
         if pool.len() < min_proxy_connection_number {
-            debug!("Begin to fill the proxy connection pool, current pool size: {}", pool.len());
+            info!("Begin to fill the proxy connection pool, current pool size: {}", pool.len());
             Self::initialize_pool(self.proxy_addresses.clone(), self.configuration.clone(), &mut pool).await?;
         }
         Ok(connection)
