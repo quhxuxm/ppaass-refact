@@ -13,6 +13,7 @@ init_proxy_connection_number = 32
 min_proxy_connection_number = 16
 proxy_addresses = ["149.28.219.182:80"]
 proxy_connection_check_interval_seconds = 20
+proxy_connection_number_increasement = 16
 proxy_public_key_file = "ProxyPublicKey.pem"
 proxy_stream_so_linger = 20
 so_backlog = 2048

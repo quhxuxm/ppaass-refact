@@ -1,7 +1,11 @@
 use std::{collections::VecDeque, net::SocketAddr, sync::Arc, time::Duration};
 
 use common::{TcpConnectRequest, TcpConnectResult, TcpConnector};
-use tokio::{io::AsyncWriteExt, net::TcpStream, sync::Mutex};
+use tokio::{
+    io::AsyncWriteExt,
+    net::TcpStream,
+    sync::{mpsc, Mutex},
+};
 use tracing::{error, info};
 
 use crate::config::AgentConfig;
@@ -84,24 +88,37 @@ impl ProxyConnectionPool {
         if pool_size >= min_proxy_connection_number {
             return Ok(());
         }
+        let (pool_initialize_channel_sender, mut pool_initialize_channel_receiver) = mpsc::channel(2048);
         for _ in pool_size..init_proxy_connection_number {
-            let connected_stream = match TcpConnector::connect(TcpConnectRequest {
-                connect_addresses: proxy_addresses.to_vec(),
-                connected_stream_so_linger: proxy_stream_so_linger,
-            })
-            .await
-            {
-                Err(e) => {
-                    error!(
-                        "Fail to create proxy connection because of error, skip this connection, create anotherone, error:{:#?}",
-                        e
-                    );
-                    continue;
-                },
-                Ok(TcpConnectResult { connected_stream }) => connected_stream,
-            };
-            pool.push_back(connected_stream);
-            info!("Initialize a proxy tcp connection, current pool size: {}", pool.len());
+            let proxy_addresses = proxy_addresses.clone();
+            let pool_initialize_channel_sender = pool_initialize_channel_sender.clone();
+            tokio::spawn(async move {
+                match TcpConnector::connect(TcpConnectRequest {
+                    connect_addresses: proxy_addresses.to_vec(),
+                    connected_stream_so_linger: proxy_stream_so_linger,
+                })
+                .await
+                {
+                    Err(e) => {
+                        error!(
+                            "Fail to create proxy connection because of error, skip this connection, create anotherone, error:{:#?}",
+                            e
+                        );
+                    },
+                    Ok(TcpConnectResult { connected_stream }) => {
+                        if let Err(e) = pool_initialize_channel_sender.send(connected_stream).await {
+                            error!(
+                                "Fail to create proxy connection because of error(sender), skip this connection, create anotherone, error:{:#?}",
+                                e
+                            );
+                        }
+                    },
+                };
+            });
+        }
+        drop(pool_initialize_channel_sender);
+        while let Some(element) = pool_initialize_channel_receiver.recv().await {
+            pool.push_back(element);
         }
         Ok(())
     }

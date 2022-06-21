@@ -64,8 +64,8 @@ impl AgentServer {
         let listener = server_socket.listen(self.configuration.so_backlog().unwrap_or(1024))?;
         let agent_rsa_crypto_fetcher = AgentRsaCryptoFetcher::new(self.configuration.clone())?;
         let agent_rsa_crypto_fetcher = Arc::new(agent_rsa_crypto_fetcher);
-        println!("ppaass-agent is listening port: {} ", local_socket_address.port());
         let proxy_connection_pool = Arc::new(ProxyConnectionPool::new(proxy_addresses.clone(), self.configuration.clone()).await?);
+        println!("ppaass-agent is listening port: {} ", local_socket_address.port());
         loop {
             let agent_rsa_crypto_fetcher = agent_rsa_crypto_fetcher.clone();
             let (client_stream, client_address) = match listener.accept().await {
