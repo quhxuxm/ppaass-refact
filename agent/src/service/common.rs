@@ -204,6 +204,7 @@ impl TcpRelayFlow {
                         error!("Fail to shutdown client stream writer when relay data from proxy to client have error:{:#?}", e);
                     };
                 }
+                drop(client_stream_write);
             }
         });
         tokio::spawn(async move {
@@ -232,6 +233,7 @@ impl TcpRelayFlow {
                         error!("Fail to close proxy message writer when relay data from client to proxy have error:{:#?}", e);
                     };
                 }
+                drop(message_framed_write);
             }
         });
 
