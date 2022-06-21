@@ -8,22 +8,23 @@ use anyhow::Result;
 use bytecodec::bytes::BytesEncoder;
 use bytecodec::EncodeExt;
 use bytes::{Bytes, BytesMut};
+
 use common::{
     generate_uuid, AgentMessagePayloadTypeValue, MessageFramedGenerator, MessageFramedRead, MessageFramedReader, MessageFramedWrite, MessageFramedWriter,
     MessagePayload, NetAddress, PayloadEncryptionTypeSelectRequest, PayloadEncryptionTypeSelectResult, PayloadEncryptionTypeSelector, PayloadType, PpaassError,
     ProxyMessagePayloadTypeValue, ReadMessageFramedError, ReadMessageFramedRequest, ReadMessageFramedResult, ReadMessageFramedResultContent, RsaCryptoFetcher,
-    TcpConnectRequest, TcpConnectResult, TcpConnector, WriteMessageFramedError, WriteMessageFramedRequest, WriteMessageFramedResult,
+    WriteMessageFramedError, WriteMessageFramedRequest, WriteMessageFramedResult,
 };
 
 use futures::{SinkExt, StreamExt};
 use httpcodec::{BodyEncoder, HttpVersion, ReasonPhrase, RequestEncoder, Response, StatusCode};
-use tokio::net::TcpStream;
+use tokio::{net::TcpStream, sync::Mutex};
 use tokio_util::codec::{Framed, FramedParts};
 
 use tracing::error;
 use url::Url;
 
-use crate::{codec::http::HttpCodec, config::AgentConfig};
+use crate::{codec::http::HttpCodec, config::AgentConfig, service::common::ProxyConnectionPool};
 const DEFAULT_BUFFER_SIZE: usize = 65536;
 const HTTPS_SCHEMA: &str = "https";
 const SCHEMA_SEP: &str = "://";
@@ -34,14 +35,12 @@ const OK_CODE: u16 = 200;
 const ERROR_CODE: u16 = 400;
 const ERROR_REASON: &str = " ";
 const CONNECTION_ESTABLISHED: &str = "Connection Established";
-const DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS: u64 = 20;
 
 type HttpFramed<'a> = Framed<&'a mut TcpStream, HttpCodec>;
 
 #[allow(unused)]
 pub(crate) struct HttpConnectFlowRequest {
     pub connection_id: String,
-    pub proxy_addresses: Arc<Vec<SocketAddr>>,
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,
     pub initial_buf: BytesMut,
@@ -76,18 +75,18 @@ impl HttpConnectFlow {
 }
 
 impl HttpConnectFlow {
-    pub async fn exec<T>(request: HttpConnectFlowRequest, rsa_crypto_fetcher: Arc<T>, configuration: Arc<AgentConfig>) -> Result<HttpConnectFlowResult<T>>
+    pub async fn exec<T>(
+        request: HttpConnectFlowRequest, rsa_crypto_fetcher: Arc<T>, configuration: Arc<AgentConfig>, proxy_connection_pool: Arc<Mutex<ProxyConnectionPool>>,
+    ) -> Result<HttpConnectFlowResult<T>>
     where
         T: RsaCryptoFetcher,
     {
         let HttpConnectFlowRequest {
             connection_id,
-            proxy_addresses,
             mut client_stream,
             client_address,
             initial_buf,
         } = request;
-        let proxy_stream_so_linger = configuration.proxy_stream_so_linger().unwrap_or(DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS);
         let mut framed_parts = FramedParts::new(&mut client_stream, HttpCodec::default());
         framed_parts.read_buf = initial_buf;
         let mut http_client_framed = Framed::from_parts(framed_parts);
@@ -134,22 +133,17 @@ impl HttpConnectFlow {
             Some(v) => v.to_string(),
         };
         let target_address = NetAddress::Domain(target_host, target_port);
-        let TcpConnectResult {
-            connected_stream: proxy_stream,
-        } = match TcpConnector::connect(TcpConnectRequest {
-            connect_addresses: proxy_addresses.to_vec(),
-            connected_stream_so_linger: proxy_stream_so_linger,
-        })
-        .await
-        {
-            Err(e) => {
-                Self::send_error_to_client(http_client_framed).await?;
-                return Err(anyhow!(e));
-            },
-            Ok(v) => v,
+        let proxy_stream = {
+            let mut proxy_connection_pool = proxy_connection_pool.lock().await;
+            match proxy_connection_pool.fetch_connection().await {
+                Err(e) => {
+                    Self::send_error_to_client(http_client_framed).await?;
+                    return Err(anyhow!(e));
+                },
+                Ok(v) => v,
+            }
         };
         let connected_proxy_address = proxy_stream.peer_addr()?;
-
         let framed_result = match MessageFramedGenerator::generate(
             proxy_stream,
             configuration.message_framed_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),

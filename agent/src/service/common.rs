@@ -83,13 +83,13 @@ impl ClientConnection {
                 let HttpFlowResult = HttpFlow::exec(
                     HttpFlowRequest {
                         connection_id: connection_id.clone(),
-                        proxy_addresses,
                         client_stream,
                         client_address,
                         buffer,
                     },
                     rsa_crypto_fetcher.clone(),
                     configuration,
+                    proxy_connection_pool,
                 )
                 .await?;
                 debug!("Connection [{}] complete http flow for client: {}", connection_id, client_address);
@@ -520,7 +520,7 @@ impl ProxyConnectionPool {
         };
         {
             let mut locked_pool = result.pool.lock().await;
-            Self::initialize_pool(proxy_addresses, configuration, &mut locked_pool).await?;
+            Self::initialize_pool(proxy_addresses.clone(), configuration.clone(), &mut locked_pool).await?;
         }
         let pool_clone_for_timer = result.pool.clone();
         tokio::spawn(async move {
@@ -554,6 +554,10 @@ impl ProxyConnectionPool {
                     );
                     pool.remove(*i);
                 }
+
+                if let Err(e) = Self::initialize_pool(proxy_addresses.clone(), configuration.clone(), &mut pool).await {
+                    error!("Fail to initialize proxy connection pool because of error in timer, error: {:#?}", e);
+                };
             }
         });
         Ok(result)

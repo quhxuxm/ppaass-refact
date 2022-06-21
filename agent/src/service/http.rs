@@ -4,7 +4,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use bytes::BytesMut;
 use common::RsaCryptoFetcher;
-use tokio::net::TcpStream;
+use tokio::{net::TcpStream, sync::Mutex};
 
 use crate::service::http::connect::{HttpConnectFlow, HttpConnectFlowRequest};
 use crate::{
@@ -14,14 +14,13 @@ use crate::{
 
 use self::connect::HttpConnectFlowResult;
 
-use super::common::TcpRelayFlowResult;
+use super::common::{ProxyConnectionPool, TcpRelayFlowResult};
 
 mod connect;
 
 #[derive(Debug)]
 pub(crate) struct HttpFlowRequest {
     pub connection_id: String,
-    pub proxy_addresses: Arc<Vec<SocketAddr>>,
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,
     pub buffer: BytesMut,
@@ -33,13 +32,14 @@ pub(crate) struct HttpFlowResult;
 pub(crate) struct HttpFlow;
 
 impl HttpFlow {
-    pub async fn exec<T>(request: HttpFlowRequest, rsa_crypto_fetcher: Arc<T>, configuration: Arc<AgentConfig>) -> Result<HttpFlowResult>
+    pub async fn exec<T>(
+        request: HttpFlowRequest, rsa_crypto_fetcher: Arc<T>, configuration: Arc<AgentConfig>, proxy_connection_pool: Arc<Mutex<ProxyConnectionPool>>,
+    ) -> Result<HttpFlowResult>
     where
         T: RsaCryptoFetcher + Send + Sync + 'static,
     {
         let HttpFlowRequest {
             connection_id,
-            proxy_addresses,
             client_stream,
             client_address,
             buffer,
@@ -56,13 +56,13 @@ impl HttpFlow {
         } = HttpConnectFlow::exec(
             HttpConnectFlowRequest {
                 connection_id: connection_id.clone(),
-                proxy_addresses,
                 client_address,
                 client_stream,
                 initial_buf: buffer,
             },
             rsa_crypto_fetcher.clone(),
             configuration.clone(),
+            proxy_connection_pool,
         )
         .await?;
         let TcpRelayFlowResult { .. } = TcpRelayFlow::exec(

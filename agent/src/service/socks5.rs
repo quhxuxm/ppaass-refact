@@ -6,7 +6,7 @@ use tokio::{net::TcpStream, sync::Mutex};
 
 use anyhow::Result;
 use common::RsaCryptoFetcher;
-use tracing::info;
+use tracing::debug;
 
 use crate::service::socks5::auth::{Socks5AuthenticateFlow, Socks5AuthenticateFlowRequest};
 use crate::service::socks5::init::{Socks5InitFlow, Socks5InitFlowRequest};
@@ -62,7 +62,7 @@ impl Socks5FlowProcessor {
             buffer,
         })
         .await?;
-        info!("Connection [{}] success to do authenticate, begin to init.", connection_id);
+        debug!("Connection [{}] success to do authenticate, begin to init.", connection_id);
         let init_flow_result = Socks5InitFlow::exec(
             Socks5InitFlowRequest {
                 connection_id: connection_id.clone(),
@@ -101,7 +101,7 @@ impl Socks5FlowProcessor {
                     configuration,
                 )
                 .await?;
-                info!("Connection [{}] start socks5 tcp relay for client: {:?}", connection_id, client_address);
+                debug!("Connection [{}] start socks5 tcp relay for client: {:?}", connection_id, client_address);
                 Ok(Socks5FlowResult)
             },
             Socks5InitFlowResult::Udp {
@@ -131,7 +131,7 @@ impl Socks5FlowProcessor {
                     configuration,
                 )
                 .await?;
-                info!(
+                debug!(
                     "Connection [{}] complete socks5 udp relay for client: {:?} on udp address: {:?}",
                     connection_id, client_address, udp_address
                 );
