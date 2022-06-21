@@ -31,6 +31,7 @@ pub struct AgentConfig {
     proxy_public_key_file: Option<String>,
     init_proxy_connection_number: Option<usize>,
     min_proxy_connection_number: Option<usize>,
+    proxy_connection_check_interval_seconds: Option<u64>,
 }
 
 impl AgentConfig {
@@ -132,6 +133,9 @@ impl AgentConfig {
     }
     pub fn min_proxy_connection_number(&self) -> Option<usize> {
         self.min_proxy_connection_number
+    }
+    pub fn proxy_connection_check_interval_seconds(&self) -> Option<u64> {
+        self.proxy_connection_check_interval_seconds
     }
 }
 
