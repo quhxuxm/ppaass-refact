@@ -275,6 +275,7 @@ impl TcpConnector {
         let connected_stream = TcpStream::connect(&connect_addresses.as_slice()).await?;
         connected_stream.set_nodelay(true)?;
         connected_stream.set_linger(Some(Duration::from_secs(connected_stream_so_linger)))?;
+
         debug!("Success connect to target: {:?}", connect_addresses);
         Ok(TcpConnectResult { connected_stream })
     }

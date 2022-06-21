@@ -16,6 +16,7 @@ use super::common::DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS;
 
 const DEFAULT_INIT_PROXY_CONNECTION_NUMBER: usize = 32;
 const DEFAULT_MIN_PROXY_CONNECTION_NUMBER: usize = 16;
+const DEFAULT_PROXY_CONNECTION_NUMBER_INCREASEMENT: usize = 16;
 const DEFAULT_PROXY_CONNECTION_CHECK_INTERVAL_SECONDS: u64 = 30;
 pub struct ProxyConnectionPool {
     pool: Arc<Mutex<VecDeque<TcpStream>>>,
@@ -83,13 +84,21 @@ impl ProxyConnectionPool {
     async fn initialize_pool(proxy_addresses: Arc<Vec<SocketAddr>>, configuration: Arc<AgentConfig>, pool: &mut VecDeque<TcpStream>) -> Result<()> {
         let proxy_stream_so_linger = configuration.proxy_stream_so_linger().unwrap_or(DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS);
         let init_proxy_connection_number = configuration.init_proxy_connection_number().unwrap_or(DEFAULT_INIT_PROXY_CONNECTION_NUMBER);
+        let proxy_connection_number_increasement = configuration
+            .proxy_connection_number_increasement()
+            .unwrap_or(DEFAULT_PROXY_CONNECTION_NUMBER_INCREASEMENT);
         let min_proxy_connection_number = configuration.min_proxy_connection_number().unwrap_or(DEFAULT_MIN_PROXY_CONNECTION_NUMBER);
         let pool_size = pool.len();
         if pool_size >= min_proxy_connection_number {
             return Ok(());
         }
         let (pool_initialize_channel_sender, mut pool_initialize_channel_receiver) = mpsc::channel(2048);
-        for _ in pool_size..init_proxy_connection_number {
+        let increase_to = if pool_size == 0 {
+            init_proxy_connection_number
+        } else {
+            pool_size + proxy_connection_number_increasement
+        };
+        for _ in pool_size..increase_to {
             let proxy_addresses = proxy_addresses.clone();
             let pool_initialize_channel_sender = pool_initialize_channel_sender.clone();
             tokio::spawn(async move {
