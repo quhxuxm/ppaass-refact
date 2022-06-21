@@ -4,7 +4,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use bytes::BytesMut;
 use common::RsaCryptoFetcher;
-use tokio::{net::TcpStream, sync::Mutex};
+use tokio::net::TcpStream;
 
 use crate::service::http::connect::{HttpConnectFlow, HttpConnectFlowRequest};
 use crate::{
@@ -33,7 +33,7 @@ pub(crate) struct HttpFlow;
 
 impl HttpFlow {
     pub async fn exec<T>(
-        request: HttpFlowRequest, rsa_crypto_fetcher: Arc<T>, configuration: Arc<AgentConfig>, proxy_connection_pool: Arc<Mutex<ProxyConnectionPool>>,
+        request: HttpFlowRequest, rsa_crypto_fetcher: Arc<T>, configuration: Arc<AgentConfig>, proxy_connection_pool: Arc<ProxyConnectionPool>,
     ) -> Result<HttpFlowResult>
     where
         T: RsaCryptoFetcher + Send + Sync + 'static,

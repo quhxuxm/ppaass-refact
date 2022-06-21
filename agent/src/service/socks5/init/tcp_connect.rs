@@ -8,7 +8,6 @@ use bytes::Bytes;
 
 use futures::SinkExt;
 
-use tokio::sync::Mutex;
 use tracing::{debug, error};
 
 use common::{
@@ -46,8 +45,7 @@ where
 
 impl Socks5TcpConnectFlow {
     pub async fn exec<T>(
-        request: Socks5TcpConnectFlowRequest, rsa_crypto_fetcher: Arc<T>, configuration: Arc<AgentConfig>,
-        proxy_connection_pool: Arc<Mutex<ProxyConnectionPool>>,
+        request: Socks5TcpConnectFlowRequest, rsa_crypto_fetcher: Arc<T>, configuration: Arc<AgentConfig>, proxy_connection_pool: Arc<ProxyConnectionPool>,
     ) -> Result<Socks5TcpConnectFlowResult<T>>
     where
         T: RsaCryptoFetcher,
@@ -56,10 +54,7 @@ impl Socks5TcpConnectFlow {
             connection_id, dest_address, ..
         } = request;
         let client_address = request.client_address;
-        let proxy_stream = {
-            let mut proxy_connection_pool = proxy_connection_pool.lock().await;
-            proxy_connection_pool.fetch_connection().await?
-        };
+        let proxy_stream = proxy_connection_pool.fetch_connection().await?;
         let message_framed_buffer_size = configuration.message_framed_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE);
         let compress = configuration.compress().unwrap_or(true);
         let connected_proxy_address = proxy_stream.peer_addr()?;

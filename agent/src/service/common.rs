@@ -5,12 +5,9 @@ use anyhow::anyhow;
 use anyhow::Result;
 use bytes::{Bytes, BytesMut};
 use futures::{SinkExt, StreamExt};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::net::TcpStream;
-use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
-    sync::Mutex,
-};
 use tokio_util::codec::{Framed, FramedParts};
 
 use tracing::{debug, error};
@@ -55,9 +52,7 @@ impl ClientConnection {
         }
     }
 
-    pub async fn exec<T>(
-        self, rsa_crypto_fetcher: Arc<T>, confiugration: Arc<AgentConfig>, proxy_connection_pool: Arc<Mutex<ProxyConnectionPool>>,
-    ) -> Result<()>
+    pub async fn exec<T>(self, rsa_crypto_fetcher: Arc<T>, confiugration: Arc<AgentConfig>, proxy_connection_pool: Arc<ProxyConnectionPool>) -> Result<()>
     where
         T: RsaCryptoFetcher + Send + Sync + 'static,
     {

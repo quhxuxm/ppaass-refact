@@ -18,7 +18,7 @@ use common::{
 
 use futures::{SinkExt, StreamExt};
 use httpcodec::{BodyEncoder, HttpVersion, ReasonPhrase, RequestEncoder, Response, StatusCode};
-use tokio::{net::TcpStream, sync::Mutex};
+use tokio::net::TcpStream;
 use tokio_util::codec::{Framed, FramedParts};
 
 use tracing::error;
@@ -76,7 +76,7 @@ impl HttpConnectFlow {
 
 impl HttpConnectFlow {
     pub async fn exec<T>(
-        request: HttpConnectFlowRequest, rsa_crypto_fetcher: Arc<T>, configuration: Arc<AgentConfig>, proxy_connection_pool: Arc<Mutex<ProxyConnectionPool>>,
+        request: HttpConnectFlowRequest, rsa_crypto_fetcher: Arc<T>, configuration: Arc<AgentConfig>, proxy_connection_pool: Arc<ProxyConnectionPool>,
     ) -> Result<HttpConnectFlowResult<T>>
     where
         T: RsaCryptoFetcher,
@@ -133,15 +133,12 @@ impl HttpConnectFlow {
             Some(v) => v.to_string(),
         };
         let target_address = NetAddress::Domain(target_host, target_port);
-        let proxy_stream = {
-            let mut proxy_connection_pool = proxy_connection_pool.lock().await;
-            match proxy_connection_pool.fetch_connection().await {
-                Err(e) => {
-                    Self::send_error_to_client(http_client_framed).await?;
-                    return Err(anyhow!(e));
-                },
-                Ok(v) => v,
-            }
+        let proxy_stream = match proxy_connection_pool.fetch_connection().await {
+            Err(e) => {
+                Self::send_error_to_client(http_client_framed).await?;
+                return Err(anyhow!(e));
+            },
+            Ok(v) => v,
         };
         let connected_proxy_address = proxy_stream.peer_addr()?;
         let framed_result = match MessageFramedGenerator::generate(

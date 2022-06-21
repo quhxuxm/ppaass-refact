@@ -2,7 +2,7 @@ use std::{collections::VecDeque, net::SocketAddr, sync::Arc, time::Duration};
 
 use common::{TcpConnectRequest, TcpConnectResult, TcpConnector};
 use tokio::{io::AsyncWriteExt, net::TcpStream, sync::Mutex};
-use tracing::{debug, error, info};
+use tracing::{error, info};
 
 use crate::config::AgentConfig;
 use anyhow::anyhow;
@@ -70,6 +70,7 @@ impl ProxyConnectionPool {
                 if let Err(e) = Self::initialize_pool(proxy_addresses.clone(), configuration.clone(), &mut pool).await {
                     error!("Fail to initialize proxy connection pool because of error in timer, error: {:#?}", e);
                 };
+                info!("Current pool size: {}", pool.len());
             }
         });
         Ok(result)
@@ -105,7 +106,7 @@ impl ProxyConnectionPool {
         Ok(())
     }
 
-    pub async fn fetch_connection(&mut self) -> Result<TcpStream> {
+    pub async fn fetch_connection(&self) -> Result<TcpStream> {
         let mut pool = self.pool.lock().await;
         let connection = pool.pop_front();
         info!("Fetch a proxy tcp connection from the pool, current pool size: {}", pool.len());

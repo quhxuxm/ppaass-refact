@@ -4,8 +4,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
+use tokio::net::TcpSocket;
 use tokio::runtime::{Builder as TokioRuntimeBuilder, Runtime};
-use tokio::{net::TcpSocket, sync::Mutex};
 
 use tracing::error;
 
@@ -65,7 +65,7 @@ impl AgentServer {
         let agent_rsa_crypto_fetcher = AgentRsaCryptoFetcher::new(self.configuration.clone())?;
         let agent_rsa_crypto_fetcher = Arc::new(agent_rsa_crypto_fetcher);
         println!("ppaass-agent is listening port: {} ", local_socket_address.port());
-        let proxy_connection_pool = Arc::new(Mutex::new(ProxyConnectionPool::new(proxy_addresses.clone(), self.configuration.clone()).await?));
+        let proxy_connection_pool = Arc::new(ProxyConnectionPool::new(proxy_addresses.clone(), self.configuration.clone()).await?);
         loop {
             let agent_rsa_crypto_fetcher = agent_rsa_crypto_fetcher.clone();
             let (client_stream, client_address) = match listener.accept().await {
