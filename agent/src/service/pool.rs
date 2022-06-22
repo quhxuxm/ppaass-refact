@@ -247,7 +247,7 @@ impl ProxyConnectionPool {
         let min_proxy_connection_number = self.configuration.min_proxy_connection_number().unwrap_or(DEFAULT_MIN_PROXY_CONNECTION_NUMBER);
         let mut pool = self.pool.lock().await;
         let connection = pool.pop_front();
-        info!("Fetch a proxy tcp connection from the pool, current pool size: {}", pool.len());
+        debug!("Fetch a proxy tcp connection from the pool, current pool size: {}", pool.len());
         let connection = match connection {
             None => {
                 debug!("Begin to fill the proxy connection pool(on empty), current pool size: {}", pool.len());
