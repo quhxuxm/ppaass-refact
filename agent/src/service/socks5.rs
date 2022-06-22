@@ -26,8 +26,7 @@ mod auth;
 mod init;
 
 pub(crate) struct Socks5FlowRequest {
-    pub connection_id: String,
-    pub proxy_addresses: Arc<Vec<SocketAddr>>,
+    pub client_connection_id: String,
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,
     pub buffer: BytesMut,
@@ -44,8 +43,7 @@ impl Socks5FlowProcessor {
         T: RsaCryptoFetcher + Send + Sync + 'static,
     {
         let Socks5FlowRequest {
-            connection_id,
-            proxy_addresses,
+            client_connection_id,
             client_stream,
             client_address,
             buffer,
@@ -56,17 +54,16 @@ impl Socks5FlowProcessor {
             buffer,
             ..
         } = Socks5AuthenticateFlow::exec(Socks5AuthenticateFlowRequest {
-            connection_id: connection_id.clone(),
+            client_connection_id: client_connection_id.clone(),
             client_stream,
             client_address,
             buffer,
         })
         .await?;
-        debug!("Connection [{}] success to do authenticate, begin to init.", connection_id);
+        debug!("Client connection [{}] success to do authenticate, begin to init.", client_connection_id);
         let init_flow_result = Socks5InitFlow::exec(
             Socks5InitFlowRequest {
-                connection_id: connection_id.clone(),
-                proxy_addresses,
+                client_connection_id: client_connection_id.clone(),
                 client_stream,
                 client_address,
                 buffer,
@@ -85,10 +82,12 @@ impl Socks5FlowProcessor {
                 source_address,
                 target_address,
                 proxy_address,
+                proxy_connection_id,
             } => {
                 let TcpRelayFlowResult { client_address } = TcpRelayFlow::exec(
                     TcpRelayFlowRequest {
-                        connection_id: connection_id.clone(),
+                        client_connection_id: client_connection_id.clone(),
+                        proxy_connection_id: proxy_connection_id.clone(),
                         client_address,
                         client_stream,
                         message_framed_write,
@@ -101,7 +100,10 @@ impl Socks5FlowProcessor {
                     configuration,
                 )
                 .await?;
-                debug!("Connection [{}] start socks5 tcp relay for client: {:?}", connection_id, client_address);
+                debug!(
+                    "Client connection [{}] start socks5 tcp relay for client: {:?}",
+                    client_connection_id, client_address
+                );
                 Ok(Socks5FlowResult)
             },
             Socks5InitFlowResult::Udp {
@@ -112,6 +114,7 @@ impl Socks5FlowProcessor {
                 message_framed_write,
                 client_address,
                 proxy_address,
+                proxy_connection_id,
             } => {
                 let udp_address = associated_udp_socket.local_addr()?;
                 let target_address = common::NetAddress::IpV4([0, 0, 0, 0], 0);
@@ -119,7 +122,8 @@ impl Socks5FlowProcessor {
                     Socks5UdpRelayFlowRequest {
                         associated_udp_socket,
                         associated_udp_address,
-                        connection_id: connection_id.clone(),
+                        client_connection_id: client_connection_id.clone(),
+                        proxy_connection_id: proxy_connection_id.clone(),
                         client_address: client_address.clone(),
                         client_stream,
                         message_framed_write,
@@ -132,8 +136,8 @@ impl Socks5FlowProcessor {
                 )
                 .await?;
                 debug!(
-                    "Connection [{}] complete socks5 udp relay for client: {:?} on udp address: {:?}",
-                    connection_id, client_address, udp_address
+                    "Client connection [{}] complete socks5 udp relay for client: {:?} on udp address: {:?}",
+                    client_connection_id, client_address, udp_address
                 );
                 Ok(Socks5FlowResult)
             },

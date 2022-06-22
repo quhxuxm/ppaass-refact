@@ -20,13 +20,16 @@ use common::{
 use crate::{
     config::AgentConfig,
     message::socks5::Socks5Addr,
-    service::{common::DEFAULT_BUFFER_SIZE, pool::ProxyConnectionPool},
+    service::{
+        common::DEFAULT_BUFFER_SIZE,
+        pool::{ProxyConnection, ProxyConnectionPool},
+    },
 };
 
 pub(crate) struct Socks5TcpConnectFlow;
 
 pub(crate) struct Socks5TcpConnectFlowRequest {
-    pub connection_id: String,
+    pub client_connection_id: String,
     pub client_address: SocketAddr,
     pub dest_address: Socks5Addr,
 }
@@ -41,6 +44,7 @@ where
     pub proxy_address: SocketAddr,
     pub source_address: NetAddress,
     pub target_address: NetAddress,
+    pub proxy_connection_id: String,
 }
 
 impl Socks5TcpConnectFlow {
@@ -51,10 +55,15 @@ impl Socks5TcpConnectFlow {
         T: RsaCryptoFetcher,
     {
         let Socks5TcpConnectFlowRequest {
-            connection_id, dest_address, ..
+            client_connection_id,
+            dest_address,
+            ..
         } = request;
         let client_address = request.client_address;
-        let proxy_stream = proxy_connection_pool.fetch_connection().await?;
+        let ProxyConnection {
+            id: proxy_connection_id,
+            stream: proxy_stream,
+        } = proxy_connection_pool.fetch_connection().await?;
         let message_framed_buffer_size = configuration.message_framed_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE);
         let compress = configuration.compress().unwrap_or(true);
         let connected_proxy_address = proxy_stream.peer_addr()?;
@@ -69,7 +78,7 @@ impl Socks5TcpConnectFlow {
         })
         .await?;
         let message_framed_write = match MessageFramedWriter::write(WriteMessageFramedRequest {
-            connection_id: Some(connection_id.clone()),
+            connection_id: Some(proxy_connection_id.clone()),
             message_framed_write,
             payload_encryption_type,
             user_token: configuration.user_token().clone().unwrap(),
@@ -94,7 +103,7 @@ impl Socks5TcpConnectFlow {
             },
         };
         match MessageFramedReader::read(ReadMessageFramedRequest {
-            connection_id: connection_id.clone(),
+            connection_id: proxy_connection_id.clone(),
             message_framed_read,
         })
         .await
@@ -117,8 +126,8 @@ impl Socks5TcpConnectFlow {
                     }),
             }) => {
                 debug!(
-                    "Connection [{}] tcp connect process success, response message id: {}",
-                    connection_id, message_id
+                    "Proxy connection [{}] tcp connect process success, response message id: {}, client connection id: {}",
+                    proxy_connection_id, message_id, client_connection_id
                 );
                 Ok(Socks5TcpConnectFlowResult {
                     client_address,
@@ -127,6 +136,7 @@ impl Socks5TcpConnectFlow {
                     source_address,
                     target_address,
                     proxy_address: connected_proxy_address,
+                    proxy_connection_id,
                 })
             },
             Ok(ReadMessageFramedResult {
@@ -143,13 +153,13 @@ impl Socks5TcpConnectFlow {
                 ..
             }) => {
                 error!(
-                    "Connection [{}] fail connect to target from proxy, response message id: {}",
-                    connection_id, message_id
+                    "Proxy connection [{}] fail connect to target from proxy, response message id: {}, client connection id: {}",
+                    proxy_connection_id, message_id, client_connection_id
                 );
                 Err(anyhow!(PpaassError::IoError {
                     source: std::io::Error::new(
                         ErrorKind::ConnectionReset,
-                        format!("Connection [{}] fail connect to target from proxy", connection_id)
+                        format!("Proxy connection [{}] fail connect to target from proxy", proxy_connection_id)
                     ),
                 }))
             },
@@ -163,8 +173,8 @@ impl Socks5TcpConnectFlow {
                 ..
             }) => {
                 error!(
-                    "Connection [{}] fail connect to target from proxy because of invalid payload type:{:?}, response message id: {}",
-                    connection_id, payload_type, message_id
+                    "Proxy connection [{}] fail connect to target from proxy because of invalid payload type:{:?}, response message id: {}, client connection id: {}",
+                    proxy_connection_id, payload_type, message_id, client_connection_id
                 );
                 Err(anyhow!(PpaassError::IoError {
                     source: std::io::Error::new(ErrorKind::InvalidData, "Invalid payload type read from proxy.",),
@@ -172,8 +182,8 @@ impl Socks5TcpConnectFlow {
             },
             Ok(ReadMessageFramedResult { .. }) => {
                 error!(
-                    "Connection [{}] fail connect to target from proxy because of unknown response content.",
-                    connection_id
+                    "Proxy connection [{}] fail connect to target from proxy because of unknown response content.",
+                    proxy_connection_id
                 );
                 Err(anyhow!(PpaassError::IoError {
                     source: std::io::Error::new(ErrorKind::InvalidData, "Invalid response content read from proxy.",),

@@ -20,7 +20,7 @@ mod connect;
 
 #[derive(Debug)]
 pub(crate) struct HttpFlowRequest {
-    pub connection_id: String,
+    pub client_connection_id: String,
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,
     pub buffer: BytesMut,
@@ -39,7 +39,7 @@ impl HttpFlow {
         T: RsaCryptoFetcher + Send + Sync + 'static,
     {
         let HttpFlowRequest {
-            connection_id,
+            client_connection_id,
             client_stream,
             client_address,
             buffer,
@@ -53,9 +53,10 @@ impl HttpFlow {
             message_framed_write,
             source_address,
             target_address,
+            proxy_connection_id,
         } = HttpConnectFlow::exec(
             HttpConnectFlowRequest {
-                connection_id: connection_id.clone(),
+                client_connection_id: client_connection_id.clone(),
                 client_address,
                 client_stream,
                 initial_buf: buffer,
@@ -67,7 +68,8 @@ impl HttpFlow {
         .await?;
         let TcpRelayFlowResult { .. } = TcpRelayFlow::exec(
             TcpRelayFlowRequest {
-                connection_id,
+                client_connection_id,
+                proxy_connection_id,
                 client_address,
                 client_stream,
                 message_framed_write,

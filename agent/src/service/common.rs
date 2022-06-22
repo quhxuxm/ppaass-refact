@@ -39,16 +39,14 @@ pub(crate) struct ClientConnection {
     pub id: String,
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,
-    pub proxy_addresses: Arc<Vec<SocketAddr>>,
 }
 
 impl ClientConnection {
-    pub(crate) fn new(client_stream: TcpStream, client_address: SocketAddr, proxy_addresses: Arc<Vec<SocketAddr>>) -> Self {
+    pub(crate) fn new(client_stream: TcpStream, client_address: SocketAddr) -> Self {
         Self {
             id: generate_uuid(),
             client_stream,
             client_address,
-            proxy_addresses,
         }
     }
 
@@ -57,9 +55,8 @@ impl ClientConnection {
         T: RsaCryptoFetcher + Send + Sync + 'static,
     {
         let rsa_crypto_fetcher = rsa_crypto_fetcher.clone();
-        let proxy_addresses = self.proxy_addresses.clone();
         let configuration = confiugration.clone();
-        let connection_id = self.id.clone();
+        let client_connection_id = self.id.clone();
         let mut client_stream = self.client_stream;
         let client_address = self.client_address;
         let mut framed = Framed::with_capacity(
@@ -77,7 +74,7 @@ impl ClientConnection {
                 let FramedParts { read_buf: buffer, .. } = framed.into_parts();
                 let HttpFlowResult = HttpFlow::exec(
                     HttpFlowRequest {
-                        connection_id: connection_id.clone(),
+                        client_connection_id: client_connection_id.clone(),
                         client_stream,
                         client_address,
                         buffer,
@@ -87,15 +84,14 @@ impl ClientConnection {
                     proxy_connection_pool,
                 )
                 .await?;
-                debug!("Connection [{}] complete http flow for client: {}", connection_id, client_address);
+                debug!("Client connection [{}] complete http flow for client: {}", client_connection_id, client_address);
                 Ok(())
             },
             Some(Ok(Protocol::Socks5)) => {
                 let FramedParts { read_buf: buffer, .. } = framed.into_parts();
                 let Socks5FlowResult = Socks5FlowProcessor::exec(
                     Socks5FlowRequest {
-                        connection_id: connection_id.clone(),
-                        proxy_addresses,
+                        client_connection_id: client_connection_id.clone(),
                         client_stream,
                         client_address,
                         buffer,
@@ -105,7 +101,10 @@ impl ClientConnection {
                     proxy_connection_pool,
                 )
                 .await?;
-                debug!("Connection [{}] complete socks5 flow for client: {}", connection_id, client_address);
+                debug!(
+                    "Client connection [{}] complete socks5 flow for client: {}",
+                    client_connection_id, client_address
+                );
                 Ok(())
             },
         };
@@ -117,7 +116,8 @@ pub(crate) struct TcpRelayFlowRequest<T>
 where
     T: RsaCryptoFetcher,
 {
-    pub connection_id: String,
+    pub client_connection_id: String,
+    pub proxy_connection_id: String,
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,
     pub message_framed_write: MessageFramedWrite<T>,
@@ -164,7 +164,7 @@ impl TcpRelayFlow {
         T: RsaCryptoFetcher + Send + Sync + 'static,
     {
         let TcpRelayFlowRequest {
-            connection_id,
+            client_connection_id,
             client_stream,
             client_address,
             message_framed_write,
@@ -176,7 +176,7 @@ impl TcpRelayFlow {
         } = request;
 
         let (client_stream_read, client_stream_write) = client_stream.into_split();
-        let connection_id_p2c = connection_id.clone();
+        let connection_id_p2c = client_connection_id.clone();
         let target_address_p2c = target_address.clone();
         let configuration_p2c = configuration.clone();
 
@@ -214,7 +214,7 @@ impl TcpRelayFlow {
                 connection_closed,
                 ..
             }) = Self::relay_client_to_proxy(
-                connection_id,
+                client_connection_id,
                 init_data,
                 message_framed_write,
                 source_address,

@@ -13,7 +13,7 @@ use tokio::{
     sync::{mpsc, Mutex},
 };
 use tokio_util::codec::FramedParts;
-use tracing::{error, info};
+use tracing::{debug, error, info};
 
 use crate::config::AgentConfig;
 use anyhow::anyhow;
@@ -25,8 +25,14 @@ const DEFAULT_INIT_PROXY_CONNECTION_NUMBER: usize = 32;
 const DEFAULT_MIN_PROXY_CONNECTION_NUMBER: usize = 16;
 const DEFAULT_PROXY_CONNECTION_NUMBER_INCREASEMENT: usize = 16;
 const DEFAULT_PROXY_CONNECTION_CHECK_INTERVAL_SECONDS: u64 = 30;
+
+#[derive(Debug)]
+pub struct ProxyConnection {
+    pub id: String,
+    pub stream: TcpStream,
+}
 pub struct ProxyConnectionPool {
-    pool: Arc<Mutex<VecDeque<Option<TcpStream>>>>,
+    pool: Arc<Mutex<VecDeque<Option<ProxyConnection>>>>,
     proxy_addresses: Arc<Vec<SocketAddr>>,
     configuration: Arc<AgentConfig>,
 }
@@ -58,21 +64,20 @@ impl ProxyConnectionPool {
             loop {
                 interval.tick().await;
                 let mut pool = pool_clone_for_timer.lock().await;
-                // let available_streams = vec![];
-                let (available_stream_sender, mut available_stream_receiver) = mpsc::channel::<TcpStream>(2048);
-                for stream in pool.iter_mut() {
-                    let stream_identifier = format!("{:?}", stream);
-                    info!("Checking proxy connection: {}", stream_identifier);
-                    let stream = match std::mem::take(stream) {
+
+                let (available_connection_sender, mut available_connection_receiver) = mpsc::channel::<ProxyConnection>(2048);
+                for connection_ref in pool.iter_mut() {
+                    let ProxyConnection { id, stream } = match std::mem::take(connection_ref) {
                         None => {
-                            error!("Fail to take stream [{}] from pool because of the element is None", stream_identifier);
+                            error!("Fail to take connection from pool because of the element is None");
                             return;
                         },
                         Some(s) => s,
                     };
+                    debug!("Checking proxy connection: {}", id);
                     let user_token = user_token.clone();
                     let rsa_crypto_fetcher = rsa_crypto_fetcher.clone();
-                    let available_stream_sender = available_stream_sender.clone();
+                    let available_stream_sender = available_connection_sender.clone();
                     tokio::spawn(async move {
                         let MessageFramedGenerateResult {
                             message_framed_write,
@@ -89,7 +94,7 @@ impl ProxyConnectionPool {
                         .await
                         {
                             Err(e) => {
-                                error!("Stream [{}] check fail because of error: {:#?}", stream_identifier, e);
+                                error!("Connection [{}] check fail because of error: {:#?}", id, e);
                                 return;
                             },
                             Ok(v) => v,
@@ -111,23 +116,23 @@ impl ProxyConnectionPool {
                         .await
                         {
                             Err(WriteMessageFramedError { source, .. }) => {
-                                error!("Stream [{}] check fail because of error(heartbeat write): {:#?}", stream_identifier, source);
+                                error!("Connection [{}] check fail because of error(heartbeat write): {:#?}", id, source);
                                 return;
                             },
                             Ok(WriteMessageFramedResult { message_framed_write }) => message_framed_write,
                         };
                         if let Err(e) = message_framed_write.flush().await {
-                            error!("Stream [{}] check fail because of error(heartbeat flush): {:#?}", stream_identifier, e);
+                            error!("Connection [{}] check fail because of error(heartbeat flush): {:#?}", id, e);
                             return;
                         }
                         match MessageFramedReader::read(ReadMessageFramedRequest {
-                            connection_id: stream_identifier.clone(),
+                            connection_id: id.clone(),
                             message_framed_read,
                         })
                         .await
                         {
                             Err(ReadMessageFramedError { source, .. }) => {
-                                error!("Stream [{}] check fail because of error(heartbeat read): {:#?}", stream_identifier, source);
+                                error!("Connection [{}] check fail because of error(heartbeat read): {:#?}", id, source);
                                 return;
                             },
                             Ok(ReadMessageFramedResult {
@@ -142,43 +147,45 @@ impl ProxyConnectionPool {
                                         ..
                                     }),
                             }) => {
-                                info!("Heartbeat for proxy stream [{}] success.", stream_identifier);
+                                info!("Heartbeat for proxy connection [{}] success.", id);
                                 let framed = match message_framed_read.reunite(message_framed_write) {
                                     Ok(f) => f,
                                     Err(e) => {
-                                        error!("Stream [{}] check fail because of error(merge read and write): {:#?}", stream_identifier, e);
+                                        error!("Connection [{}] check fail because of error(merge read and write): {:#?}", id, e);
                                         return;
                                     },
                                 };
                                 let FramedParts { io: stream, .. } = framed.into_parts();
-                                if let Err(e) = available_stream_sender.send(stream).await {
-                                    error!("Stream [{}] check fail because of error(send available stream): {:#?}", stream_identifier, e);
+                                if let Err(e) = available_stream_sender.send(ProxyConnection { id: id.clone(), stream }).await {
+                                    error!("Connection [{}] check fail because of error(send available stream): {:#?}", id, e);
                                     return;
                                 };
                                 return;
                             },
                             Ok(ReadMessageFramedResult { .. }) => {
-                                error!("Stream [{}] check fail because of closed(heartbeat read)", stream_identifier);
+                                error!("Connection [{}] check fail because of closed(heartbeat read)", id);
                                 return;
                             },
                         }
                     });
                 }
                 pool.clear();
-                drop(available_stream_sender);
-                while let Some(stream) = available_stream_receiver.recv().await {
+                drop(available_connection_sender);
+                while let Some(stream) = available_connection_receiver.recv().await {
                     pool.push_back(Some(stream));
                 }
                 if let Err(e) = Self::initialize_pool(proxy_addresses.clone(), configuration.clone(), &mut pool).await {
                     error!("Fail to initialize proxy connection pool because of error in timer, error: {:#?}", e);
                 };
-                info!("Current pool size: {}", pool.len());
+                debug!("Current pool size: {}", pool.len());
             }
         });
         Ok(result)
     }
 
-    async fn initialize_pool(proxy_addresses: Arc<Vec<SocketAddr>>, configuration: Arc<AgentConfig>, pool: &mut VecDeque<Option<TcpStream>>) -> Result<()> {
+    async fn initialize_pool(
+        proxy_addresses: Arc<Vec<SocketAddr>>, configuration: Arc<AgentConfig>, pool: &mut VecDeque<Option<ProxyConnection>>,
+    ) -> Result<()> {
         let proxy_stream_so_linger = configuration.proxy_stream_so_linger().unwrap_or(DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS);
         let init_proxy_connection_number = configuration.init_proxy_connection_number().unwrap_or(DEFAULT_INIT_PROXY_CONNECTION_NUMBER);
         let proxy_connection_number_increasement = configuration
@@ -212,12 +219,18 @@ impl ProxyConnectionPool {
                         );
                     },
                     Ok(TcpConnectResult { connected_stream }) => {
-                        if let Err(e) = pool_initialize_channel_sender.send(connected_stream).await {
+                        let proxy_connection_id = generate_uuid();
+                        let proxy_connection = ProxyConnection {
+                            id: proxy_connection_id.clone(),
+                            stream: connected_stream,
+                        };
+                        if let Err(e) = pool_initialize_channel_sender.send(proxy_connection).await {
                             error!(
-                                "Fail to create proxy connection because of error(sender), skip this connection, create anotherone, error:{:#?}",
-                                e
+                                "Fail to create proxy connection [{}] because of error(sender), skip this connection, create anotherone, error:{:#?}",
+                                proxy_connection_id, e
                             );
                         }
+                        debug!("Success to create proxy connection : {}", proxy_connection_id);
                     },
                 };
             });
@@ -226,18 +239,18 @@ impl ProxyConnectionPool {
         while let Some(element) = pool_initialize_channel_receiver.recv().await {
             pool.push_back(Some(element));
         }
-        info!("Success to initialize proxy connection pool: {}", pool.len());
+        debug!("Success to initialize proxy connection pool: {}", pool.len());
         Ok(())
     }
 
-    pub async fn fetch_connection(&self) -> Result<TcpStream> {
+    pub async fn fetch_connection(&self) -> Result<ProxyConnection> {
         let min_proxy_connection_number = self.configuration.min_proxy_connection_number().unwrap_or(DEFAULT_MIN_PROXY_CONNECTION_NUMBER);
         let mut pool = self.pool.lock().await;
         let connection = pool.pop_front();
         info!("Fetch a proxy tcp connection from the pool, current pool size: {}", pool.len());
         let connection = match connection {
             None => {
-                info!("Begin to fill the proxy connection pool(on empty), current pool size: {}", pool.len());
+                debug!("Begin to fill the proxy connection pool(on empty), current pool size: {}", pool.len());
                 Self::initialize_pool(self.proxy_addresses.clone(), self.configuration.clone(), &mut pool).await?;
                 pool.pop_front()
                     .ok_or(anyhow!("Fail to initialize connection pool."))?
@@ -249,7 +262,7 @@ impl ProxyConnectionPool {
             Some(Some(v)) => v,
         };
         if pool.len() < min_proxy_connection_number {
-            info!("Begin to fill the proxy connection pool, current pool size: {}", pool.len());
+            debug!("Begin to fill the proxy connection pool, current pool size: {}", pool.len());
             Self::initialize_pool(self.proxy_addresses.clone(), self.configuration.clone(), &mut pool).await?;
         }
         Ok(connection)

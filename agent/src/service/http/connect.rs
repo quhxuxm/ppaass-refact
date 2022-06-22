@@ -24,7 +24,11 @@ use tokio_util::codec::{Framed, FramedParts};
 use tracing::error;
 use url::Url;
 
-use crate::{codec::http::HttpCodec, config::AgentConfig, service::pool::ProxyConnectionPool};
+use crate::{
+    codec::http::HttpCodec,
+    config::AgentConfig,
+    service::pool::{ProxyConnection, ProxyConnectionPool},
+};
 const DEFAULT_BUFFER_SIZE: usize = 65536;
 const HTTPS_SCHEMA: &str = "https";
 const SCHEMA_SEP: &str = "://";
@@ -40,7 +44,7 @@ type HttpFramed<'a> = Framed<&'a mut TcpStream, HttpCodec>;
 
 #[allow(unused)]
 pub(crate) struct HttpConnectFlowRequest {
-    pub connection_id: String,
+    pub client_connection_id: String,
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,
     pub initial_buf: BytesMut,
@@ -59,6 +63,7 @@ where
     pub message_framed_write: MessageFramedWrite<T>,
     pub source_address: NetAddress,
     pub target_address: NetAddress,
+    pub proxy_connection_id: String,
 }
 
 pub(crate) struct HttpConnectFlow;
@@ -82,10 +87,10 @@ impl HttpConnectFlow {
         T: RsaCryptoFetcher,
     {
         let HttpConnectFlowRequest {
-            connection_id,
             mut client_stream,
             client_address,
             initial_buf,
+            ..
         } = request;
         let mut framed_parts = FramedParts::new(&mut client_stream, HttpCodec::default());
         framed_parts.read_buf = initial_buf;
@@ -133,7 +138,10 @@ impl HttpConnectFlow {
             Some(v) => v.to_string(),
         };
         let target_address = NetAddress::Domain(target_host, target_port);
-        let proxy_stream = match proxy_connection_pool.fetch_connection().await {
+        let ProxyConnection {
+            id: proxy_connection_id,
+            stream: proxy_stream,
+        } = match proxy_connection_pool.fetch_connection().await {
             Err(e) => {
                 Self::send_error_to_client(http_client_framed).await?;
                 return Err(anyhow!(e));
@@ -158,7 +166,7 @@ impl HttpConnectFlow {
         })
         .await?;
         let message_framed_write = match MessageFramedWriter::write(WriteMessageFramedRequest {
-            connection_id: Some(connection_id.clone()),
+            connection_id: Some(proxy_connection_id.clone()),
             message_framed_write,
             payload_encryption_type,
             user_token: configuration.user_token().clone().unwrap(),
@@ -185,7 +193,7 @@ impl HttpConnectFlow {
             },
         };
         match MessageFramedReader::read(ReadMessageFramedRequest {
-            connection_id,
+            connection_id: proxy_connection_id.clone(),
             message_framed_read,
         })
         .await
@@ -213,8 +221,8 @@ impl HttpConnectFlow {
                             }),
                         ..
                     }),
-            }) => {
-                if let None = init_data {
+            }) => match init_data {
+                None => {
                     let http_connect_success_response = Response::new(
                         HttpVersion::V1_1,
                         StatusCode::new(OK_CODE).unwrap(),
@@ -232,18 +240,22 @@ impl HttpConnectFlow {
                         message_framed_write,
                         target_address,
                         source_address,
+                        proxy_connection_id,
                     });
-                }
-                return Ok(HttpConnectFlowResult {
-                    client_stream,
-                    client_address,
-                    proxy_address: connected_proxy_address,
-                    init_data,
-                    message_framed_read,
-                    message_framed_write,
-                    target_address,
-                    source_address,
-                });
+                },
+                Some(init_data) => {
+                    return Ok(HttpConnectFlowResult {
+                        client_stream,
+                        client_address,
+                        proxy_address: connected_proxy_address,
+                        init_data: Some(init_data),
+                        message_framed_read,
+                        message_framed_write,
+                        target_address,
+                        source_address,
+                        proxy_connection_id,
+                    });
+                },
             },
             Ok(ReadMessageFramedResult { .. }) => {
                 Self::send_error_to_client(http_client_framed).await?;

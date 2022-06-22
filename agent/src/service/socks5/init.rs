@@ -48,6 +48,7 @@ where
         source_address: NetAddress,
         target_address: NetAddress,
         proxy_address: SocketAddr,
+        proxy_connection_id: String,
     },
     Udp {
         associated_udp_socket: UdpSocket,
@@ -57,11 +58,11 @@ where
         message_framed_write: MessageFramedWrite<T>,
         client_address: NetAddress,
         proxy_address: SocketAddr,
+        proxy_connection_id: String,
     },
 }
 pub(crate) struct Socks5InitFlowRequest {
-    pub connection_id: String,
-    pub proxy_addresses: Arc<Vec<SocketAddr>>,
+    pub client_connection_id: String,
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,
     pub buffer: BytesMut,
@@ -77,8 +78,7 @@ impl Socks5InitFlow {
         T: RsaCryptoFetcher,
     {
         let Socks5InitFlowRequest {
-            connection_id,
-            proxy_addresses,
+            client_connection_id,
             mut client_stream,
             client_address,
             buffer,
@@ -91,23 +91,23 @@ impl Socks5InitFlow {
             Some(Ok(v)) => v,
             _ => {
                 error!(
-                    "Connection [{}] fail to handle socks 5 init command from client {}",
-                    connection_id, client_address
+                    "Client connection [{}] fail to handle socks 5 init command from client {}",
+                    client_connection_id, client_address
                 );
                 send_socks5_init_failure(&mut socks5_init_framed).await?;
                 return Err(anyhow!(PpaassError::CodecError));
             },
         };
         debug!(
-            "Connection [{}] send socks 5 connect command to client {} : {:#?}",
-            connection_id, client_address, init_command
+            "Client connection [{}] send socks 5 connect command to client {} : {:#?}",
+            client_connection_id, client_address, init_command
         );
         let dest_address_in_init_command = init_command.dest_address;
         match init_command.request_type {
             Socks5InitCommandType::Connect => {
                 match Socks5TcpConnectFlow::exec(
                     Socks5TcpConnectFlowRequest {
-                        connection_id: connection_id.clone(),
+                        client_connection_id: client_connection_id.clone(),
                         client_address,
                         dest_address: dest_address_in_init_command.clone(),
                     },
@@ -119,8 +119,8 @@ impl Socks5InitFlow {
                 {
                     Err(e) => {
                         error!(
-                            "Connection [{}] fail to handle socks5 init command (CONNECT) because of error: {:#?}",
-                            connection_id, e
+                            "Client connection [{}] fail to handle socks5 init command (CONNECT) because of error: {:#?}",
+                            client_connection_id, e
                         );
                         send_socks5_init_failure(&mut socks5_init_framed).await?;
                         Err(e)
@@ -132,6 +132,7 @@ impl Socks5InitFlow {
                         source_address,
                         target_address,
                         proxy_address,
+                        proxy_connection_id,
                     }) => {
                         //Response for socks5 connect command
                         let init_command_result =
@@ -146,6 +147,7 @@ impl Socks5InitFlow {
                             source_address,
                             target_address,
                             proxy_address,
+                            proxy_connection_id,
                         })
                     },
                 }
@@ -153,19 +155,18 @@ impl Socks5InitFlow {
             Socks5InitCommandType::UdpAssociate => {
                 match Socks5UdpAssociateFlow::exec(
                     Socks5UdpAssociateFlowRequest {
-                        connection_id: connection_id.clone(),
-                        proxy_addresses,
                         client_address: dest_address_in_init_command.clone(),
                     },
                     rsa_crypto_fetcher,
                     configuration,
+                    proxy_connection_pool,
                 )
                 .await
                 {
                     Err(e) => {
                         error!(
-                            "Connection [{}] fail to handle socks5 init command (UDP ASSOCIATE) because of error: {:#?}",
-                            connection_id, e
+                            "Client connection [{}] fail to handle socks5 init command (UDP ASSOCIATE) because of error: {:#?}",
+                            client_connection_id, e
                         );
                         send_socks5_init_failure(&mut socks5_init_framed).await?;
                         Err(e)
@@ -177,6 +178,7 @@ impl Socks5InitFlow {
                         message_framed_write,
                         client_address,
                         proxy_address,
+                        proxy_connection_id,
                     }) => {
                         //Response for socks5 udp associate command
                         let init_command_result =
@@ -191,6 +193,7 @@ impl Socks5InitFlow {
                             message_framed_read,
                             message_framed_write,
                             proxy_address,
+                            proxy_connection_id,
                         })
                     },
                 }

@@ -11,18 +11,18 @@ use common::{
     generate_uuid, AgentMessagePayloadTypeValue, MessageFramedGenerateResult, MessageFramedGenerator, MessageFramedRead, MessageFramedReader,
     MessageFramedWrite, MessageFramedWriter, MessagePayload, NetAddress, PayloadEncryptionTypeSelectRequest, PayloadEncryptionTypeSelectResult,
     PayloadEncryptionTypeSelector, PayloadType, PpaassError, ProxyMessagePayloadTypeValue, ReadMessageFramedError, ReadMessageFramedRequest,
-    ReadMessageFramedResult, ReadMessageFramedResultContent, RsaCryptoFetcher, TcpConnectRequest, TcpConnectResult, TcpConnector, WriteMessageFramedError,
-    WriteMessageFramedRequest, WriteMessageFramedResult,
+    ReadMessageFramedResult, ReadMessageFramedResultContent, RsaCryptoFetcher, WriteMessageFramedError, WriteMessageFramedRequest, WriteMessageFramedResult,
 };
 use futures::SinkExt;
 use tokio::net::UdpSocket;
 use tracing::{debug, error};
 
-use crate::service::common::{DEFAULT_BUFFER_SIZE, DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS};
+use crate::service::{
+    common::DEFAULT_BUFFER_SIZE,
+    pool::{ProxyConnection, ProxyConnectionPool},
+};
 use crate::{config::AgentConfig, message::socks5::Socks5Addr};
 pub(crate) struct Socks5UdpAssociateFlowRequest {
-    pub connection_id: String,
-    pub proxy_addresses: Arc<Vec<SocketAddr>>,
     pub client_address: Socks5Addr,
 }
 pub(crate) struct Socks5UdpAssociateFlowResult<T>
@@ -35,34 +35,26 @@ where
     pub message_framed_write: MessageFramedWrite<T>,
     pub proxy_address: SocketAddr,
     pub client_address: NetAddress,
+    pub proxy_connection_id: String,
 }
 pub(crate) struct Socks5UdpAssociateFlow;
 
 impl Socks5UdpAssociateFlow {
     pub(crate) async fn exec<T>(
-        request: Socks5UdpAssociateFlowRequest, rsa_crypto_fetcher: Arc<T>, configuration: Arc<AgentConfig>,
+        request: Socks5UdpAssociateFlowRequest, rsa_crypto_fetcher: Arc<T>, configuration: Arc<AgentConfig>, proxy_connection_pool: Arc<ProxyConnectionPool>,
     ) -> Result<Socks5UdpAssociateFlowResult<T>>
     where
         T: RsaCryptoFetcher,
     {
-        let Socks5UdpAssociateFlowRequest {
-            connection_id,
-            proxy_addresses,
-            client_address,
-        } = request;
-        let target_stream_so_linger = configuration.proxy_stream_so_linger().unwrap_or(DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS);
+        let Socks5UdpAssociateFlowRequest { client_address, .. } = request;
         let initial_local_ip = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
         let initial_udp_address = SocketAddr::new(initial_local_ip, 0);
         let associated_udp_socket = UdpSocket::bind(initial_udp_address).await?;
         let associated_udp_address = associated_udp_socket.local_addr()?;
-
-        let TcpConnectResult {
-            connected_stream: proxy_stream,
-        } = TcpConnector::connect(TcpConnectRequest {
-            connect_addresses: proxy_addresses.to_vec(),
-            connected_stream_so_linger: target_stream_so_linger,
-        })
-        .await?;
+        let ProxyConnection {
+            id: proxy_connection_id,
+            stream: proxy_stream,
+        } = proxy_connection_pool.fetch_connection().await?;
         let connected_proxy_address = proxy_stream.peer_addr()?;
         let message_framed_buffer_size = configuration.message_framed_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE);
         let compress = configuration.compress().unwrap_or(true);
@@ -78,7 +70,7 @@ impl Socks5UdpAssociateFlow {
         })
         .await?;
         let message_framed_write = match MessageFramedWriter::write(WriteMessageFramedRequest {
-            connection_id: Some(connection_id.clone()),
+            connection_id: Some(proxy_connection_id.clone()),
             message_framed_write,
             payload_encryption_type,
             user_token: configuration.user_token().clone().unwrap(),
@@ -106,7 +98,7 @@ impl Socks5UdpAssociateFlow {
         };
 
         match MessageFramedReader::read(ReadMessageFramedRequest {
-            connection_id: connection_id.clone(),
+            connection_id: proxy_connection_id.clone(),
             message_framed_read,
         })
         .await
@@ -128,8 +120,8 @@ impl Socks5UdpAssociateFlow {
                     }),
             }) => {
                 debug!(
-                    "Connection [{}] udp associate process success, response message id: {}",
-                    connection_id, message_id
+                    "Proxy connection [{}] udp associate process success, response message id: {}",
+                    proxy_connection_id, message_id
                 );
                 Ok(Socks5UdpAssociateFlowResult {
                     associated_udp_socket,
@@ -138,6 +130,7 @@ impl Socks5UdpAssociateFlow {
                     message_framed_read,
                     message_framed_write,
                     proxy_address: connected_proxy_address,
+                    proxy_connection_id,
                 })
             },
             Ok(ReadMessageFramedResult {
@@ -154,13 +147,13 @@ impl Socks5UdpAssociateFlow {
                 ..
             }) => {
                 error!(
-                    "Connection [{}] fail connect to target from proxy, response message id: {}",
-                    connection_id, message_id
+                    "Proxy connection [{}] fail connect to target from proxy, response message id: {}",
+                    proxy_connection_id, message_id
                 );
                 Err(anyhow!(PpaassError::IoError {
                     source: std::io::Error::new(
                         ErrorKind::ConnectionReset,
-                        format!("Connection [{}] fail connect to target from proxy", connection_id)
+                        format!("Proxy connection [{}] fail connect to target from proxy", proxy_connection_id)
                     ),
                 }))
             },
@@ -174,8 +167,8 @@ impl Socks5UdpAssociateFlow {
                 ..
             }) => {
                 error!(
-                    "Connection [{}] fail connect to target from proxy because of invalid payload type:{:?}, response message id: {}",
-                    connection_id, payload_type, message_id
+                    "Proxy connection [{}] fail connect to target from proxy because of invalid payload type:{:?}, response message id: {}",
+                    proxy_connection_id, payload_type, message_id
                 );
                 Err(anyhow!(PpaassError::IoError {
                     source: std::io::Error::new(ErrorKind::InvalidData, "Invalid payload type read from proxy.",),
@@ -183,8 +176,8 @@ impl Socks5UdpAssociateFlow {
             },
             Ok(ReadMessageFramedResult { .. }) => {
                 error!(
-                    "Connection [{}] fail connect to target from proxy because of unknown response content.",
-                    connection_id
+                    "Proxy connection [{}] fail connect to target from proxy because of unknown response content.",
+                    proxy_connection_id
                 );
                 Err(anyhow!(PpaassError::IoError {
                     source: std::io::Error::new(ErrorKind::InvalidData, "Invalid response content read from proxy.",),
