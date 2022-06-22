@@ -1,10 +1,14 @@
 use anyhow::anyhow;
 use anyhow::Result;
 
+use bytes::Bytes;
 use common::{
-    AgentMessagePayloadTypeValue, MessageFramedRead, MessageFramedReader, MessageFramedWrite, MessagePayload, NetAddress, PayloadType, PpaassError,
-    ReadMessageFramedRequest, ReadMessageFramedResult, ReadMessageFramedResultContent, RsaCryptoFetcher,
+    generate_uuid, AgentMessagePayloadTypeValue, MessageFramedRead, MessageFramedReader, MessageFramedWrite, MessageFramedWriter, MessagePayload, NetAddress,
+    PayloadEncryptionTypeSelectRequest, PayloadEncryptionTypeSelectResult, PayloadEncryptionTypeSelector, PayloadType, PpaassError,
+    ProxyMessagePayloadTypeValue, ReadMessageFramedRequest, ReadMessageFramedResult, ReadMessageFramedResultContent, RsaCryptoFetcher, WriteMessageFramedError,
+    WriteMessageFramedRequest, WriteMessageFramedResult,
 };
+use futures::SinkExt;
 
 use std::net::SocketAddr;
 
@@ -35,6 +39,10 @@ pub(crate) enum InitFlowResult<T>
 where
     T: RsaCryptoFetcher,
 {
+    Heartbeat {
+        message_framed_read: MessageFramedRead<T>,
+        message_framed_write: MessageFramedWrite<T>,
+    },
     Tcp {
         target_stream: TcpStream,
         message_framed_read: MessageFramedRead<T>,
@@ -73,6 +81,59 @@ impl InitializeFlow {
         })
         .await;
         match read_agent_message_result {
+            Ok(ReadMessageFramedResult {
+                message_framed_read,
+                content:
+                    Some(ReadMessageFramedResultContent {
+                        user_token,
+                        message_id,
+                        message_payload:
+                            Some(MessagePayload {
+                                payload_type: PayloadType::AgentPayload(AgentMessagePayloadTypeValue::Heartbeat),
+                                ..
+                            }),
+                        ..
+                    }),
+                ..
+            }) => {
+                let PayloadEncryptionTypeSelectResult { payload_encryption_type, .. } =
+                    PayloadEncryptionTypeSelector::select(PayloadEncryptionTypeSelectRequest {
+                        encryption_token: generate_uuid().into(),
+                        user_token: user_token.clone(),
+                    })
+                    .await?;
+                let heartbeat_success = MessagePayload {
+                    source_address: None,
+                    target_address: None,
+                    payload_type: PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::HeartbeatSuccess),
+                    data: Bytes::new(),
+                };
+                let message_framed_write = match MessageFramedWriter::write(WriteMessageFramedRequest {
+                    message_framed_write,
+                    message_payload: Some(heartbeat_success),
+                    payload_encryption_type,
+                    user_token,
+                    ref_id: Some(message_id),
+                    connection_id: Some(connection_id),
+                })
+                .await
+                {
+                    Err(WriteMessageFramedError { source, .. }) => {
+                        return Err(anyhow!(source));
+                    },
+                    Ok(WriteMessageFramedResult { mut message_framed_write }) => {
+                        if let Err(e) = message_framed_write.flush().await {
+                            return Err(anyhow!(e));
+                        }
+                        message_framed_write
+                    },
+                };
+
+                return Ok(InitFlowResult::Heartbeat {
+                    message_framed_write,
+                    message_framed_read,
+                });
+            },
             Ok(ReadMessageFramedResult {
                 message_framed_read,
                 content:

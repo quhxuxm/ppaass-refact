@@ -1,34 +1,46 @@
 use std::{collections::VecDeque, net::SocketAddr, sync::Arc, time::Duration};
 
-use common::{TcpConnectRequest, TcpConnectResult, TcpConnector};
+use bytes::Bytes;
+use common::{
+    generate_uuid, AgentMessagePayloadTypeValue, MessageFramedGenerateResult, MessageFramedGenerator, MessageFramedReader, MessageFramedWriter, MessagePayload,
+    PayloadEncryptionTypeSelectRequest, PayloadEncryptionTypeSelectResult, PayloadEncryptionTypeSelector, PayloadType, ProxyMessagePayloadTypeValue,
+    ReadMessageFramedError, ReadMessageFramedRequest, ReadMessageFramedResult, ReadMessageFramedResultContent, RsaCryptoFetcher, TcpConnectRequest,
+    TcpConnectResult, TcpConnector, WriteMessageFramedError, WriteMessageFramedRequest, WriteMessageFramedResult,
+};
 use tokio::{
-    io::AsyncWriteExt,
     net::TcpStream,
     sync::{mpsc, Mutex},
 };
+use tokio_util::codec::FramedParts;
 use tracing::{error, info};
 
 use crate::config::AgentConfig;
 use anyhow::anyhow;
 use anyhow::Result;
 
-use super::common::DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS;
+use super::common::{DEFAULT_BUFFER_SIZE, DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS};
 
 const DEFAULT_INIT_PROXY_CONNECTION_NUMBER: usize = 32;
 const DEFAULT_MIN_PROXY_CONNECTION_NUMBER: usize = 16;
 const DEFAULT_PROXY_CONNECTION_NUMBER_INCREASEMENT: usize = 16;
 const DEFAULT_PROXY_CONNECTION_CHECK_INTERVAL_SECONDS: u64 = 30;
 pub struct ProxyConnectionPool {
-    pool: Arc<Mutex<VecDeque<TcpStream>>>,
+    pool: Arc<Mutex<VecDeque<Option<TcpStream>>>>,
     proxy_addresses: Arc<Vec<SocketAddr>>,
     configuration: Arc<AgentConfig>,
 }
 
 impl ProxyConnectionPool {
-    pub async fn new(proxy_addresses: Arc<Vec<SocketAddr>>, configuration: Arc<AgentConfig>) -> Result<Self> {
+    pub async fn new<T>(proxy_addresses: Arc<Vec<SocketAddr>>, configuration: Arc<AgentConfig>, rsa_crypto_fetcher: Arc<T>) -> Result<Self>
+    where
+        T: RsaCryptoFetcher + Send + Sync + 'static,
+    {
         let proxy_connection_check_interval_seconds = configuration
             .proxy_connection_check_interval_seconds()
             .unwrap_or(DEFAULT_PROXY_CONNECTION_CHECK_INTERVAL_SECONDS);
+        let buffer_size = configuration.message_framed_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE);
+        let compress = configuration.compress().unwrap_or(true);
+        let user_token = configuration.user_token().clone().expect("No user token configured.");
         let pool = Arc::new(Mutex::new(VecDeque::new()));
         let result = Self {
             proxy_addresses: proxy_addresses.clone(),
@@ -45,44 +57,112 @@ impl ProxyConnectionPool {
             loop {
                 interval.tick().await;
                 let mut pool = pool_clone_for_timer.lock().await;
-                let mut remove_indexes = vec![];
-                for (i, stream) in pool.iter_mut().enumerate() {
-                    info!("Checking proxy connection: {:?}", stream);
-                    if let Err(e) = stream.write(&[0u8; 0]).await {
-                        error!(
-                            "Proxy connection {:?} has error(write), mark it to be remove from the pool, error:{:?}.",
-                            stream, e
-                        );
-                        remove_indexes.push(i);
+                // let available_streams = vec![];
+                let (available_stream_sender, mut available_stream_receiver) = mpsc::channel::<TcpStream>(2048);
+                for stream in pool.iter_mut() {
+                    let stream_identifier = format!("{:?}", stream);
+                    info!("Checking proxy connection: {:?}", stream_identifier);
+                    let stream = match std::mem::take(stream) {
+                        None => {
+                            error!("Fail to take stream [{}] from pool because of the element is None", stream_identifier);
+                            return;
+                        },
+                        Some(s) => s,
                     };
-                    if let Err(e) = stream.flush().await {
-                        error!(
-                            "Proxy connection {:?} has error(flush), mark it to be remove from the pool, error:{:?}.",
-                            stream, e
-                        );
-                        remove_indexes.push(i);
-                    };
-                }
-                for i in remove_indexes.iter() {
-                    let target_stream = pool.remove(*i);
-                    error!(
-                        "Proxy connection {:?} has error, remove it from the pool, current pool size: {}.",
-                        target_stream,
-                        pool.len()
-                    );
-                    if let Some(mut target_stream) = target_stream {
-                        if let Err(e) = target_stream.shutdown().await {
-                            error!(
-                                "Fail to close proxy connection {:?} because of error, current pool size: {}, error: {:#?}.",
-                                target_stream,
-                                pool.len(),
-                                e
-                            );
+                    let user_token = user_token.clone();
+                    let rsa_crypto_fetcher = rsa_crypto_fetcher.clone();
+                    let available_stream_sender = available_stream_sender.clone();
+                    tokio::spawn(async move {
+                        let MessageFramedGenerateResult {
+                            message_framed_write,
+                            message_framed_read,
+                        } = MessageFramedGenerator::generate(stream, buffer_size, compress, rsa_crypto_fetcher.clone()).await;
+                        let PayloadEncryptionTypeSelectResult {
+                            user_token,
+                            payload_encryption_type,
+                            ..
+                        } = match PayloadEncryptionTypeSelector::select(PayloadEncryptionTypeSelectRequest {
+                            user_token: user_token.clone(),
+                            encryption_token: generate_uuid().into(),
+                        })
+                        .await
+                        {
+                            Err(e) => {
+                                error!("Stream [{:?}] check fail because of error: {:#?}", stream_identifier, e);
+                                return;
+                            },
+                            Ok(v) => v,
+                        };
+                        let heartbeat_message_payload = MessagePayload {
+                            data: Bytes::new(),
+                            source_address: None,
+                            target_address: None,
+                            payload_type: PayloadType::AgentPayload(AgentMessagePayloadTypeValue::Heartbeat),
+                        };
+                        let message_framed_write = match MessageFramedWriter::write(WriteMessageFramedRequest {
+                            connection_id: None,
+                            message_framed_write,
+                            message_payload: Some(heartbeat_message_payload),
+                            payload_encryption_type,
+                            ref_id: None,
+                            user_token: user_token.clone(),
+                        })
+                        .await
+                        {
+                            Err(WriteMessageFramedError { source, .. }) => {
+                                error!("Stream [{:?}] check fail because of error(heartbeat write): {:#?}", stream_identifier, source);
+                                return;
+                            },
+                            Ok(WriteMessageFramedResult { message_framed_write }) => message_framed_write,
+                        };
+                        match MessageFramedReader::read(ReadMessageFramedRequest {
+                            connection_id: stream_identifier.clone(),
+                            message_framed_read,
+                        })
+                        .await
+                        {
+                            Err(ReadMessageFramedError { source, .. }) => {
+                                error!("Stream [{:?}] check fail because of error(heartbeat read): {:#?}", stream_identifier, source);
+                                return;
+                            },
+                            Ok(ReadMessageFramedResult {
+                                message_framed_read,
+                                content:
+                                    Some(ReadMessageFramedResultContent {
+                                        message_payload:
+                                            Some(MessagePayload {
+                                                payload_type: PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::HeartbeatSuccess),
+                                                ..
+                                            }),
+                                        ..
+                                    }),
+                            }) => {
+                                let framed = match message_framed_read.reunite(message_framed_write) {
+                                    Ok(f) => f,
+                                    Err(e) => {
+                                        error!("Stream [{:?}] check fail because of error(merge read and write): {:#?}", stream_identifier, e);
+                                        return;
+                                    },
+                                };
+                                let FramedParts { io: stream, .. } = framed.into_parts();
+                                if let Err(e) = available_stream_sender.send(stream).await {
+                                    error!("Stream [{:?}] check fail because of error(send available stream): {:#?}", stream_identifier, e);
+                                    return;
+                                };
+                                return;
+                            },
+                            Ok(ReadMessageFramedResult { .. }) => {
+                                error!("Stream [{:?}] check fail because of closed(heartbeat read)", stream_identifier);
+                                return;
+                            },
                         }
-                        drop(target_stream);
-                    }
+                    });
                 }
-
+                pool.clear();
+                drop(available_stream_sender);
+                while let Some(stream) = available_stream_receiver.recv().await {
+                    pool.push_back(Some(stream));
+                }
                 if let Err(e) = Self::initialize_pool(proxy_addresses.clone(), configuration.clone(), &mut pool).await {
                     error!("Fail to initialize proxy connection pool because of error in timer, error: {:#?}", e);
                 };
@@ -92,7 +172,7 @@ impl ProxyConnectionPool {
         Ok(result)
     }
 
-    async fn initialize_pool(proxy_addresses: Arc<Vec<SocketAddr>>, configuration: Arc<AgentConfig>, pool: &mut VecDeque<TcpStream>) -> Result<()> {
+    async fn initialize_pool(proxy_addresses: Arc<Vec<SocketAddr>>, configuration: Arc<AgentConfig>, pool: &mut VecDeque<Option<TcpStream>>) -> Result<()> {
         let proxy_stream_so_linger = configuration.proxy_stream_so_linger().unwrap_or(DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS);
         let init_proxy_connection_number = configuration.init_proxy_connection_number().unwrap_or(DEFAULT_INIT_PROXY_CONNECTION_NUMBER);
         let proxy_connection_number_increasement = configuration
@@ -138,7 +218,7 @@ impl ProxyConnectionPool {
         }
         drop(pool_initialize_channel_sender);
         while let Some(element) = pool_initialize_channel_receiver.recv().await {
-            pool.push_back(element);
+            pool.push_back(Some(element));
         }
         info!("Success to initialize proxy connection pool: {}", pool.len());
         Ok(())
@@ -153,9 +233,14 @@ impl ProxyConnectionPool {
             None => {
                 info!("Begin to fill the proxy connection pool(on empty), current pool size: {}", pool.len());
                 Self::initialize_pool(self.proxy_addresses.clone(), self.configuration.clone(), &mut pool).await?;
-                pool.pop_front().ok_or(anyhow!("Fail to initialize connection pool."))?
+                pool.pop_front()
+                    .ok_or(anyhow!("Fail to initialize connection pool."))?
+                    .ok_or(anyhow!("Fail to fetch connection from to pool because of the element is None"))?
             },
-            Some(v) => v,
+            Some(None) => {
+                return Err(anyhow!("Fail to fetch connection from to pool because of the element is None"));
+            },
+            Some(Some(v)) => v,
         };
         if pool.len() < min_proxy_connection_number {
             info!("Begin to fill the proxy connection pool, current pool size: {}", pool.len());

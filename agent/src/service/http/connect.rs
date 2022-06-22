@@ -10,10 +10,10 @@ use bytecodec::EncodeExt;
 use bytes::{Bytes, BytesMut};
 
 use common::{
-    generate_uuid, AgentMessagePayloadTypeValue, MessageFramedGenerator, MessageFramedRead, MessageFramedReader, MessageFramedWrite, MessageFramedWriter,
-    MessagePayload, NetAddress, PayloadEncryptionTypeSelectRequest, PayloadEncryptionTypeSelectResult, PayloadEncryptionTypeSelector, PayloadType, PpaassError,
-    ProxyMessagePayloadTypeValue, ReadMessageFramedError, ReadMessageFramedRequest, ReadMessageFramedResult, ReadMessageFramedResultContent, RsaCryptoFetcher,
-    WriteMessageFramedError, WriteMessageFramedRequest, WriteMessageFramedResult,
+    generate_uuid, AgentMessagePayloadTypeValue, MessageFramedGenerateResult, MessageFramedGenerator, MessageFramedRead, MessageFramedReader,
+    MessageFramedWrite, MessageFramedWriter, MessagePayload, NetAddress, PayloadEncryptionTypeSelectRequest, PayloadEncryptionTypeSelectResult,
+    PayloadEncryptionTypeSelector, PayloadType, PpaassError, ProxyMessagePayloadTypeValue, ReadMessageFramedError, ReadMessageFramedRequest,
+    ReadMessageFramedResult, ReadMessageFramedResultContent, RsaCryptoFetcher, WriteMessageFramedError, WriteMessageFramedRequest, WriteMessageFramedResult,
 };
 
 use futures::{SinkExt, StreamExt};
@@ -141,20 +141,16 @@ impl HttpConnectFlow {
             Ok(v) => v,
         };
         let connected_proxy_address = proxy_stream.peer_addr()?;
-        let framed_result = match MessageFramedGenerator::generate(
+        let MessageFramedGenerateResult {
+            message_framed_write,
+            message_framed_read,
+        } = MessageFramedGenerator::generate(
             proxy_stream,
             configuration.message_framed_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
             configuration.compress().unwrap_or(true),
             rsa_crypto_fetcher,
         )
-        .await
-        {
-            Err(e) => {
-                Self::send_error_to_client(http_client_framed).await?;
-                return Err(anyhow!(e));
-            },
-            Ok(v) => v,
-        };
+        .await;
 
         let PayloadEncryptionTypeSelectResult { payload_encryption_type, .. } = PayloadEncryptionTypeSelector::select(PayloadEncryptionTypeSelectRequest {
             encryption_token: generate_uuid().into(),
@@ -163,7 +159,7 @@ impl HttpConnectFlow {
         .await?;
         let message_framed_write = match MessageFramedWriter::write(WriteMessageFramedRequest {
             connection_id: Some(connection_id.clone()),
-            message_framed_write: framed_result.message_framed_write,
+            message_framed_write,
             payload_encryption_type,
             user_token: configuration.user_token().clone().unwrap(),
             ref_id: None,
@@ -190,7 +186,7 @@ impl HttpConnectFlow {
         };
         match MessageFramedReader::read(ReadMessageFramedRequest {
             connection_id,
-            message_framed_read: framed_result.message_framed_read,
+            message_framed_read,
         })
         .await
         {

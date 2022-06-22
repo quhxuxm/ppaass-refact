@@ -295,6 +295,7 @@ pub enum AgentMessagePayloadTypeValue {
     TcpData,
     UdpAssociate,
     UdpData,
+    Heartbeat,
 }
 
 impl From<AgentMessagePayloadTypeValue> for u8 {
@@ -304,6 +305,7 @@ impl From<AgentMessagePayloadTypeValue> for u8 {
             AgentMessagePayloadTypeValue::TcpData => 111,
             AgentMessagePayloadTypeValue::UdpAssociate => 120,
             AgentMessagePayloadTypeValue::UdpData => 121,
+            AgentMessagePayloadTypeValue::Heartbeat => 130,
         }
     }
 }
@@ -317,6 +319,7 @@ pub enum ProxyMessagePayloadTypeValue {
     UdpAssociateFail,
     UdpData,
     UdpDataRelayFail,
+    HeartbeatSuccess,
 }
 
 impl From<ProxyMessagePayloadTypeValue> for u8 {
@@ -329,6 +332,7 @@ impl From<ProxyMessagePayloadTypeValue> for u8 {
             ProxyMessagePayloadTypeValue::UdpAssociateFail => 222,
             ProxyMessagePayloadTypeValue::UdpDataRelayFail => 223,
             ProxyMessagePayloadTypeValue::UdpData => 224,
+            ProxyMessagePayloadTypeValue::HeartbeatSuccess => 230,
         }
     }
 }
@@ -360,11 +364,13 @@ impl TryFrom<u8> for PayloadType {
             222 => Ok(PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::UdpAssociateFail)),
             223 => Ok(PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::UdpDataRelayFail)),
             224 => Ok(PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::UdpData)),
+            230 => Ok(PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::HeartbeatSuccess)),
 
             110 => Ok(PayloadType::AgentPayload(AgentMessagePayloadTypeValue::TcpConnect)),
             111 => Ok(PayloadType::AgentPayload(AgentMessagePayloadTypeValue::TcpData)),
             120 => Ok(PayloadType::AgentPayload(AgentMessagePayloadTypeValue::UdpAssociate)),
             121 => Ok(PayloadType::AgentPayload(AgentMessagePayloadTypeValue::UdpData)),
+            130 => Ok(PayloadType::AgentPayload(AgentMessagePayloadTypeValue::Heartbeat)),
 
             invalid_type => {
                 error!("Fail to parse payload type: {}", invalid_type);

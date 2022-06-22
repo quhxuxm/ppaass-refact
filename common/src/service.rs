@@ -29,18 +29,16 @@ where
 pub struct MessageFramedGenerator;
 
 impl MessageFramedGenerator {
-    pub async fn generate<T>(
-        input_stream: TcpStream, buffer_size: usize, compress: bool, rsa_crypto_fetcher: Arc<T>,
-    ) -> Result<MessageFramedGenerateResult<T>, PpaassError>
+    pub async fn generate<T>(input_stream: TcpStream, buffer_size: usize, compress: bool, rsa_crypto_fetcher: Arc<T>) -> MessageFramedGenerateResult<T>
     where
         T: RsaCryptoFetcher,
     {
         let framed = Framed::with_capacity(input_stream, MessageCodec::<T>::new(compress, rsa_crypto_fetcher), buffer_size);
         let (message_framed_write, message_framed_read) = framed.split();
-        Ok(MessageFramedGenerateResult {
+        MessageFramedGenerateResult {
             message_framed_write,
             message_framed_read,
-        })
+        }
     }
 }
 
