@@ -61,7 +61,7 @@ impl ProxyConnectionPool {
                 let (available_stream_sender, mut available_stream_receiver) = mpsc::channel::<TcpStream>(2048);
                 for stream in pool.iter_mut() {
                     let stream_identifier = format!("{:?}", stream);
-                    info!("Checking proxy connection: {:?}", stream_identifier);
+                    info!("Checking proxy connection: {}", stream_identifier);
                     let stream = match std::mem::take(stream) {
                         None => {
                             error!("Fail to take stream [{}] from pool because of the element is None", stream_identifier);
@@ -88,7 +88,7 @@ impl ProxyConnectionPool {
                         .await
                         {
                             Err(e) => {
-                                error!("Stream [{:?}] check fail because of error: {:#?}", stream_identifier, e);
+                                error!("Stream [{}] check fail because of error: {:#?}", stream_identifier, e);
                                 return;
                             },
                             Ok(v) => v,
@@ -110,7 +110,7 @@ impl ProxyConnectionPool {
                         .await
                         {
                             Err(WriteMessageFramedError { source, .. }) => {
-                                error!("Stream [{:?}] check fail because of error(heartbeat write): {:#?}", stream_identifier, source);
+                                error!("Stream [{}] check fail because of error(heartbeat write): {:#?}", stream_identifier, source);
                                 return;
                             },
                             Ok(WriteMessageFramedResult { message_framed_write }) => message_framed_write,
@@ -122,7 +122,7 @@ impl ProxyConnectionPool {
                         .await
                         {
                             Err(ReadMessageFramedError { source, .. }) => {
-                                error!("Stream [{:?}] check fail because of error(heartbeat read): {:#?}", stream_identifier, source);
+                                error!("Stream [{}] check fail because of error(heartbeat read): {:#?}", stream_identifier, source);
                                 return;
                             },
                             Ok(ReadMessageFramedResult {
@@ -137,22 +137,23 @@ impl ProxyConnectionPool {
                                         ..
                                     }),
                             }) => {
+                                info!("Heartbeat for proxy stream [{}] success.", stream_identifier);
                                 let framed = match message_framed_read.reunite(message_framed_write) {
                                     Ok(f) => f,
                                     Err(e) => {
-                                        error!("Stream [{:?}] check fail because of error(merge read and write): {:#?}", stream_identifier, e);
+                                        error!("Stream [{}] check fail because of error(merge read and write): {:#?}", stream_identifier, e);
                                         return;
                                     },
                                 };
                                 let FramedParts { io: stream, .. } = framed.into_parts();
                                 if let Err(e) = available_stream_sender.send(stream).await {
-                                    error!("Stream [{:?}] check fail because of error(send available stream): {:#?}", stream_identifier, e);
+                                    error!("Stream [{}] check fail because of error(send available stream): {:#?}", stream_identifier, e);
                                     return;
                                 };
                                 return;
                             },
                             Ok(ReadMessageFramedResult { .. }) => {
-                                error!("Stream [{:?}] check fail because of closed(heartbeat read)", stream_identifier);
+                                error!("Stream [{}] check fail because of closed(heartbeat read)", stream_identifier);
                                 return;
                             },
                         }
