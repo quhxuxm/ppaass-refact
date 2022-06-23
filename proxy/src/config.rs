@@ -41,6 +41,7 @@ pub(crate) struct ProxyConfig {
     max_log_level: Option<String>,
     agent_stream_so_linger: Option<u64>,
     target_stream_so_linger: Option<u64>,
+    agent_connection_read_timeout: Option<u64>,
     so_backlog: Option<u32>,
 }
 
@@ -119,6 +120,9 @@ impl ProxyConfig {
     }
     pub fn so_send_buffer_size(&self) -> Option<u32> {
         self.so_send_buffer_size
+    }
+    pub fn agent_connection_read_timeout(&self) -> Option<u64> {
+        self.agent_connection_read_timeout
     }
 }
 

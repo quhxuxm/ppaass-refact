@@ -10,12 +10,12 @@ use common::{
 };
 use futures::SinkExt;
 
-use std::net::SocketAddr;
+use std::{net::SocketAddr, time::Duration};
 
 use std::sync::Arc;
-use tokio::net::TcpStream;
+use tokio::{net::TcpStream, time::timeout};
 
-use tracing::debug;
+use tracing::{debug, error};
 
 use crate::config::ProxyConfig;
 
@@ -24,6 +24,7 @@ use super::{
     udp::associate::{UdpAssociateFlow, UdpAssociateFlowRequest, UdpAssociateFlowResult},
 };
 
+const DEFAULT_AGENT_CONNECTION_READ_TIMEOUT: u64 = 1200;
 pub(crate) struct InitFlowRequest<T>
 where
     T: RsaCryptoFetcher,
@@ -75,11 +76,14 @@ impl InitializeFlow {
             message_framed_write,
             agent_address,
         } = request;
-        let read_agent_message_result = MessageFramedReader::read(ReadMessageFramedRequest {
-            connection_id: connection_id.clone(),
-            message_framed_read,
-        })
-        .await;
+        let read_agent_message_result = timeout(
+            Duration::from_secs(configuration.agent_connection_read_timeout().unwrap_or(DEFAULT_AGENT_CONNECTION_READ_TIMEOUT)),
+            MessageFramedReader::read(ReadMessageFramedRequest {
+                connection_id: connection_id.clone(),
+                message_framed_read,
+            }),
+        )
+        .await?;
         match read_agent_message_result {
             Ok(ReadMessageFramedResult {
                 message_framed_read,
@@ -239,7 +243,10 @@ impl InitializeFlow {
                     user_token,
                 });
             },
-            _ => Err(anyhow!(PpaassError::CodecError)),
+            _ => {
+                error!("Handle agent connection fail because of unknown error.");
+                Err(anyhow!(PpaassError::CodecError))
+            },
         }
     }
 }
