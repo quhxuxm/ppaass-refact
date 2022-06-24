@@ -31,7 +31,7 @@ pub struct AgentConfig {
     proxy_public_key_file: Option<String>,
     init_proxy_connection_number: Option<usize>,
     min_proxy_connection_number: Option<usize>,
-    proxy_connection_number_increasement: Option<usize>,
+    proxy_connection_number_incremental: Option<usize>,
     proxy_connection_check_interval_seconds: Option<u64>,
 }
 
@@ -139,7 +139,7 @@ impl AgentConfig {
         self.proxy_connection_check_interval_seconds
     }
     pub fn proxy_connection_number_increasement(&self) -> Option<usize> {
-        self.proxy_connection_number_increasement
+        self.proxy_connection_number_incremental
     }
 }
 
