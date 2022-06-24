@@ -61,13 +61,13 @@ fn init() -> AgentConfig {
 }
 
 fn main() -> Result<()> {
-    let confiugration = init();
+    let configuration = init();
     let _tracing_guard = init_log(
-        confiugration.log_dir().as_ref().expect("No log directory given."),
-        confiugration.log_file().as_ref().expect("No log file name given."),
-        confiugration.max_log_level().as_ref().unwrap_or(&Level::ERROR.to_string()),
+        configuration.log_dir().as_ref().expect("No log directory given."),
+        configuration.log_file().as_ref().expect("No log file name given."),
+        configuration.max_log_level().as_ref().unwrap_or(&Level::ERROR.to_string()),
     );
-    let agent_server = AgentServer::new(Arc::new(confiugration))?;
+    let agent_server = AgentServer::new(Arc::new(configuration))?;
     agent_server.run()?;
     Ok(())
 }
