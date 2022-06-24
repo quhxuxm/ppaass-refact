@@ -164,7 +164,7 @@ where
 pub(crate) struct TcpRelayFlow;
 
 impl TcpRelayFlow {
-    #[instrument(fields(request.client_connection_id))]
+    #[instrument(fields(request.client_connection_id), skip_all)]
     pub async fn exec<T>(request: TcpRelayFlowRequest<T>, configuration: Arc<AgentConfig>) -> Result<TcpRelayFlowResult>
     where
         T: RsaCryptoFetcher + Send + Sync + Debug + 'static,
@@ -246,7 +246,7 @@ impl TcpRelayFlow {
         Ok(TcpRelayFlowResult { client_address })
     }
 
-    #[instrument(fields(connection_id))]
+    #[instrument(fields(connection_id), skip_all)]
     async fn relay_client_to_proxy<T>(
         connection_id: String, init_data: Option<Vec<u8>>, mut message_framed_write: MessageFramedWrite<T>, source_address_a2t: NetAddress,
         target_address_a2t: NetAddress, mut client_stream_read: OwnedReadHalf, configuration: Arc<AgentConfig>,
@@ -411,7 +411,7 @@ impl TcpRelayFlow {
         }
     }
 
-    #[instrument(fields(connection_id))]
+    #[instrument(fields(connection_id), skip_all)]
     async fn relay_proxy_to_client<T>(
         connection_id: String, _target_address_t2a: NetAddress, mut message_framed_read: MessageFramedRead<T>, mut client_stream_write: OwnedWriteHalf,
         configuration: Arc<AgentConfig>,
