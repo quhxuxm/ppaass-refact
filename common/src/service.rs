@@ -11,7 +11,7 @@ use futures::{SinkExt, StreamExt};
 use tokio::net::TcpStream;
 use tokio_util::codec::Framed;
 
-use tracing::{debug, error, info, trace};
+use tracing::{debug, error, info, instrument, trace};
 
 use crate::{crypto::RsaCryptoFetcher, generate_uuid, Message, MessageCodec, MessagePayload, PayloadEncryptionType, PpaassError};
 
@@ -29,9 +29,10 @@ where
 pub struct MessageFramedGenerator;
 
 impl MessageFramedGenerator {
+    #[instrument]
     pub async fn generate<T>(input_stream: TcpStream, buffer_size: usize, compress: bool, rsa_crypto_fetcher: Arc<T>) -> MessageFramedGenerateResult<T>
     where
-        T: RsaCryptoFetcher,
+        T: RsaCryptoFetcher + Debug,
     {
         let framed = Framed::with_capacity(input_stream, MessageCodec::<T>::new(compress, rsa_crypto_fetcher), buffer_size);
         let (message_framed_write, message_framed_read) = framed.split();
@@ -69,6 +70,7 @@ where
     }
 }
 
+#[derive(Debug)]
 pub struct WriteMessageFramedResult<T>
 where
     T: RsaCryptoFetcher,
@@ -99,6 +101,7 @@ where
 pub struct MessageFramedWriter;
 
 impl MessageFramedWriter {
+    #[instrument]
     pub async fn write<T>(request: WriteMessageFramedRequest<T>) -> Result<WriteMessageFramedResult<T>, WriteMessageFramedError<T>>
     where
         T: RsaCryptoFetcher,
@@ -138,6 +141,7 @@ impl MessageFramedWriter {
     }
 }
 
+#[derive(Debug)]
 pub struct ReadMessageFramedRequest<T>
 where
     T: RsaCryptoFetcher,
@@ -146,12 +150,14 @@ where
     pub message_framed_read: MessageFramedRead<T>,
 }
 
+#[derive(Debug)]
 pub struct ReadMessageFramedResultContent {
     pub message_id: String,
     pub message_payload: Option<MessagePayload>,
     pub user_token: String,
 }
 
+#[derive(Debug)]
 pub struct ReadMessageFramedResult<T>
 where
     T: RsaCryptoFetcher,
@@ -171,9 +177,10 @@ where
 pub struct MessageFramedReader;
 
 impl MessageFramedReader {
+    #[instrument]
     pub async fn read<T>(request: ReadMessageFramedRequest<T>) -> Result<ReadMessageFramedResult<T>, ReadMessageFramedError<T>>
     where
-        T: RsaCryptoFetcher,
+        T: RsaCryptoFetcher + Debug,
     {
         let ReadMessageFramedRequest {
             connection_id,
@@ -233,6 +240,7 @@ pub struct PayloadEncryptionTypeSelectRequest {
     pub encryption_token: Bytes,
 }
 
+#[derive(Debug)]
 pub struct PayloadEncryptionTypeSelectResult {
     pub user_token: String,
     pub encryption_token: Bytes,
@@ -242,6 +250,7 @@ pub struct PayloadEncryptionTypeSelectResult {
 pub struct PayloadEncryptionTypeSelector;
 
 impl PayloadEncryptionTypeSelector {
+    #[instrument]
     pub async fn select(request: PayloadEncryptionTypeSelectRequest) -> Result<PayloadEncryptionTypeSelectResult, PpaassError> {
         let PayloadEncryptionTypeSelectRequest { user_token, encryption_token } = request;
         Ok(PayloadEncryptionTypeSelectResult {
@@ -252,11 +261,13 @@ impl PayloadEncryptionTypeSelector {
     }
 }
 
+#[derive(Debug)]
 pub struct TcpConnectRequest {
     pub connect_addresses: Vec<SocketAddr>,
     pub connected_stream_so_linger: u64,
 }
 
+#[derive(Debug)]
 pub struct TcpConnectResult {
     pub connected_stream: TcpStream,
 }
@@ -264,6 +275,7 @@ pub struct TcpConnectResult {
 pub struct TcpConnector;
 
 impl TcpConnector {
+    #[instrument]
     pub async fn connect(request: TcpConnectRequest) -> Result<TcpConnectResult, PpaassError> {
         let TcpConnectRequest {
             connect_addresses,

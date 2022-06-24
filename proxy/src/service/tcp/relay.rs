@@ -1,4 +1,4 @@
-use std::io::ErrorKind;
+use std::{fmt::Debug, io::ErrorKind};
 
 use std::{net::SocketAddr, sync::Arc};
 
@@ -10,7 +10,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::net::TcpStream;
 
-use tracing::{debug, error};
+use tracing::{debug, error, instrument};
 
 use common::{
     generate_uuid, AgentMessagePayloadTypeValue, MessageFramedRead, MessageFramedReader, MessageFramedWrite, MessageFramedWriter, MessagePayload, NetAddress,
@@ -24,6 +24,7 @@ use crate::config::ProxyConfig;
 const DEFAULT_BUFFER_SIZE: usize = 64 * 1024;
 
 #[allow(unused)]
+#[derive(Debug)]
 pub(crate) struct TcpRelayFlowRequest<T>
 where
     T: RsaCryptoFetcher,
@@ -40,6 +41,7 @@ where
 }
 
 #[allow(unused)]
+#[derive(Debug)]
 struct TcpRelayT2PError<T>
 where
     T: RsaCryptoFetcher,
@@ -51,6 +53,7 @@ where
 }
 
 #[allow(unused)]
+#[derive(Debug)]
 struct TcpRelayP2TError<T>
 where
     T: RsaCryptoFetcher,
@@ -63,9 +66,10 @@ where
 pub(crate) struct TcpRelayFlow;
 
 impl TcpRelayFlow {
+    #[instrument]
     pub async fn exec<T>(request: TcpRelayFlowRequest<T>, configuration: Arc<ProxyConfig>) -> Result<()>
     where
-        T: RsaCryptoFetcher + Send + Sync + 'static,
+        T: RsaCryptoFetcher + Send + Sync + Debug + 'static,
     {
         let TcpRelayFlowRequest {
             connection_id,
@@ -162,7 +166,7 @@ impl TcpRelayFlow {
         configuration: Arc<ProxyConfig>,
     ) -> Result<(), TcpRelayP2TError<T>>
     where
-        T: RsaCryptoFetcher + Send + Sync + 'static,
+        T: RsaCryptoFetcher + Send + Sync + Debug + 'static,
     {
         loop {
             let connection_id = connection_id.clone();

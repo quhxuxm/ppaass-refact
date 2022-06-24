@@ -1,4 +1,4 @@
-use std::net::SocketAddr;
+use std::{fmt::Debug, net::SocketAddr};
 
 use std::{io::ErrorKind, sync::Arc};
 
@@ -52,7 +52,7 @@ impl Socks5TcpConnectFlow {
         request: Socks5TcpConnectFlowRequest, rsa_crypto_fetcher: Arc<T>, configuration: Arc<AgentConfig>, proxy_connection_pool: Arc<ProxyConnectionPool>,
     ) -> Result<Socks5TcpConnectFlowResult<T>>
     where
-        T: RsaCryptoFetcher,
+        T: RsaCryptoFetcher + Debug,
     {
         let Socks5TcpConnectFlowRequest {
             client_connection_id,

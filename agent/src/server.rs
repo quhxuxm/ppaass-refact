@@ -7,13 +7,14 @@ use anyhow::Result;
 use tokio::net::TcpSocket;
 use tokio::runtime::{Builder as TokioRuntimeBuilder, Runtime};
 
-use tracing::error;
+use tracing::{error, instrument};
 
 use crate::service::{common::ClientConnection, AgentRsaCryptoFetcher};
 use crate::{config::AgentConfig, service::pool::ProxyConnectionPool};
 
 const DEFAULT_SERVER_PORT: u16 = 10080;
 
+#[derive(Debug)]
 pub(crate) struct AgentServer {
     runtime: Runtime,
     configuration: Arc<AgentConfig>,
@@ -34,6 +35,7 @@ impl AgentServer {
         })
     }
 
+    #[instrument]
     async fn concrete_run(&self) -> Result<()> {
         let proxy_addresses_from_config = self.configuration.proxy_addresses().as_ref().expect("No proxy addresses configuration item");
         let mut proxy_addresses: Vec<SocketAddr> = Vec::new();
@@ -100,6 +102,7 @@ impl AgentServer {
         }
     }
 
+    #[instrument]
     pub(crate) fn run(&self) -> Result<()> {
         self.runtime.block_on(self.concrete_run())?;
         Ok(())
