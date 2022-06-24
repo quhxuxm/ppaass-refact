@@ -1,5 +1,5 @@
+use std::net::SocketAddr;
 use std::sync::Arc;
-use std::{fmt::Debug, net::SocketAddr};
 
 use std::io::ErrorKind;
 
@@ -43,7 +43,6 @@ const CONNECTION_ESTABLISHED: &str = "Connection Established";
 type HttpFramed<'a> = Framed<&'a mut TcpStream, HttpCodec>;
 
 #[allow(unused)]
-#[derive(Debug)]
 pub(crate) struct HttpConnectFlowRequest {
     pub client_connection_id: String,
     pub client_stream: TcpStream,
@@ -52,7 +51,6 @@ pub(crate) struct HttpConnectFlowRequest {
 }
 
 #[allow(unused)]
-#[derive(Debug)]
 pub(crate) struct HttpConnectFlowResult<T>
 where
     T: RsaCryptoFetcher,
@@ -86,7 +84,7 @@ impl HttpConnectFlow {
         request: HttpConnectFlowRequest, rsa_crypto_fetcher: Arc<T>, configuration: Arc<AgentConfig>, proxy_connection_pool: Arc<ProxyConnectionPool>,
     ) -> Result<HttpConnectFlowResult<T>>
     where
-        T: RsaCryptoFetcher + Debug,
+        T: RsaCryptoFetcher,
     {
         let HttpConnectFlowRequest {
             mut client_stream,

@@ -1,5 +1,4 @@
 use std::{
-    fmt::Debug,
     io::ErrorKind,
     net::{IpAddr, Ipv4Addr, SocketAddr},
     sync::Arc,
@@ -16,20 +15,16 @@ use common::{
 };
 use futures::SinkExt;
 use tokio::net::UdpSocket;
-use tracing::{debug, error, instrument};
+use tracing::{debug, error};
 
 use crate::service::{
     common::DEFAULT_BUFFER_SIZE,
     pool::{ProxyConnection, ProxyConnectionPool},
 };
 use crate::{config::AgentConfig, message::socks5::Socks5Addr};
-
-#[derive(Debug)]
 pub(crate) struct Socks5UdpAssociateFlowRequest {
     pub client_address: Socks5Addr,
 }
-
-#[derive(Debug)]
 pub(crate) struct Socks5UdpAssociateFlowResult<T>
 where
     T: RsaCryptoFetcher,
@@ -45,12 +40,11 @@ where
 pub(crate) struct Socks5UdpAssociateFlow;
 
 impl Socks5UdpAssociateFlow {
-    #[instrument]
     pub(crate) async fn exec<T>(
         request: Socks5UdpAssociateFlowRequest, rsa_crypto_fetcher: Arc<T>, configuration: Arc<AgentConfig>, proxy_connection_pool: Arc<ProxyConnectionPool>,
     ) -> Result<Socks5UdpAssociateFlowResult<T>>
     where
-        T: RsaCryptoFetcher + Debug,
+        T: RsaCryptoFetcher,
     {
         let Socks5UdpAssociateFlowRequest { client_address, .. } = request;
         let initial_local_ip = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));

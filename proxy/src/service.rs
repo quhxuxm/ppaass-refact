@@ -6,7 +6,7 @@ use tokio::net::TcpStream;
 
 use common::{generate_uuid, MessageFramedGenerateResult, MessageFramedGenerator, PpaassError, RsaCrypto, RsaCryptoFetcher};
 
-use tracing::{debug, error, instrument};
+use tracing::{debug, error};
 
 use crate::service::{
     init::{InitFlowRequest, InitFlowResult},
@@ -22,7 +22,6 @@ mod udp;
 
 const DEFAULT_BUFFER_SIZE: usize = 1024 * 64;
 
-#[derive(Debug)]
 pub(crate) struct ProxyRsaCryptoFetcher {
     cache: HashMap<String, RsaCrypto>,
 }
@@ -91,7 +90,6 @@ pub(crate) struct AgentConnection {
     agent_stream: TcpStream,
     agent_address: SocketAddr,
 }
-
 impl AgentConnection {
     pub fn new(agent_stream: TcpStream, agent_address: SocketAddr) -> Self {
         Self {
@@ -103,11 +101,9 @@ impl AgentConnection {
     pub fn get_id(&self) -> &str {
         self.id.as_str()
     }
-
-    #[instrument]
     pub async fn exec<T>(self, rsa_crypto_fetcher: Arc<T>, configuration: Arc<ProxyConfig>) -> Result<()>
     where
-        T: RsaCryptoFetcher + Send + Sync + Debug + 'static,
+        T: RsaCryptoFetcher + Send + Sync + 'static,
     {
         let connection_id = self.id.clone();
         debug!("Begin to handle agent connection: {}", connection_id);

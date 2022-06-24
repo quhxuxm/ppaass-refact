@@ -10,7 +10,7 @@ use tokio::net::TcpSocket;
 use tokio::runtime::Builder as TokioRuntimeBuilder;
 use tokio::runtime::Runtime as TokioRuntime;
 
-use tracing::{error, instrument};
+use tracing::error;
 
 use crate::{
     config::ProxyConfig,
@@ -19,14 +19,12 @@ use crate::{
 
 const DEFAULT_SERVER_PORT: u16 = 80;
 
-#[derive(Debug)]
 pub(crate) struct ProxyServer {
     runtime: TokioRuntime,
     configuration: Arc<ProxyConfig>,
 }
 
 impl ProxyServer {
-    #[instrument]
     pub(crate) fn new(configuration: Arc<ProxyConfig>) -> Result<Self> {
         let mut runtime_builder = TokioRuntimeBuilder::new_multi_thread();
         runtime_builder
@@ -40,7 +38,6 @@ impl ProxyServer {
         })
     }
 
-    #[instrument]
     async fn concrete_run(&self) -> Result<()> {
         let server_socket = TcpSocket::new_v4()?;
         server_socket.set_reuseaddr(true)?;

@@ -1,7 +1,4 @@
-use std::{
-    fmt::Debug,
-    net::{Ipv4Addr, SocketAddr, SocketAddrV4, ToSocketAddrs},
-};
+use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4, ToSocketAddrs};
 
 use anyhow::Result;
 use bytes::Bytes;
@@ -17,9 +14,7 @@ use tracing::{debug, error};
 
 use pretty_hex::*;
 const SIZE_64KB: usize = 65535;
-
 #[allow(unused)]
-#[derive(Debug)]
 pub(crate) struct UdpRelayFlowRequest<T>
 where
     T: RsaCryptoFetcher,
@@ -30,15 +25,13 @@ where
     pub message_framed_read: MessageFramedRead<T>,
     pub message_framed_write: MessageFramedWrite<T>,
 }
-
-#[derive(Debug)]
 pub(crate) struct UdpRelayFlowResult;
 pub(crate) struct UdpRelayFlow;
 
 impl UdpRelayFlow {
     pub async fn exec<T>(request: UdpRelayFlowRequest<T>) -> Result<UdpRelayFlowResult>
     where
-        T: RsaCryptoFetcher + Send + Sync + Debug + 'static,
+        T: RsaCryptoFetcher + Send + Sync + 'static,
     {
         let UdpRelayFlowRequest {
             connection_id,
