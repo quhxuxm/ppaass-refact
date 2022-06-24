@@ -10,12 +10,12 @@ use common::{
 };
 use futures::SinkExt;
 
-use std::{net::SocketAddr, time::Duration};
+use std::{fmt::Debug, net::SocketAddr, time::Duration};
 
 use std::sync::Arc;
 use tokio::{net::TcpStream, time::timeout};
 
-use tracing::{debug, error};
+use tracing::{debug, error, instrument};
 
 use crate::config::ProxyConfig;
 
@@ -25,6 +25,8 @@ use super::{
 };
 
 const DEFAULT_AGENT_CONNECTION_READ_TIMEOUT: u64 = 1200;
+
+#[derive(Debug)]
 pub(crate) struct InitFlowRequest<T>
 where
     T: RsaCryptoFetcher,
@@ -66,9 +68,10 @@ where
 pub(crate) struct InitializeFlow;
 
 impl InitializeFlow {
+    #[instrument]
     pub async fn exec<T>(request: InitFlowRequest<T>, configuration: Arc<ProxyConfig>) -> Result<InitFlowResult<T>>
     where
-        T: RsaCryptoFetcher + Send + Sync + 'static,
+        T: RsaCryptoFetcher + Send + Sync + Debug + 'static,
     {
         let InitFlowRequest {
             connection_id,

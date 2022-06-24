@@ -1,4 +1,5 @@
 use std::{
+    fmt::Debug,
     net::{SocketAddr, ToSocketAddrs},
     sync::Arc,
 };
@@ -8,17 +9,19 @@ use bytes::{Buf, Bytes};
 use common::{
     generate_uuid, AgentMessagePayloadTypeValue, MessageFramedRead, MessageFramedReader, MessageFramedWrite, MessageFramedWriter, MessagePayload, NetAddress,
     PayloadEncryptionTypeSelectRequest, PayloadEncryptionTypeSelectResult, PayloadEncryptionTypeSelector, PayloadType, ProxyMessagePayloadTypeValue,
-    ReadMessageFramedError, ReadMessageFramedResult, ReadMessageFramedResultContent, RsaCryptoFetcher, WriteMessageFramedError, WriteMessageFramedRequest,
-    WriteMessageFramedResult,
+    ReadMessageFramedError, ReadMessageFramedRequest, ReadMessageFramedResult, ReadMessageFramedResultContent, RsaCryptoFetcher, WriteMessageFramedError,
+    WriteMessageFramedRequest, WriteMessageFramedResult,
 };
 use futures::SinkExt;
 use pretty_hex::*;
 use tokio::net::{TcpStream, UdpSocket};
-use tracing::{debug, error};
+use tracing::{debug, error, instrument};
 
 use crate::{config::AgentConfig, message::socks5::Socks5UdpDataPacket};
 
 const SIZE_64KB: usize = 65535;
+
+#[derive(Debug)]
 pub struct Socks5UdpRelayFlowRequest<T>
 where
     T: RsaCryptoFetcher,
@@ -35,13 +38,16 @@ where
     pub init_data: Option<Vec<u8>>,
     pub proxy_address: SocketAddr,
 }
+
+#[derive(Debug)]
 pub struct Socks5UdpRelayFlowResult {}
 pub struct Socks5UdpRelayFlow;
 
 impl Socks5UdpRelayFlow {
+    #[instrument]
     pub async fn exec<T>(request: Socks5UdpRelayFlowRequest<T>, configuration: Arc<AgentConfig>) -> Result<Socks5UdpRelayFlowResult>
     where
-        T: RsaCryptoFetcher + Send + Sync + 'static,
+        T: RsaCryptoFetcher + Send + Sync + Debug + 'static,
     {
         let Socks5UdpRelayFlowRequest {
             associated_udp_socket,
@@ -143,7 +149,7 @@ impl Socks5UdpRelayFlow {
         });
         tokio::spawn(async move {
             loop {
-                match MessageFramedReader::read(common::ReadMessageFramedRequest {
+                match MessageFramedReader::read(ReadMessageFramedRequest {
                     connection_id: proxy_connection_id.clone(),
                     message_framed_read,
                 })
