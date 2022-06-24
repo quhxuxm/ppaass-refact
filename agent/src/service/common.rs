@@ -1,3 +1,4 @@
+use std::fmt::Debug;
 use std::sync::Arc;
 use std::{io::ErrorKind, net::SocketAddr};
 
@@ -10,7 +11,7 @@ use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::net::TcpStream;
 use tokio_util::codec::{Framed, FramedParts};
 
-use tracing::{debug, error};
+use tracing::{debug, error, instrument};
 
 use common::{
     generate_uuid, AgentMessagePayloadTypeValue, MessageFramedRead, MessageFramedReader, MessageFramedWrite, MessageFramedWriter, MessagePayload, NetAddress,
@@ -50,12 +51,12 @@ impl ClientConnection {
         }
     }
 
-    pub async fn exec<T>(self, rsa_crypto_fetcher: Arc<T>, confiugration: Arc<AgentConfig>, proxy_connection_pool: Arc<ProxyConnectionPool>) -> Result<()>
+    pub async fn exec<T>(self, rsa_crypto_fetcher: Arc<T>, configuration: Arc<AgentConfig>, proxy_connection_pool: Arc<ProxyConnectionPool>) -> Result<()>
     where
-        T: RsaCryptoFetcher + Send + Sync + 'static,
+        T: RsaCryptoFetcher + Send + Sync + Debug + 'static,
     {
         let rsa_crypto_fetcher = rsa_crypto_fetcher.clone();
-        let configuration = confiugration.clone();
+        let configuration = configuration.clone();
         let client_connection_id = self.id.clone();
         let mut client_stream = self.client_stream;
         let client_address = self.client_address;
@@ -112,6 +113,7 @@ impl ClientConnection {
 }
 
 #[allow(unused)]
+#[derive(Debug)]
 pub(crate) struct TcpRelayFlowRequest<T>
 where
     T: RsaCryptoFetcher,
@@ -159,9 +161,10 @@ where
 pub(crate) struct TcpRelayFlow;
 
 impl TcpRelayFlow {
+    #[instrument]
     pub async fn exec<T>(request: TcpRelayFlowRequest<T>, configuration: Arc<AgentConfig>) -> Result<TcpRelayFlowResult>
     where
-        T: RsaCryptoFetcher + Send + Sync + 'static,
+        T: RsaCryptoFetcher + Send + Sync + Debug + 'static,
     {
         let TcpRelayFlowRequest {
             client_connection_id,

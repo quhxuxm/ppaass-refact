@@ -8,12 +8,13 @@ use common::PpaassError;
 use futures::{SinkExt, StreamExt};
 use tokio::net::TcpStream;
 use tokio_util::codec::{Framed, FramedParts};
-use tracing::debug;
+use tracing::{debug, instrument};
 
 use crate::codec::socks5::Socks5AuthCommandContentCodec;
 use crate::message::socks5::{Socks5AuthCommandResultContent, Socks5AuthMethod};
 
 #[allow(unused)]
+#[derive(Debug)]
 pub(crate) struct Socks5AuthenticateFlowRequest {
     pub client_connection_id: String,
     pub client_stream: TcpStream,
@@ -32,6 +33,7 @@ pub(crate) struct Socks5AuthenticateFlowResult {
 pub(crate) struct Socks5AuthenticateFlow;
 
 impl Socks5AuthenticateFlow {
+    #[instrument]
     pub async fn exec(request: Socks5AuthenticateFlowRequest) -> Result<Socks5AuthenticateFlowResult> {
         let Socks5AuthenticateFlowRequest {
             client_connection_id,

@@ -1,12 +1,13 @@
+use std::fmt::Debug;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use anyhow::Result;
 use bytes::BytesMut;
 use tokio::net::TcpStream;
+use tracing::{debug, instrument};
 
-use anyhow::Result;
 use common::RsaCryptoFetcher;
-use tracing::debug;
 
 use crate::service::socks5::auth::{Socks5AuthenticateFlow, Socks5AuthenticateFlowRequest};
 use crate::service::socks5::init::{Socks5InitFlow, Socks5InitFlowRequest};
@@ -15,16 +16,17 @@ use crate::{
     service::common::{TcpRelayFlow, TcpRelayFlowRequest},
 };
 
+use super::{common::TcpRelayFlowResult, pool::ProxyConnectionPool};
+
 use self::{
     auth::Socks5AuthenticateFlowResult,
     init::{Socks5InitFlowResult, Socks5UdpRelayFlow, Socks5UdpRelayFlowRequest, Socks5UdpRelayFlowResult},
 };
 
-use super::{common::TcpRelayFlowResult, pool::ProxyConnectionPool};
-
 mod auth;
 mod init;
 
+#[derive(Debug)]
 pub(crate) struct Socks5FlowRequest {
     pub client_connection_id: String,
     pub client_stream: TcpStream,
@@ -36,11 +38,12 @@ pub(crate) struct Socks5FlowResult;
 
 pub(crate) struct Socks5FlowProcessor;
 impl Socks5FlowProcessor {
+    #[instrument]
     pub async fn exec<T>(
         request: Socks5FlowRequest, rsa_crypto_fetcher: Arc<T>, configuration: Arc<AgentConfig>, proxy_connection_pool: Arc<ProxyConnectionPool>,
     ) -> Result<Socks5FlowResult>
     where
-        T: RsaCryptoFetcher + Send + Sync + 'static,
+        T: RsaCryptoFetcher + Send + Sync + Debug + 'static,
     {
         let Socks5FlowRequest {
             client_connection_id,

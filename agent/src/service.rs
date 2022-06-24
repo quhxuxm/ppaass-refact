@@ -10,6 +10,7 @@ pub(crate) mod http;
 pub(crate) mod pool;
 pub(crate) mod socks5;
 
+#[derive(Debug)]
 pub struct AgentRsaCryptoFetcher {
     rsa_crypto: RsaCrypto,
 }

@@ -1,3 +1,4 @@
+use std::fmt::Debug;
 use std::sync::Arc;
 
 use std::net::SocketAddr;
@@ -11,7 +12,7 @@ use tcp_connect::Socks5TcpConnectFlow;
 use tokio::net::{TcpStream, UdpSocket};
 use tokio_util::codec::{Framed, FramedParts};
 
-use tracing::{debug, error};
+use tracing::{debug, error, instrument};
 
 use crate::service::{
     pool::ProxyConnectionPool,
@@ -61,6 +62,8 @@ where
         proxy_connection_id: String,
     },
 }
+
+#[derive(Debug)]
 pub(crate) struct Socks5InitFlowRequest {
     pub client_connection_id: String,
     pub client_stream: TcpStream,
@@ -71,11 +74,12 @@ pub(crate) struct Socks5InitFlowRequest {
 pub(crate) struct Socks5InitFlow;
 
 impl Socks5InitFlow {
+    #[instrument]
     pub async fn exec<T>(
         request: Socks5InitFlowRequest, rsa_crypto_fetcher: Arc<T>, configuration: Arc<AgentConfig>, proxy_connection_pool: Arc<ProxyConnectionPool>,
     ) -> Result<Socks5InitFlowResult<T>>
     where
-        T: RsaCryptoFetcher,
+        T: RsaCryptoFetcher + Debug,
     {
         let Socks5InitFlowRequest {
             client_connection_id,

@@ -1,3 +1,4 @@
+use std::fmt::Debug;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -5,6 +6,7 @@ use anyhow::Result;
 use bytes::BytesMut;
 use common::RsaCryptoFetcher;
 use tokio::net::TcpStream;
+use tracing::instrument;
 
 use crate::service::http::connect::{HttpConnectFlow, HttpConnectFlowRequest};
 use crate::{
@@ -32,11 +34,12 @@ pub(crate) struct HttpFlowResult;
 pub(crate) struct HttpFlow;
 
 impl HttpFlow {
+    #[instrument]
     pub async fn exec<T>(
         request: HttpFlowRequest, rsa_crypto_fetcher: Arc<T>, configuration: Arc<AgentConfig>, proxy_connection_pool: Arc<ProxyConnectionPool>,
     ) -> Result<HttpFlowResult>
     where
-        T: RsaCryptoFetcher + Send + Sync + 'static,
+        T: RsaCryptoFetcher + Send + Sync + Debug + 'static,
     {
         let HttpFlowRequest {
             client_connection_id,

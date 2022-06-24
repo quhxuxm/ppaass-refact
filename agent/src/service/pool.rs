@@ -13,7 +13,7 @@ use tokio::{
     sync::{mpsc, Mutex},
 };
 use tokio_util::codec::FramedParts;
-use tracing::{debug, error, info};
+use tracing::{debug, debug_span, error, info, instrument, Instrument};
 
 use crate::config::AgentConfig;
 use anyhow::anyhow;
@@ -31,6 +31,8 @@ pub struct ProxyConnection {
     pub id: String,
     pub stream: TcpStream,
 }
+
+#[derive(Debug)]
 pub struct ProxyConnectionPool {
     pool: Arc<Mutex<VecDeque<Option<ProxyConnection>>>>,
     proxy_addresses: Arc<Vec<SocketAddr>>,
@@ -59,136 +61,140 @@ impl ProxyConnectionPool {
             Self::initialize_pool(proxy_addresses.clone(), configuration.clone(), &mut locked_pool).await?;
         }
         let pool_clone_for_timer = result.pool.clone();
-        tokio::spawn(async move {
-            let mut interval = tokio::time::interval(Duration::from_secs(proxy_connection_check_interval_seconds));
-            loop {
-                interval.tick().await;
-                let mut pool = pool_clone_for_timer.lock().await;
+        tokio::spawn(
+            async move {
+                let mut interval = tokio::time::interval(Duration::from_secs(proxy_connection_check_interval_seconds));
+                loop {
+                    interval.tick().await;
+                    let mut pool = pool_clone_for_timer.lock().await;
 
-                let (available_connection_sender, mut available_connection_receiver) = mpsc::channel::<ProxyConnection>(2048);
-                for connection_ref in pool.iter_mut() {
-                    let ProxyConnection { id, stream } = match std::mem::take(connection_ref) {
-                        None => {
-                            error!("Fail to take connection from pool because of the element is None");
-                            return;
-                        },
-                        Some(s) => s,
-                    };
-                    debug!("Checking proxy connection: {}", id);
-                    let user_token = user_token.clone();
-                    let rsa_crypto_fetcher = rsa_crypto_fetcher.clone();
-                    let available_stream_sender = available_connection_sender.clone();
-                    tokio::spawn(async move {
-                        let MessageFramedGenerateResult {
-                            message_framed_write,
-                            message_framed_read,
-                        } = MessageFramedGenerator::generate(stream, buffer_size, compress, rsa_crypto_fetcher.clone()).await;
-                        let PayloadEncryptionTypeSelectResult {
-                            user_token,
-                            payload_encryption_type,
-                            ..
-                        } = match PayloadEncryptionTypeSelector::select(PayloadEncryptionTypeSelectRequest {
-                            user_token: user_token.clone(),
-                            encryption_token: generate_uuid().into(),
-                        })
-                        .await
-                        {
-                            Err(e) => {
-                                error!("Connection [{}] check fail because of error: {:#?}", id, e);
+                    let (available_connection_sender, mut available_connection_receiver) = mpsc::channel::<ProxyConnection>(2048);
+                    for connection_ref in pool.iter_mut() {
+                        let ProxyConnection { id, stream } = match std::mem::take(connection_ref) {
+                            None => {
+                                error!("Fail to take connection from pool because of the element is None");
                                 return;
                             },
-                            Ok(v) => v,
+                            Some(s) => s,
                         };
-                        let heartbeat_message_payload = MessagePayload {
-                            data: Bytes::new(),
-                            source_address: None,
-                            target_address: None,
-                            payload_type: PayloadType::AgentPayload(AgentMessagePayloadTypeValue::Heartbeat),
-                        };
-                        let mut message_framed_write = match MessageFramedWriter::write(WriteMessageFramedRequest {
-                            connection_id: None,
-                            message_framed_write,
-                            message_payload: Some(heartbeat_message_payload),
-                            payload_encryption_type,
-                            ref_id: None,
-                            user_token: user_token.clone(),
-                        })
-                        .await
-                        {
-                            Err(WriteMessageFramedError { source, .. }) => {
-                                error!("Connection [{}] check fail because of error(heartbeat write): {:#?}", id, source);
-                                return;
-                            },
-                            Ok(WriteMessageFramedResult { message_framed_write }) => message_framed_write,
-                        };
-                        if let Err(e) = message_framed_write.flush().await {
-                            error!("Connection [{}] check fail because of error(heartbeat flush): {:#?}", id, e);
-                            return;
-                        }
-                        match MessageFramedReader::read(ReadMessageFramedRequest {
-                            connection_id: id.clone(),
-                            message_framed_read,
-                        })
-                        .await
-                        {
-                            Err(ReadMessageFramedError { source, .. }) => {
-                                error!("Connection [{}] check fail because of error(heartbeat read): {:#?}", id, source);
-                                return;
-                            },
-                            Ok(ReadMessageFramedResult {
+                        debug!("Checking proxy connection: {}", id);
+                        let user_token = user_token.clone();
+                        let rsa_crypto_fetcher = rsa_crypto_fetcher.clone();
+                        let available_stream_sender = available_connection_sender.clone();
+                        tokio::spawn(async move {
+                            let MessageFramedGenerateResult {
+                                message_framed_write,
                                 message_framed_read,
-                                content:
-                                    Some(ReadMessageFramedResultContent {
-                                        message_payload:
-                                            Some(MessagePayload {
-                                                payload_type: PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::HeartbeatSuccess),
-                                                ..
-                                            }),
-                                        ..
-                                    }),
-                            }) => {
-                                info!("Heartbeat for proxy connection [{}] success.", id);
-                                let framed = match message_framed_read.reunite(message_framed_write) {
-                                    Ok(f) => f,
-                                    Err(e) => {
-                                        error!("Connection [{}] check fail because of error(merge read and write): {:#?}", id, e);
-                                        return;
-                                    },
-                                };
-                                let FramedParts { io: stream, .. } = framed.into_parts();
-                                if let Err(e) = available_stream_sender.send(ProxyConnection { id: id.clone(), stream }).await {
-                                    error!("Connection [{}] check fail because of error(send available stream): {:#?}", id, e);
+                            } = MessageFramedGenerator::generate(stream, buffer_size, compress, rsa_crypto_fetcher.clone()).await;
+                            let PayloadEncryptionTypeSelectResult {
+                                user_token,
+                                payload_encryption_type,
+                                ..
+                            } = match PayloadEncryptionTypeSelector::select(PayloadEncryptionTypeSelectRequest {
+                                user_token: user_token.clone(),
+                                encryption_token: generate_uuid().into(),
+                            })
+                            .await
+                            {
+                                Err(e) => {
+                                    error!("Connection [{}] check fail because of error: {:#?}", id, e);
                                     return;
-                                };
+                                },
+                                Ok(v) => v,
+                            };
+                            let heartbeat_message_payload = MessagePayload {
+                                data: Bytes::new(),
+                                source_address: None,
+                                target_address: None,
+                                payload_type: PayloadType::AgentPayload(AgentMessagePayloadTypeValue::Heartbeat),
+                            };
+                            let mut message_framed_write = match MessageFramedWriter::write(WriteMessageFramedRequest {
+                                connection_id: None,
+                                message_framed_write,
+                                message_payload: Some(heartbeat_message_payload),
+                                payload_encryption_type,
+                                ref_id: None,
+                                user_token: user_token.clone(),
+                            })
+                            .await
+                            {
+                                Err(WriteMessageFramedError { source, .. }) => {
+                                    error!("Connection [{}] check fail because of error(heartbeat write): {:#?}", id, source);
+                                    return;
+                                },
+                                Ok(WriteMessageFramedResult { message_framed_write }) => message_framed_write,
+                            };
+                            if let Err(e) = message_framed_write.flush().await {
+                                error!("Connection [{}] check fail because of error(heartbeat flush): {:#?}", id, e);
                                 return;
-                            },
-                            Ok(ReadMessageFramedResult { .. }) => {
-                                error!("Connection [{}] check fail because of closed(heartbeat read)", id);
-                                return;
-                            },
-                        }
-                    });
+                            }
+                            match MessageFramedReader::read(ReadMessageFramedRequest {
+                                connection_id: id.clone(),
+                                message_framed_read,
+                            })
+                            .await
+                            {
+                                Err(ReadMessageFramedError { source, .. }) => {
+                                    error!("Connection [{}] check fail because of error(heartbeat read): {:#?}", id, source);
+                                    return;
+                                },
+                                Ok(ReadMessageFramedResult {
+                                    message_framed_read,
+                                    content:
+                                        Some(ReadMessageFramedResultContent {
+                                            message_payload:
+                                                Some(MessagePayload {
+                                                    payload_type: PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::HeartbeatSuccess),
+                                                    ..
+                                                }),
+                                            ..
+                                        }),
+                                }) => {
+                                    info!("Heartbeat for proxy connection [{}] success.", id);
+                                    let framed = match message_framed_read.reunite(message_framed_write) {
+                                        Ok(f) => f,
+                                        Err(e) => {
+                                            error!("Connection [{}] check fail because of error(merge read and write): {:#?}", id, e);
+                                            return;
+                                        },
+                                    };
+                                    let FramedParts { io: stream, .. } = framed.into_parts();
+                                    if let Err(e) = available_stream_sender.send(ProxyConnection { id: id.clone(), stream }).await {
+                                        error!("Connection [{}] check fail because of error(send available stream): {:#?}", id, e);
+                                        return;
+                                    };
+                                    return;
+                                },
+                                Ok(ReadMessageFramedResult { .. }) => {
+                                    error!("Connection [{}] check fail because of closed(heartbeat read)", id);
+                                    return;
+                                },
+                            }
+                        });
+                    }
+                    pool.clear();
+                    drop(available_connection_sender);
+                    while let Some(stream) = available_connection_receiver.recv().await {
+                        pool.push_back(Some(stream));
+                    }
+                    if let Err(e) = Self::initialize_pool(proxy_addresses.clone(), configuration.clone(), &mut pool).await {
+                        error!("Fail to initialize proxy connection pool because of error in timer, error: {:#?}", e);
+                    };
+                    debug!("Current pool size: {}", pool.len());
                 }
-                pool.clear();
-                drop(available_connection_sender);
-                while let Some(stream) = available_connection_receiver.recv().await {
-                    pool.push_back(Some(stream));
-                }
-                if let Err(e) = Self::initialize_pool(proxy_addresses.clone(), configuration.clone(), &mut pool).await {
-                    error!("Fail to initialize proxy connection pool because of error in timer, error: {:#?}", e);
-                };
-                debug!("Current pool size: {}", pool.len());
             }
-        });
+            .instrument(debug_span!("PROXY_CONNECTION_POOL_HEARTBEAT_TIMER")),
+        );
         Ok(result)
     }
 
+    #[instrument]
     async fn initialize_pool(
         proxy_addresses: Arc<Vec<SocketAddr>>, configuration: Arc<AgentConfig>, pool: &mut VecDeque<Option<ProxyConnection>>,
     ) -> Result<()> {
         let proxy_stream_so_linger = configuration.proxy_stream_so_linger().unwrap_or(DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS);
         let init_proxy_connection_number = configuration.init_proxy_connection_number().unwrap_or(DEFAULT_INIT_PROXY_CONNECTION_NUMBER);
-        let proxy_connection_number_increasement = configuration
+        let proxy_connection_number_incremental = configuration
             .proxy_connection_number_increasement()
             .unwrap_or(DEFAULT_PROXY_CONNECTION_NUMBER_INCREASEMENT);
         let min_proxy_connection_number = configuration.min_proxy_connection_number().unwrap_or(DEFAULT_MIN_PROXY_CONNECTION_NUMBER);
@@ -200,7 +206,7 @@ impl ProxyConnectionPool {
         let increase_to = if pool_size == 0 {
             init_proxy_connection_number
         } else {
-            pool_size + proxy_connection_number_increasement
+            pool_size + proxy_connection_number_incremental
         };
         for _ in pool_size..increase_to {
             let proxy_addresses = proxy_addresses.clone();
@@ -243,6 +249,7 @@ impl ProxyConnectionPool {
         Ok(())
     }
 
+    #[instrument]
     pub async fn fetch_connection(&self) -> Result<ProxyConnection> {
         let min_proxy_connection_number = self.configuration.min_proxy_connection_number().unwrap_or(DEFAULT_MIN_PROXY_CONNECTION_NUMBER);
         let mut pool = self.pool.lock().await;
