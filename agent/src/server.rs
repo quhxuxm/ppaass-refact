@@ -35,7 +35,7 @@ impl AgentServer {
         })
     }
 
-    #[instrument]
+    #[instrument(skip_all)]
     async fn concrete_run(&self) -> Result<()> {
         let proxy_addresses_from_config = self.configuration.proxy_addresses().as_ref().expect("No proxy addresses configuration item");
         let mut proxy_addresses: Vec<SocketAddr> = Vec::new();
@@ -102,7 +102,7 @@ impl AgentServer {
         }
     }
 
-    #[instrument]
+    #[instrument(skip_all)]
     pub(crate) fn run(&self) -> Result<()> {
         self.runtime.block_on(self.concrete_run())?;
         Ok(())

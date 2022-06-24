@@ -13,7 +13,7 @@ use common::{
 };
 use pretty_hex;
 use tokio::net::UdpSocket;
-use tracing::{debug, error};
+use tracing::{debug, error, instrument};
 
 use pretty_hex::*;
 const SIZE_64KB: usize = 65535;
@@ -36,6 +36,7 @@ pub(crate) struct UdpRelayFlowResult;
 pub(crate) struct UdpRelayFlow;
 
 impl UdpRelayFlow {
+    #[instrument(skip_all, fields(request.connection_id))]
     pub async fn exec<T>(request: UdpRelayFlowRequest<T>) -> Result<UdpRelayFlowResult>
     where
         T: RsaCryptoFetcher + Send + Sync + Debug + 'static,

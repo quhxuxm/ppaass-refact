@@ -26,7 +26,7 @@ pub(crate) struct ProxyServer {
 }
 
 impl ProxyServer {
-    #[instrument]
+    #[instrument(skip_all)]
     pub(crate) fn new(configuration: Arc<ProxyConfig>) -> Result<Self> {
         let mut runtime_builder = TokioRuntimeBuilder::new_multi_thread();
         runtime_builder
@@ -40,7 +40,7 @@ impl ProxyServer {
         })
     }
 
-    #[instrument]
+    #[instrument(skip_all)]
     async fn concrete_run(&self) -> Result<()> {
         let server_socket = TcpSocket::new_v4()?;
         server_socket.set_reuseaddr(true)?;

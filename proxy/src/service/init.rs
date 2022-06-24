@@ -68,7 +68,7 @@ where
 pub(crate) struct InitializeFlow;
 
 impl InitializeFlow {
-    #[instrument]
+    #[instrument(skip_all, fields(request.connection_id))]
     pub async fn exec<T>(request: InitFlowRequest<T>, configuration: Arc<ProxyConfig>) -> Result<InitFlowResult<T>>
     where
         T: RsaCryptoFetcher + Send + Sync + Debug + 'static,

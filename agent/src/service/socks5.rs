@@ -38,7 +38,7 @@ pub(crate) struct Socks5FlowResult;
 
 pub(crate) struct Socks5FlowProcessor;
 impl Socks5FlowProcessor {
-    #[instrument(level = "error")]
+    #[instrument(skip_all, fields(request.client_connection_id))]
     pub async fn exec<T>(
         request: Socks5FlowRequest, rsa_crypto_fetcher: Arc<T>, configuration: Arc<AgentConfig>, proxy_connection_pool: Arc<ProxyConnectionPool>,
     ) -> Result<Socks5FlowResult>

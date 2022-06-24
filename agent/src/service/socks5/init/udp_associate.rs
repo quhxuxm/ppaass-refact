@@ -26,6 +26,7 @@ use crate::{config::AgentConfig, message::socks5::Socks5Addr};
 
 #[derive(Debug)]
 pub(crate) struct Socks5UdpAssociateFlowRequest {
+    pub client_connection_id: String,
     pub client_address: Socks5Addr,
 }
 
@@ -45,14 +46,17 @@ where
 pub(crate) struct Socks5UdpAssociateFlow;
 
 impl Socks5UdpAssociateFlow {
-    #[instrument]
+    #[instrument(skip_all, fields(request.client_connection_id))]
     pub(crate) async fn exec<T>(
         request: Socks5UdpAssociateFlowRequest, rsa_crypto_fetcher: Arc<T>, configuration: Arc<AgentConfig>, proxy_connection_pool: Arc<ProxyConnectionPool>,
     ) -> Result<Socks5UdpAssociateFlowResult<T>>
     where
         T: RsaCryptoFetcher + Debug,
     {
-        let Socks5UdpAssociateFlowRequest { client_address, .. } = request;
+        let Socks5UdpAssociateFlowRequest {
+            client_address,
+            client_connection_id,
+        } = request;
         let initial_local_ip = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
         let initial_udp_address = SocketAddr::new(initial_local_ip, 0);
         let associated_udp_socket = UdpSocket::bind(initial_udp_address).await?;
@@ -126,8 +130,8 @@ impl Socks5UdpAssociateFlow {
                     }),
             }) => {
                 debug!(
-                    "Proxy connection [{}] udp associate process success, response message id: {}",
-                    proxy_connection_id, message_id
+                    "Proxy connection [{}] udp associate process success, response message id: {}, client connection id: {}",
+                    proxy_connection_id, message_id, client_connection_id
                 );
                 Ok(Socks5UdpAssociateFlowResult {
                     associated_udp_socket,
@@ -153,8 +157,8 @@ impl Socks5UdpAssociateFlow {
                 ..
             }) => {
                 error!(
-                    "Proxy connection [{}] fail connect to target from proxy, response message id: {}",
-                    proxy_connection_id, message_id
+                    "Proxy connection [{}] fail connect to target from proxy, response message id: {}, client connection id: {}",
+                    proxy_connection_id, message_id, client_connection_id
                 );
                 Err(anyhow!(PpaassError::IoError {
                     source: std::io::Error::new(
@@ -173,8 +177,8 @@ impl Socks5UdpAssociateFlow {
                 ..
             }) => {
                 error!(
-                    "Proxy connection [{}] fail connect to target from proxy because of invalid payload type:{:?}, response message id: {}",
-                    proxy_connection_id, payload_type, message_id
+                    "Proxy connection [{}] fail connect to target from proxy because of invalid payload type:{:?}, response message id: {}, client connection id: {}",
+                    proxy_connection_id, payload_type, message_id, client_connection_id
                 );
                 Err(anyhow!(PpaassError::IoError {
                     source: std::io::Error::new(ErrorKind::InvalidData, "Invalid payload type read from proxy.",),

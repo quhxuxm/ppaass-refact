@@ -44,7 +44,7 @@ pub struct Socks5UdpRelayFlowResult {}
 pub struct Socks5UdpRelayFlow;
 
 impl Socks5UdpRelayFlow {
-    #[instrument]
+    #[instrument(skip_all, fields(request.client_connection_id, request.proxy_connection_id))]
     pub async fn exec<T>(request: Socks5UdpRelayFlowRequest<T>, configuration: Arc<AgentConfig>) -> Result<Socks5UdpRelayFlowResult>
     where
         T: RsaCryptoFetcher + Send + Sync + Debug + 'static,

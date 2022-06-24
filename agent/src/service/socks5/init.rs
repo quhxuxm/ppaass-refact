@@ -74,7 +74,7 @@ pub(crate) struct Socks5InitFlowRequest {
 pub(crate) struct Socks5InitFlow;
 
 impl Socks5InitFlow {
-    #[instrument(level = "error")]
+    #[instrument(fields(request.client_connection_id), skip_all)]
     pub async fn exec<T>(
         request: Socks5InitFlowRequest, rsa_crypto_fetcher: Arc<T>, configuration: Arc<AgentConfig>, proxy_connection_pool: Arc<ProxyConnectionPool>,
     ) -> Result<Socks5InitFlowResult<T>>
@@ -98,7 +98,7 @@ impl Socks5InitFlow {
                     "Client connection [{}] fail to handle socks 5 init command from client {}",
                     client_connection_id, client_address
                 );
-                send_socks5_init_failure(&mut socks5_init_framed).await?;
+                send_socks5_init_failure(&client_connection_id, &mut socks5_init_framed).await?;
                 return Err(anyhow!(PpaassError::CodecError));
             },
         };
@@ -126,7 +126,7 @@ impl Socks5InitFlow {
                             "Client connection [{}] fail to handle socks5 init command (CONNECT) because of error: {:#?}",
                             client_connection_id, e
                         );
-                        send_socks5_init_failure(&mut socks5_init_framed).await?;
+                        send_socks5_init_failure(&client_connection_id, &mut socks5_init_framed).await?;
                         Err(e)
                     },
                     Ok(Socks5TcpConnectFlowResult {
@@ -159,6 +159,7 @@ impl Socks5InitFlow {
             Socks5InitCommandType::UdpAssociate => {
                 match Socks5UdpAssociateFlow::exec(
                     Socks5UdpAssociateFlowRequest {
+                        client_connection_id: client_connection_id.clone(),
                         client_address: dest_address_in_init_command.clone(),
                     },
                     rsa_crypto_fetcher,
@@ -172,7 +173,7 @@ impl Socks5InitFlow {
                             "Client connection [{}] fail to handle socks5 init command (UDP ASSOCIATE) because of error: {:#?}",
                             client_connection_id, e
                         );
-                        send_socks5_init_failure(&mut socks5_init_framed).await?;
+                        send_socks5_init_failure(&client_connection_id, &mut socks5_init_framed).await?;
                         Err(e)
                     },
                     Ok(Socks5UdpAssociateFlowResult {
@@ -209,12 +210,10 @@ impl Socks5InitFlow {
     }
 }
 
-async fn send_socks5_init_failure(socks5_client_framed: &mut Socks5InitFramed<'_>) -> Result<(), PpaassError> {
+#[instrument(fields(_client_connection_id), skip_all)]
+async fn send_socks5_init_failure(_client_connection_id: &str, socks5_client_framed: &mut Socks5InitFramed<'_>) -> Result<(), PpaassError> {
     let connect_result = Socks5InitCommandResultContent::new(Socks5InitCommandResultStatus::Failure, None);
-    if let Err(e) = socks5_client_framed.send(connect_result).await {
-        error!("Fail to write socks5 connect fail result to client because of error: {:#?}", e);
-        return Err(e);
-    };
+    socks5_client_framed.send(connect_result).await?;
     socks5_client_framed.flush().await?;
     socks5_client_framed.close().await?;
     Ok(())

@@ -41,7 +41,7 @@ pub struct ProxyConnectionPool {
 }
 
 impl ProxyConnectionPool {
-    #[instrument(level = "error")]
+    #[instrument(skip_all, fields(proxy_addresses))]
     pub async fn new<T>(proxy_addresses: Arc<Vec<SocketAddr>>, configuration: Arc<AgentConfig>, rsa_crypto_fetcher: Arc<T>) -> Result<Self>
     where
         T: RsaCryptoFetcher + Send + Sync + Debug + 'static,
@@ -190,7 +190,7 @@ impl ProxyConnectionPool {
         Ok(result)
     }
 
-    #[instrument(level = "error")]
+    #[instrument(skip_all, fields(proxy_addresses))]
     async fn initialize_pool(
         proxy_addresses: Arc<Vec<SocketAddr>>, configuration: Arc<AgentConfig>, pool: &mut VecDeque<Option<ProxyConnection>>,
     ) -> Result<()> {
@@ -251,7 +251,7 @@ impl ProxyConnectionPool {
         Ok(())
     }
 
-    #[instrument(level = "error")]
+    #[instrument(skip_all)]
     pub async fn fetch_connection(&self) -> Result<ProxyConnection> {
         let min_proxy_connection_number = self.configuration.min_proxy_connection_number().unwrap_or(DEFAULT_MIN_PROXY_CONNECTION_NUMBER);
         let mut pool = self.pool.lock().await;

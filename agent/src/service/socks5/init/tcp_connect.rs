@@ -8,7 +8,7 @@ use bytes::Bytes;
 
 use futures::SinkExt;
 
-use tracing::{debug, error};
+use tracing::{debug, error, instrument};
 
 use common::{
     generate_uuid, AgentMessagePayloadTypeValue, MessageFramedGenerateResult, MessageFramedGenerator, MessageFramedRead, MessageFramedReader,
@@ -48,6 +48,7 @@ where
 }
 
 impl Socks5TcpConnectFlow {
+    #[instrument(skip_all, fields(request.client_connection_id))]
     pub async fn exec<T>(
         request: Socks5TcpConnectFlowRequest, rsa_crypto_fetcher: Arc<T>, configuration: Arc<AgentConfig>, proxy_connection_pool: Arc<ProxyConnectionPool>,
     ) -> Result<Socks5TcpConnectFlowResult<T>>

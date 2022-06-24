@@ -10,7 +10,7 @@ use common::{
 };
 
 use futures::SinkExt;
-use tracing::info;
+use tracing::{info, instrument};
 
 use crate::config::ProxyConfig;
 
@@ -44,6 +44,7 @@ where
 pub(crate) struct UdpAssociateFlow;
 
 impl UdpAssociateFlow {
+    #[instrument(skip_all, fields(request.connection_id))]
     pub async fn exec<T>(request: UdpAssociateFlowRequest<T>, _configuration: Arc<ProxyConfig>) -> Result<UdpAssociateFlowResult<T>>
     where
         T: RsaCryptoFetcher,

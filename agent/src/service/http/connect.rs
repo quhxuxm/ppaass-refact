@@ -21,7 +21,7 @@ use httpcodec::{BodyEncoder, HttpVersion, ReasonPhrase, RequestEncoder, Response
 use tokio::net::TcpStream;
 use tokio_util::codec::{Framed, FramedParts};
 
-use tracing::error;
+use tracing::{error, instrument};
 use url::Url;
 
 use crate::{
@@ -71,7 +71,8 @@ where
 pub(crate) struct HttpConnectFlow;
 
 impl HttpConnectFlow {
-    async fn send_error_to_client(mut client_http_framed: HttpFramed<'_>) -> Result<()> {
+    #[instrument(skip_all, fields(_client_connection_id))]
+    async fn send_error_to_client(_client_connection_id: &str, mut client_http_framed: HttpFramed<'_>) -> Result<()> {
         let bad_request_status_code = StatusCode::new(ERROR_CODE).unwrap();
         let error_response_reason = ReasonPhrase::new(ERROR_REASON).unwrap();
         let connect_error_response = Response::new(HttpVersion::V1_1, bad_request_status_code, error_response_reason, vec![]);
@@ -92,6 +93,7 @@ impl HttpConnectFlow {
             mut client_stream,
             client_address,
             initial_buf,
+            client_connection_id,
             ..
         } = request;
         let mut framed_parts = FramedParts::new(&mut client_stream, HttpCodec::default());
@@ -101,7 +103,7 @@ impl HttpConnectFlow {
             Some(Ok(v)) => v,
             _ => {
                 return {
-                    Self::send_error_to_client(http_client_framed).await?;
+                    Self::send_error_to_client(&client_connection_id, http_client_framed).await?;
                     Err(anyhow!(PpaassError::CodecError))
                 }
             },
@@ -114,7 +116,7 @@ impl HttpConnectFlow {
             let encode_result = match http_data_encoder.encode_into_bytes(http_message) {
                 Err(e) => {
                     error!("Fail to encode http data because of error: {:#?} ", e);
-                    Self::send_error_to_client(http_client_framed).await?;
+                    Self::send_error_to_client(&client_connection_id, http_client_framed).await?;
                     return Err(anyhow!(e));
                 },
                 Ok(v) => v,
@@ -134,7 +136,7 @@ impl HttpConnectFlow {
         };
         let target_host = match parsed_request_url.host() {
             None => {
-                Self::send_error_to_client(http_client_framed).await?;
+                Self::send_error_to_client(&client_connection_id, http_client_framed).await?;
                 return Err(anyhow!(PpaassError::CodecError));
             },
             Some(v) => v.to_string(),
@@ -145,7 +147,7 @@ impl HttpConnectFlow {
             stream: proxy_stream,
         } = match proxy_connection_pool.fetch_connection().await {
             Err(e) => {
-                Self::send_error_to_client(http_client_framed).await?;
+                Self::send_error_to_client(&client_connection_id, http_client_framed).await?;
                 return Err(anyhow!(e));
             },
             Ok(v) => v,
@@ -183,12 +185,12 @@ impl HttpConnectFlow {
         .await
         {
             Err(WriteMessageFramedError { source, .. }) => {
-                Self::send_error_to_client(http_client_framed).await?;
+                Self::send_error_to_client(&client_connection_id, http_client_framed).await?;
                 return Err(anyhow!(source));
             },
             Ok(WriteMessageFramedResult { mut message_framed_write }) => {
                 if let Err(e) = message_framed_write.flush().await {
-                    Self::send_error_to_client(http_client_framed).await?;
+                    Self::send_error_to_client(&client_connection_id, http_client_framed).await?;
                     return Err(anyhow!(e));
                 }
                 message_framed_write
@@ -201,11 +203,11 @@ impl HttpConnectFlow {
         .await
         {
             Err(ReadMessageFramedError { source, .. }) => {
-                Self::send_error_to_client(http_client_framed).await?;
+                Self::send_error_to_client(&client_connection_id, http_client_framed).await?;
                 return Err(anyhow!(source));
             },
             Ok(ReadMessageFramedResult { content: None, .. }) => {
-                Self::send_error_to_client(http_client_framed).await?;
+                Self::send_error_to_client(&client_connection_id, http_client_framed).await?;
                 return Err(anyhow!(PpaassError::IoError {
                     source: std::io::Error::new(ErrorKind::InvalidData, "Invalid payload type read from proxy.",),
                 }));
@@ -260,7 +262,7 @@ impl HttpConnectFlow {
                 },
             },
             Ok(ReadMessageFramedResult { .. }) => {
-                Self::send_error_to_client(http_client_framed).await?;
+                Self::send_error_to_client(&client_connection_id, http_client_framed).await?;
                 return Err(anyhow!(PpaassError::IoError {
                     source: std::io::Error::new(ErrorKind::InvalidData, "Invalid payload type read from proxy.",),
                 }));

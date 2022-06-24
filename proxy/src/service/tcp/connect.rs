@@ -9,7 +9,7 @@ use common::{
 use futures::SinkExt;
 use std::{net::SocketAddr, sync::Arc};
 use tokio::net::TcpStream;
-use tracing::{debug, error};
+use tracing::{debug, error, instrument};
 
 use crate::config::{ProxyConfig, DEFAULT_TARGET_STREAM_SO_LINGER};
 
@@ -43,6 +43,7 @@ where
 pub(crate) struct TcpConnectFlow;
 
 impl TcpConnectFlow {
+    #[instrument(skip_all, fields(request.connection_id))]
     pub async fn exec<T>(request: TcpConnectFlowRequest<T>, configuration: Arc<ProxyConfig>) -> Result<TcpConnectFlowResult<T>>
     where
         T: RsaCryptoFetcher,

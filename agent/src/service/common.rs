@@ -44,6 +44,7 @@ pub(crate) struct ClientConnection {
 }
 
 impl ClientConnection {
+    #[instrument(skip(client_stream))]
     pub(crate) fn new(client_stream: TcpStream, client_address: SocketAddr) -> Self {
         Self {
             id: generate_uuid(),
@@ -52,7 +53,7 @@ impl ClientConnection {
         }
     }
 
-    #[instrument(level = "error")]
+    #[instrument(skip_all)]
     pub async fn exec<T>(self, rsa_crypto_fetcher: Arc<T>, configuration: Arc<AgentConfig>, proxy_connection_pool: Arc<ProxyConnectionPool>) -> Result<()>
     where
         T: RsaCryptoFetcher + Send + Sync + Debug + 'static,
@@ -163,7 +164,7 @@ where
 pub(crate) struct TcpRelayFlow;
 
 impl TcpRelayFlow {
-    #[instrument(level = "error")]
+    #[instrument(fields(request.client_connection_id))]
     pub async fn exec<T>(request: TcpRelayFlowRequest<T>, configuration: Arc<AgentConfig>) -> Result<TcpRelayFlowResult>
     where
         T: RsaCryptoFetcher + Send + Sync + Debug + 'static,
@@ -245,7 +246,7 @@ impl TcpRelayFlow {
         Ok(TcpRelayFlowResult { client_address })
     }
 
-    #[instrument]
+    #[instrument(fields(connection_id))]
     async fn relay_client_to_proxy<T>(
         connection_id: String, init_data: Option<Vec<u8>>, mut message_framed_write: MessageFramedWrite<T>, source_address_a2t: NetAddress,
         target_address_a2t: NetAddress, mut client_stream_read: OwnedReadHalf, configuration: Arc<AgentConfig>,
@@ -410,7 +411,7 @@ impl TcpRelayFlow {
         }
     }
 
-    #[instrument]
+    #[instrument(fields(connection_id))]
     async fn relay_proxy_to_client<T>(
         connection_id: String, _target_address_t2a: NetAddress, mut message_framed_read: MessageFramedRead<T>, mut client_stream_write: OwnedWriteHalf,
         configuration: Arc<AgentConfig>,
