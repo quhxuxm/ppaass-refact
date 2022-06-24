@@ -34,7 +34,7 @@ pub(crate) struct HttpFlowResult;
 pub(crate) struct HttpFlow;
 
 impl HttpFlow {
-    #[instrument]
+    #[instrument(level = "error")]
     pub async fn exec<T>(
         request: HttpFlowRequest, rsa_crypto_fetcher: Arc<T>, configuration: Arc<AgentConfig>, proxy_connection_pool: Arc<ProxyConnectionPool>,
     ) -> Result<HttpFlowResult>

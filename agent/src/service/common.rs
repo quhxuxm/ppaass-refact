@@ -36,6 +36,7 @@ pub const DEFAULT_BUFFER_SIZE: usize = 1024 * 64;
 
 pub const DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS: u64 = 20;
 
+#[derive(Debug)]
 pub(crate) struct ClientConnection {
     pub id: String,
     pub client_stream: TcpStream,
@@ -51,6 +52,7 @@ impl ClientConnection {
         }
     }
 
+    #[instrument(level = "error")]
     pub async fn exec<T>(self, rsa_crypto_fetcher: Arc<T>, configuration: Arc<AgentConfig>, proxy_connection_pool: Arc<ProxyConnectionPool>) -> Result<()>
     where
         T: RsaCryptoFetcher + Send + Sync + Debug + 'static,
@@ -161,7 +163,7 @@ where
 pub(crate) struct TcpRelayFlow;
 
 impl TcpRelayFlow {
-    #[instrument]
+    #[instrument(level = "error")]
     pub async fn exec<T>(request: TcpRelayFlowRequest<T>, configuration: Arc<AgentConfig>) -> Result<TcpRelayFlowResult>
     where
         T: RsaCryptoFetcher + Send + Sync + Debug + 'static,

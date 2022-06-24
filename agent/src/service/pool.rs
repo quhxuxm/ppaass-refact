@@ -1,3 +1,4 @@
+use std::fmt::Debug;
 use std::{collections::VecDeque, net::SocketAddr, sync::Arc, time::Duration};
 
 use bytes::Bytes;
@@ -23,7 +24,7 @@ use super::common::{DEFAULT_BUFFER_SIZE, DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS};
 
 const DEFAULT_INIT_PROXY_CONNECTION_NUMBER: usize = 32;
 const DEFAULT_MIN_PROXY_CONNECTION_NUMBER: usize = 16;
-const DEFAULT_PROXY_CONNECTION_NUMBER_INCREASEMENT: usize = 16;
+const DEFAULT_PROXY_CONNECTION_NUMBER_INCREMENTAL: usize = 16;
 const DEFAULT_PROXY_CONNECTION_CHECK_INTERVAL_SECONDS: u64 = 30;
 
 #[derive(Debug)]
@@ -40,9 +41,10 @@ pub struct ProxyConnectionPool {
 }
 
 impl ProxyConnectionPool {
+    #[instrument(level = "error")]
     pub async fn new<T>(proxy_addresses: Arc<Vec<SocketAddr>>, configuration: Arc<AgentConfig>, rsa_crypto_fetcher: Arc<T>) -> Result<Self>
     where
-        T: RsaCryptoFetcher + Send + Sync + 'static,
+        T: RsaCryptoFetcher + Send + Sync + Debug + 'static,
     {
         let proxy_connection_check_interval_seconds = configuration
             .proxy_connection_check_interval_seconds()
@@ -188,7 +190,7 @@ impl ProxyConnectionPool {
         Ok(result)
     }
 
-    #[instrument]
+    #[instrument(level = "error")]
     async fn initialize_pool(
         proxy_addresses: Arc<Vec<SocketAddr>>, configuration: Arc<AgentConfig>, pool: &mut VecDeque<Option<ProxyConnection>>,
     ) -> Result<()> {
@@ -196,7 +198,7 @@ impl ProxyConnectionPool {
         let init_proxy_connection_number = configuration.init_proxy_connection_number().unwrap_or(DEFAULT_INIT_PROXY_CONNECTION_NUMBER);
         let proxy_connection_number_incremental = configuration
             .proxy_connection_number_increasement()
-            .unwrap_or(DEFAULT_PROXY_CONNECTION_NUMBER_INCREASEMENT);
+            .unwrap_or(DEFAULT_PROXY_CONNECTION_NUMBER_INCREMENTAL);
         let min_proxy_connection_number = configuration.min_proxy_connection_number().unwrap_or(DEFAULT_MIN_PROXY_CONNECTION_NUMBER);
         let pool_size = pool.len();
         if pool_size >= min_proxy_connection_number {
@@ -249,7 +251,7 @@ impl ProxyConnectionPool {
         Ok(())
     }
 
-    #[instrument]
+    #[instrument(level = "error")]
     pub async fn fetch_connection(&self) -> Result<ProxyConnection> {
         let min_proxy_connection_number = self.configuration.min_proxy_connection_number().unwrap_or(DEFAULT_MIN_PROXY_CONNECTION_NUMBER);
         let mut pool = self.pool.lock().await;

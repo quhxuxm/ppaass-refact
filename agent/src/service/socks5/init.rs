@@ -74,7 +74,7 @@ pub(crate) struct Socks5InitFlowRequest {
 pub(crate) struct Socks5InitFlow;
 
 impl Socks5InitFlow {
-    #[instrument]
+    #[instrument(level = "error")]
     pub async fn exec<T>(
         request: Socks5InitFlowRequest, rsa_crypto_fetcher: Arc<T>, configuration: Arc<AgentConfig>, proxy_connection_pool: Arc<ProxyConnectionPool>,
     ) -> Result<Socks5InitFlowResult<T>>

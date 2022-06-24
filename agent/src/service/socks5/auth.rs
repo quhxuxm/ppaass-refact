@@ -33,7 +33,7 @@ pub(crate) struct Socks5AuthenticateFlowResult {
 pub(crate) struct Socks5AuthenticateFlow;
 
 impl Socks5AuthenticateFlow {
-    #[instrument]
+    #[instrument(level = "error")]
     pub async fn exec(request: Socks5AuthenticateFlowRequest) -> Result<Socks5AuthenticateFlowResult> {
         let Socks5AuthenticateFlowRequest {
             client_connection_id,
