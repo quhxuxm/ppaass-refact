@@ -27,7 +27,8 @@ use tracing::{debug, debug_span, error, info, instrument, Instrument};
 use crate::config::AgentConfig;
 use anyhow::anyhow;
 use anyhow::Result;
-use pin_project::*;
+use pin_project::pin_project;
+use pin_project::pinned_drop;
 
 use super::common::{DEFAULT_BUFFER_SIZE, DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS};
 
@@ -37,7 +38,7 @@ const DEFAULT_PROXY_CONNECTION_NUMBER_INCREMENTAL: usize = 16;
 const DEFAULT_PROXY_CONNECTION_CHECK_INTERVAL_SECONDS: u64 = 30;
 
 #[derive(Debug)]
-#[pin_project]
+#[pin_project(PinnedDrop)]
 pub struct ProxyConnection {
     pub id: String,
     #[pin]
@@ -49,6 +50,14 @@ impl Deref for ProxyConnection {
 
     fn deref(&self) -> &Self::Target {
         &self.stream
+    }
+}
+
+#[pinned_drop]
+impl PinnedDrop for ProxyConnection {
+    fn drop(self: Pin<&mut Self>) {
+        let this = self.project();
+        info!("Proxy connection [{}] closed.", this.id)
     }
 }
 
