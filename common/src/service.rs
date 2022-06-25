@@ -29,7 +29,7 @@ where
 pub struct MessageFramedGenerator;
 
 impl MessageFramedGenerator {
-    #[instrument]
+    #[instrument(fields(input_stream))]
     pub async fn generate<T>(input_stream: TcpStream, buffer_size: usize, compress: bool, rsa_crypto_fetcher: Arc<T>) -> MessageFramedGenerateResult<T>
     where
         T: RsaCryptoFetcher + Debug,
@@ -101,7 +101,7 @@ where
 pub struct MessageFramedWriter;
 
 impl MessageFramedWriter {
-    #[instrument]
+    #[instrument(fields(request.connection_id))]
     pub async fn write<T>(request: WriteMessageFramedRequest<T>) -> Result<WriteMessageFramedResult<T>, WriteMessageFramedError<T>>
     where
         T: RsaCryptoFetcher,
@@ -177,7 +177,7 @@ where
 pub struct MessageFramedReader;
 
 impl MessageFramedReader {
-    #[instrument]
+    #[instrument(fields(request.connection_id))]
     pub async fn read<T>(request: ReadMessageFramedRequest<T>) -> Result<ReadMessageFramedResult<T>, ReadMessageFramedError<T>>
     where
         T: RsaCryptoFetcher + Debug,
@@ -250,7 +250,7 @@ pub struct PayloadEncryptionTypeSelectResult {
 pub struct PayloadEncryptionTypeSelector;
 
 impl PayloadEncryptionTypeSelector {
-    #[instrument]
+    #[instrument(fields(request.user_token))]
     pub async fn select(request: PayloadEncryptionTypeSelectRequest) -> Result<PayloadEncryptionTypeSelectResult, PpaassError> {
         let PayloadEncryptionTypeSelectRequest { user_token, encryption_token } = request;
         Ok(PayloadEncryptionTypeSelectResult {
@@ -275,7 +275,7 @@ pub struct TcpConnectResult {
 pub struct TcpConnector;
 
 impl TcpConnector {
-    #[instrument]
+    #[instrument(fields(request.connect_addresses))]
     pub async fn connect(request: TcpConnectRequest) -> Result<TcpConnectResult, PpaassError> {
         let TcpConnectRequest {
             connect_addresses,
