@@ -37,8 +37,8 @@ where
 {
     pub associated_udp_socket: UdpSocket,
     pub associated_udp_address: Socks5Addr,
-    pub message_framed_read: MessageFramedRead<T>,
-    pub message_framed_write: MessageFramedWrite<T>,
+    pub message_framed_read: MessageFramedRead<T, ProxyConnection>,
+    pub message_framed_write: MessageFramedWrite<T, ProxyConnection>,
     pub proxy_address: SocketAddr,
     pub client_address: NetAddress,
     pub proxy_connection_id: String,
@@ -61,18 +61,16 @@ impl Socks5UdpAssociateFlow {
         let initial_udp_address = SocketAddr::new(initial_local_ip, 0);
         let associated_udp_socket = UdpSocket::bind(initial_udp_address).await?;
         let associated_udp_address = associated_udp_socket.local_addr()?;
-        let ProxyConnection {
-            id: proxy_connection_id,
-            stream: proxy_stream,
-        } = proxy_connection_pool.fetch_connection().await?;
-        let connected_proxy_address = proxy_stream.peer_addr()?;
+        let proxy_connection = proxy_connection_pool.fetch_connection().await?;
+        let proxy_connection_id = proxy_connection.id.clone();
+        let connected_proxy_address = proxy_connection.peer_addr()?;
         let message_framed_buffer_size = configuration.message_framed_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE);
         let compress = configuration.compress().unwrap_or(true);
 
         let MessageFramedGenerateResult {
             message_framed_write,
             message_framed_read,
-        } = MessageFramedGenerator::generate(proxy_stream, message_framed_buffer_size, compress, rsa_crypto_fetcher).await;
+        } = MessageFramedGenerator::generate(proxy_connection, message_framed_buffer_size, compress, rsa_crypto_fetcher).await;
 
         let PayloadEncryptionTypeSelectResult { payload_encryption_type, .. } = PayloadEncryptionTypeSelector::select(PayloadEncryptionTypeSelectRequest {
             encryption_token: generate_uuid().into(),

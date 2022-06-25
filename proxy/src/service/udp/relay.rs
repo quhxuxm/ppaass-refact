@@ -12,7 +12,7 @@ use common::{
     WriteMessageFramedRequest, WriteMessageFramedResult,
 };
 use pretty_hex;
-use tokio::net::UdpSocket;
+use tokio::net::{TcpStream, UdpSocket};
 use tracing::{debug, error, instrument};
 
 use pretty_hex::*;
@@ -27,8 +27,8 @@ where
     pub connection_id: String,
     pub message_id: String,
     pub user_token: String,
-    pub message_framed_read: MessageFramedRead<T>,
-    pub message_framed_write: MessageFramedWrite<T>,
+    pub message_framed_read: MessageFramedRead<T, TcpStream>,
+    pub message_framed_write: MessageFramedWrite<T, TcpStream>,
 }
 
 #[derive(Debug)]

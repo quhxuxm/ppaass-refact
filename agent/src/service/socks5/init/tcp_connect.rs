@@ -38,8 +38,8 @@ pub(crate) struct Socks5TcpConnectFlowResult<T>
 where
     T: RsaCryptoFetcher,
 {
-    pub message_framed_read: MessageFramedRead<T>,
-    pub message_framed_write: MessageFramedWrite<T>,
+    pub message_framed_read: MessageFramedRead<T, ProxyConnection>,
+    pub message_framed_write: MessageFramedWrite<T, ProxyConnection>,
     pub client_address: SocketAddr,
     pub proxy_address: SocketAddr,
     pub source_address: NetAddress,
@@ -61,17 +61,15 @@ impl Socks5TcpConnectFlow {
             ..
         } = request;
         let client_address = request.client_address;
-        let ProxyConnection {
-            id: proxy_connection_id,
-            stream: proxy_stream,
-        } = proxy_connection_pool.fetch_connection().await?;
+        let proxy_connection = proxy_connection_pool.fetch_connection().await?;
+        let proxy_connection_id = proxy_connection.id.clone();
         let message_framed_buffer_size = configuration.message_framed_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE);
         let compress = configuration.compress().unwrap_or(true);
-        let connected_proxy_address = proxy_stream.peer_addr()?;
+        let connected_proxy_address = proxy_connection.peer_addr()?;
         let MessageFramedGenerateResult {
             message_framed_write,
             message_framed_read,
-        } = MessageFramedGenerator::generate(proxy_stream, message_framed_buffer_size, compress, rsa_crypto_fetcher).await;
+        } = MessageFramedGenerator::generate(proxy_connection, message_framed_buffer_size, compress, rsa_crypto_fetcher).await;
 
         let PayloadEncryptionTypeSelectResult { payload_encryption_type, .. } = PayloadEncryptionTypeSelector::select(PayloadEncryptionTypeSelectRequest {
             encryption_token: generate_uuid().into(),
@@ -137,7 +135,7 @@ impl Socks5TcpConnectFlow {
                     source_address,
                     target_address,
                     proxy_address: connected_proxy_address,
-                    proxy_connection_id,
+                    proxy_connection_id: proxy_connection_id.clone(),
                 })
             },
             Ok(ReadMessageFramedResult {

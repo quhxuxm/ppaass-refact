@@ -27,13 +27,13 @@ use super::{
 const DEFAULT_AGENT_CONNECTION_READ_TIMEOUT: u64 = 1200;
 
 #[derive(Debug)]
-pub(crate) struct InitFlowRequest<T>
+pub(crate) struct InitFlowRequest<T, TcpStream>
 where
     T: RsaCryptoFetcher,
 {
     pub connection_id: String,
-    pub message_framed_read: MessageFramedRead<T>,
-    pub message_framed_write: MessageFramedWrite<T>,
+    pub message_framed_read: MessageFramedRead<T, TcpStream>,
+    pub message_framed_write: MessageFramedWrite<T, TcpStream>,
     pub agent_address: SocketAddr,
 }
 
@@ -43,21 +43,21 @@ where
     T: RsaCryptoFetcher,
 {
     Heartbeat {
-        message_framed_read: MessageFramedRead<T>,
-        message_framed_write: MessageFramedWrite<T>,
+        message_framed_read: MessageFramedRead<T, TcpStream>,
+        message_framed_write: MessageFramedWrite<T, TcpStream>,
     },
     Tcp {
         target_stream: TcpStream,
-        message_framed_read: MessageFramedRead<T>,
-        message_framed_write: MessageFramedWrite<T>,
+        message_framed_read: MessageFramedRead<T, TcpStream>,
+        message_framed_write: MessageFramedWrite<T, TcpStream>,
         message_id: String,
         source_address: NetAddress,
         target_address: NetAddress,
         user_token: String,
     },
     Udp {
-        message_framed_read: MessageFramedRead<T>,
-        message_framed_write: MessageFramedWrite<T>,
+        message_framed_read: MessageFramedRead<T, TcpStream>,
+        message_framed_write: MessageFramedWrite<T, TcpStream>,
         message_id: String,
         source_address: NetAddress,
         user_token: String,
@@ -69,7 +69,7 @@ pub(crate) struct InitializeFlow;
 
 impl InitializeFlow {
     #[instrument(skip_all, fields(request.connection_id))]
-    pub async fn exec<T>(request: InitFlowRequest<T>, configuration: Arc<ProxyConfig>) -> Result<InitFlowResult<T>>
+    pub async fn exec<T>(request: InitFlowRequest<T, TcpStream>, configuration: Arc<ProxyConfig>) -> Result<InitFlowResult<T>>
     where
         T: RsaCryptoFetcher + Send + Sync + Debug + 'static,
     {

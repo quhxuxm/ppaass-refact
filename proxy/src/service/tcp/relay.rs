@@ -30,8 +30,8 @@ where
     T: RsaCryptoFetcher,
 {
     pub connection_id: String,
-    pub message_framed_read: MessageFramedRead<T>,
-    pub message_framed_write: MessageFramedWrite<T>,
+    pub message_framed_read: MessageFramedRead<T, TcpStream>,
+    pub message_framed_write: MessageFramedWrite<T, TcpStream>,
     pub agent_address: SocketAddr,
     pub target_stream: TcpStream,
     pub agent_tcp_connect_message_id: String,
@@ -46,7 +46,7 @@ struct TcpRelayT2PError<T>
 where
     T: RsaCryptoFetcher,
 {
-    pub message_framed_write: MessageFramedWrite<T>,
+    pub message_framed_write: MessageFramedWrite<T, TcpStream>,
     pub target_stream_read: OwnedReadHalf,
     pub source: anyhow::Error,
     pub connection_closed: bool,
@@ -58,7 +58,7 @@ struct TcpRelayP2TError<T>
 where
     T: RsaCryptoFetcher,
 {
-    pub message_framed_read: MessageFramedRead<T>,
+    pub message_framed_read: MessageFramedRead<T, TcpStream>,
     pub target_stream_write: OwnedWriteHalf,
     pub source: anyhow::Error,
     pub connection_closed: bool,
@@ -163,7 +163,7 @@ impl TcpRelayFlow {
 
     #[instrument(skip_all, fields(connection_id, agent_address))]
     async fn relay_proxy_to_target<T>(
-        connection_id: String, agent_address: SocketAddr, mut message_framed_read: MessageFramedRead<T>, mut target_stream_write: OwnedWriteHalf,
+        connection_id: String, agent_address: SocketAddr, mut message_framed_read: MessageFramedRead<T, TcpStream>, mut target_stream_write: OwnedWriteHalf,
         configuration: Arc<ProxyConfig>,
     ) -> Result<(), TcpRelayP2TError<T>>
     where
@@ -271,7 +271,7 @@ impl TcpRelayFlow {
 
     #[instrument(skip_all, fields(connection_id, agent_connect_message_source_address, agent_connect_message_target_address))]
     async fn relay_target_to_proxy<T>(
-        connection_id: String, mut message_framed_write: MessageFramedWrite<T>, agent_tcp_connect_message_id: String, user_token: String,
+        connection_id: String, mut message_framed_write: MessageFramedWrite<T, TcpStream>, agent_tcp_connect_message_id: String, user_token: String,
         agent_connect_message_source_address: NetAddress, agent_connect_message_target_address: NetAddress, mut target_stream_read: OwnedReadHalf,
         configuration: Arc<ProxyConfig>,
     ) -> Result<(), TcpRelayT2PError<T>>

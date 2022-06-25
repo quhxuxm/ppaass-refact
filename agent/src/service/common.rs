@@ -30,7 +30,10 @@ use crate::{
     config::AgentConfig,
 };
 
-use super::{http::HttpFlowResult, pool::ProxyConnectionPool};
+use super::{
+    http::HttpFlowResult,
+    pool::{ProxyConnection, ProxyConnectionPool},
+};
 
 pub const DEFAULT_BUFFER_SIZE: usize = 1024 * 64;
 
@@ -125,8 +128,8 @@ where
     pub proxy_connection_id: String,
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,
-    pub message_framed_write: MessageFramedWrite<T>,
-    pub message_framed_read: MessageFramedRead<T>,
+    pub message_framed_write: MessageFramedWrite<T, ProxyConnection>,
+    pub message_framed_read: MessageFramedRead<T, ProxyConnection>,
     pub source_address: NetAddress,
     pub target_address: NetAddress,
     pub init_data: Option<Vec<u8>>,
@@ -143,7 +146,7 @@ struct TcpRelayC2PError<T>
 where
     T: RsaCryptoFetcher,
 {
-    message_framed_write: MessageFramedWrite<T>,
+    message_framed_write: MessageFramedWrite<T, ProxyConnection>,
     client_stream_read: OwnedReadHalf,
     source: anyhow::Error,
     connection_closed: bool,
@@ -154,7 +157,7 @@ struct TcpRelayP2CError<T>
 where
     T: RsaCryptoFetcher,
 {
-    message_framed_read: MessageFramedRead<T>,
+    message_framed_read: MessageFramedRead<T, ProxyConnection>,
     client_stream_write: OwnedWriteHalf,
     source: anyhow::Error,
     connection_closed: bool,
@@ -248,7 +251,7 @@ impl TcpRelayFlow {
 
     #[instrument(fields(connection_id), skip_all)]
     async fn relay_client_to_proxy<T>(
-        connection_id: String, init_data: Option<Vec<u8>>, mut message_framed_write: MessageFramedWrite<T>, source_address_a2t: NetAddress,
+        connection_id: String, init_data: Option<Vec<u8>>, mut message_framed_write: MessageFramedWrite<T, ProxyConnection>, source_address_a2t: NetAddress,
         target_address_a2t: NetAddress, mut client_stream_read: OwnedReadHalf, configuration: Arc<AgentConfig>,
     ) -> Result<(), TcpRelayC2PError<T>>
     where
@@ -413,8 +416,8 @@ impl TcpRelayFlow {
 
     #[instrument(fields(connection_id), skip_all)]
     async fn relay_proxy_to_client<T>(
-        connection_id: String, _target_address_t2a: NetAddress, mut message_framed_read: MessageFramedRead<T>, mut client_stream_write: OwnedWriteHalf,
-        configuration: Arc<AgentConfig>,
+        connection_id: String, _target_address_t2a: NetAddress, mut message_framed_read: MessageFramedRead<T, ProxyConnection>,
+        mut client_stream_write: OwnedWriteHalf, configuration: Arc<AgentConfig>,
     ) -> Result<(), TcpRelayP2CError<T>>
     where
         T: RsaCryptoFetcher + Debug,

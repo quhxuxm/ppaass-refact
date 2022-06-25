@@ -8,31 +8,36 @@ use bytes::Bytes;
 
 use futures::stream::{SplitSink, SplitStream};
 use futures::{SinkExt, StreamExt};
-use tokio::net::TcpStream;
+use tokio::{
+    io::{AsyncRead, AsyncWrite},
+    net::TcpStream,
+};
 use tokio_util::codec::Framed;
 
 use tracing::{debug, error, info, instrument, trace};
 
 use crate::{crypto::RsaCryptoFetcher, generate_uuid, Message, MessageCodec, MessagePayload, PayloadEncryptionType, PpaassError};
 
-pub type MessageFramedRead<T> = SplitStream<Framed<TcpStream, MessageCodec<T>>>;
-pub type MessageFramedWrite<T> = SplitSink<Framed<TcpStream, MessageCodec<T>>, Message>;
+pub type MessageFramedRead<T, S> = SplitStream<Framed<S, MessageCodec<T>>>;
+pub type MessageFramedWrite<T, S> = SplitSink<Framed<S, MessageCodec<T>>, Message>;
 
-pub struct MessageFramedGenerateResult<T>
+pub struct MessageFramedGenerateResult<T, S>
 where
     T: RsaCryptoFetcher,
+    S: AsyncRead + AsyncWrite,
 {
-    pub message_framed_write: MessageFramedWrite<T>,
-    pub message_framed_read: MessageFramedRead<T>,
+    pub message_framed_write: MessageFramedWrite<T, S>,
+    pub message_framed_read: MessageFramedRead<T, S>,
 }
 
 pub struct MessageFramedGenerator;
 
 impl MessageFramedGenerator {
-    #[instrument(fields(input_stream))]
-    pub async fn generate<T>(input_stream: TcpStream, buffer_size: usize, compress: bool, rsa_crypto_fetcher: Arc<T>) -> MessageFramedGenerateResult<T>
+    #[instrument(skip_all, fields(input_stream))]
+    pub async fn generate<T, S>(input_stream: S, buffer_size: usize, compress: bool, rsa_crypto_fetcher: Arc<T>) -> MessageFramedGenerateResult<T, S>
     where
         T: RsaCryptoFetcher + Debug,
+        S: AsyncRead + AsyncWrite,
     {
         let framed = Framed::with_capacity(input_stream, MessageCodec::<T>::new(compress, rsa_crypto_fetcher), buffer_size);
         let (message_framed_write, message_framed_read) = framed.split();
@@ -43,11 +48,12 @@ impl MessageFramedGenerator {
     }
 }
 
-pub struct WriteMessageFramedRequest<T>
+pub struct WriteMessageFramedRequest<T, S>
 where
     T: RsaCryptoFetcher,
+    S: AsyncRead + AsyncWrite,
 {
-    pub message_framed_write: MessageFramedWrite<T>,
+    pub message_framed_write: MessageFramedWrite<T, S>,
     pub message_payload: Option<MessagePayload>,
     pub ref_id: Option<String>,
     pub connection_id: Option<String>,
@@ -55,9 +61,10 @@ where
     pub payload_encryption_type: PayloadEncryptionType,
 }
 
-impl<T> Debug for WriteMessageFramedRequest<T>
+impl<T, S> Debug for WriteMessageFramedRequest<T, S>
 where
     T: RsaCryptoFetcher,
+    S: AsyncRead + AsyncWrite,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
@@ -71,40 +78,31 @@ where
 }
 
 #[derive(Debug)]
-pub struct WriteMessageFramedResult<T>
+pub struct WriteMessageFramedResult<T, S>
 where
     T: RsaCryptoFetcher,
+    S: AsyncRead + AsyncWrite,
 {
-    pub message_framed_write: MessageFramedWrite<T>,
+    pub message_framed_write: MessageFramedWrite<T, S>,
 }
 
-pub struct WriteMessageFramedError<T>
+pub struct WriteMessageFramedError<T, S>
 where
     T: RsaCryptoFetcher,
+    S: AsyncRead + AsyncWrite,
 {
-    pub message_framed_write: MessageFramedWrite<T>,
+    pub message_framed_write: MessageFramedWrite<T, S>,
     pub source: PpaassError,
-}
-
-impl<T> Debug for WriteMessageFramedError<T>
-where
-    T: RsaCryptoFetcher,
-{
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("WriteMessageServiceError")
-            .field("message_framed_write", &self.message_framed_write)
-            .field("source", &self.source)
-            .finish()
-    }
 }
 
 pub struct MessageFramedWriter;
 
 impl MessageFramedWriter {
     #[instrument(fields(request.connection_id))]
-    pub async fn write<T>(request: WriteMessageFramedRequest<T>) -> Result<WriteMessageFramedResult<T>, WriteMessageFramedError<T>>
+    pub async fn write<T, S>(request: WriteMessageFramedRequest<T, S>) -> Result<WriteMessageFramedResult<T, S>, WriteMessageFramedError<T, S>>
     where
         T: RsaCryptoFetcher,
+        S: AsyncRead + AsyncWrite,
     {
         let WriteMessageFramedRequest {
             message_framed_write,
@@ -142,12 +140,13 @@ impl MessageFramedWriter {
 }
 
 #[derive(Debug)]
-pub struct ReadMessageFramedRequest<T>
+pub struct ReadMessageFramedRequest<T, S>
 where
     T: RsaCryptoFetcher,
+    S: AsyncRead + AsyncWrite,
 {
     pub connection_id: String,
-    pub message_framed_read: MessageFramedRead<T>,
+    pub message_framed_read: MessageFramedRead<T, S>,
 }
 
 #[derive(Debug)]
@@ -158,29 +157,32 @@ pub struct ReadMessageFramedResultContent {
 }
 
 #[derive(Debug)]
-pub struct ReadMessageFramedResult<T>
+pub struct ReadMessageFramedResult<T, S>
 where
     T: RsaCryptoFetcher,
+    S: AsyncRead + AsyncWrite,
 {
-    pub message_framed_read: MessageFramedRead<T>,
+    pub message_framed_read: MessageFramedRead<T, S>,
     pub content: Option<ReadMessageFramedResultContent>,
 }
 
-pub struct ReadMessageFramedError<T>
+pub struct ReadMessageFramedError<T, S>
 where
     T: RsaCryptoFetcher,
+    S: AsyncRead + AsyncWrite,
 {
-    pub message_framed_read: MessageFramedRead<T>,
+    pub message_framed_read: MessageFramedRead<T, S>,
     pub source: PpaassError,
 }
 
 pub struct MessageFramedReader;
 
 impl MessageFramedReader {
-    #[instrument(fields(request.connection_id))]
-    pub async fn read<T>(request: ReadMessageFramedRequest<T>) -> Result<ReadMessageFramedResult<T>, ReadMessageFramedError<T>>
+    #[instrument(skip_all, fields(request.connection_id))]
+    pub async fn read<T, S>(request: ReadMessageFramedRequest<T, S>) -> Result<ReadMessageFramedResult<T, S>, ReadMessageFramedError<T, S>>
     where
         T: RsaCryptoFetcher + Debug,
+        S: AsyncRead + AsyncWrite,
     {
         let ReadMessageFramedRequest {
             connection_id,

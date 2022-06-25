@@ -61,8 +61,8 @@ where
     pub client_address: SocketAddr,
     pub proxy_address: SocketAddr,
     pub init_data: Option<Vec<u8>>,
-    pub message_framed_read: MessageFramedRead<T>,
-    pub message_framed_write: MessageFramedWrite<T>,
+    pub message_framed_read: MessageFramedRead<T, ProxyConnection>,
+    pub message_framed_write: MessageFramedWrite<T, ProxyConnection>,
     pub source_address: NetAddress,
     pub target_address: NetAddress,
     pub proxy_connection_id: String,
@@ -142,22 +142,20 @@ impl HttpConnectFlow {
             Some(v) => v.to_string(),
         };
         let target_address = NetAddress::Domain(target_host, target_port);
-        let ProxyConnection {
-            id: proxy_connection_id,
-            stream: proxy_stream,
-        } = match proxy_connection_pool.fetch_connection().await {
+        let proxy_connection = match proxy_connection_pool.fetch_connection().await {
             Err(e) => {
                 Self::send_error_to_client(&client_connection_id, http_client_framed).await?;
                 return Err(anyhow!(e));
             },
             Ok(v) => v,
         };
-        let connected_proxy_address = proxy_stream.peer_addr()?;
+        let proxy_connection_id = proxy_connection.id.clone();
+        let connected_proxy_address = proxy_connection.peer_addr()?;
         let MessageFramedGenerateResult {
             message_framed_write,
             message_framed_read,
         } = MessageFramedGenerator::generate(
-            proxy_stream,
+            proxy_connection,
             configuration.message_framed_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE),
             configuration.compress().unwrap_or(true),
             rsa_crypto_fetcher,

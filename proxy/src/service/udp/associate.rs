@@ -10,6 +10,7 @@ use common::{
 };
 
 use futures::SinkExt;
+use tokio::net::TcpStream;
 use tracing::{info, instrument};
 
 use crate::config::ProxyConfig;
@@ -24,8 +25,8 @@ where
     pub user_token: String,
     pub source_address: NetAddress,
     pub agent_address: SocketAddr,
-    pub message_framed_read: MessageFramedRead<T>,
-    pub message_framed_write: MessageFramedWrite<T>,
+    pub message_framed_read: MessageFramedRead<T, TcpStream>,
+    pub message_framed_write: MessageFramedWrite<T, TcpStream>,
 }
 
 #[allow(unused)]
@@ -36,8 +37,8 @@ where
     pub connection_id: String,
     pub message_id: String,
     pub user_token: String,
-    pub message_framed_read: MessageFramedRead<T>,
-    pub message_framed_write: MessageFramedWrite<T>,
+    pub message_framed_read: MessageFramedRead<T, TcpStream>,
+    pub message_framed_write: MessageFramedWrite<T, TcpStream>,
     pub source_address: NetAddress,
 }
 

@@ -17,7 +17,7 @@ use pretty_hex::*;
 use tokio::net::{TcpStream, UdpSocket};
 use tracing::{debug, error, instrument};
 
-use crate::{config::AgentConfig, message::socks5::Socks5UdpDataPacket};
+use crate::{config::AgentConfig, message::socks5::Socks5UdpDataPacket, service::pool::ProxyConnection};
 
 const SIZE_64KB: usize = 65535;
 
@@ -31,8 +31,8 @@ where
     pub client_connection_id: String,
     pub proxy_connection_id: String,
     pub client_stream: TcpStream,
-    pub message_framed_write: MessageFramedWrite<T>,
-    pub message_framed_read: MessageFramedRead<T>,
+    pub message_framed_write: MessageFramedWrite<T, ProxyConnection>,
+    pub message_framed_read: MessageFramedRead<T, ProxyConnection>,
     pub client_address: NetAddress,
     pub target_address: NetAddress,
     pub init_data: Option<Vec<u8>>,

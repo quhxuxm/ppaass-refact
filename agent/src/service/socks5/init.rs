@@ -15,7 +15,7 @@ use tokio_util::codec::{Framed, FramedParts};
 use tracing::{debug, error, instrument};
 
 use crate::service::{
-    pool::ProxyConnectionPool,
+    pool::{ProxyConnection, ProxyConnectionPool},
     socks5::init::{
         tcp_connect::Socks5TcpConnectFlowResult,
         udp_associate::{Socks5UdpAssociateFlow, Socks5UdpAssociateFlowRequest, Socks5UdpAssociateFlowResult},
@@ -43,8 +43,8 @@ where
 {
     Tcp {
         client_stream: TcpStream,
-        message_framed_read: MessageFramedRead<T>,
-        message_framed_write: MessageFramedWrite<T>,
+        message_framed_read: MessageFramedRead<T, ProxyConnection>,
+        message_framed_write: MessageFramedWrite<T, ProxyConnection>,
         client_address: SocketAddr,
         source_address: NetAddress,
         target_address: NetAddress,
@@ -55,8 +55,8 @@ where
         associated_udp_socket: UdpSocket,
         associated_udp_address: SocketAddr,
         client_stream: TcpStream,
-        message_framed_read: MessageFramedRead<T>,
-        message_framed_write: MessageFramedWrite<T>,
+        message_framed_read: MessageFramedRead<T, ProxyConnection>,
+        message_framed_write: MessageFramedWrite<T, ProxyConnection>,
         client_address: NetAddress,
         proxy_address: SocketAddr,
         proxy_connection_id: String,

@@ -23,8 +23,8 @@ where
     pub source_address: NetAddress,
     pub target_address: NetAddress,
     pub agent_address: SocketAddr,
-    pub message_framed_read: MessageFramedRead<T>,
-    pub message_framed_write: MessageFramedWrite<T>,
+    pub message_framed_read: MessageFramedRead<T, TcpStream>,
+    pub message_framed_write: MessageFramedWrite<T, TcpStream>,
 }
 
 pub(crate) struct TcpConnectFlowResult<T>
@@ -32,8 +32,8 @@ where
     T: RsaCryptoFetcher,
 {
     pub target_stream: TcpStream,
-    pub message_framed_read: MessageFramedRead<T>,
-    pub message_framed_write: MessageFramedWrite<T>,
+    pub message_framed_read: MessageFramedRead<T, TcpStream>,
+    pub message_framed_write: MessageFramedWrite<T, TcpStream>,
     pub source_address: NetAddress,
     pub target_address: NetAddress,
     pub user_token: String,
