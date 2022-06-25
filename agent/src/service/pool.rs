@@ -57,6 +57,7 @@ impl Deref for ProxyConnection {
 impl PinnedDrop for ProxyConnection {
     fn drop(self: Pin<&mut Self>) {
         let this = self.project();
+        drop(this.stream);
         info!("Proxy connection [{}] closed.", this.id)
     }
 }
