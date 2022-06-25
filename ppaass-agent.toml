@@ -1,5 +1,5 @@
 agent_private_key_file = "AgentPrivateKey.pem"
-client_buffer_size = 131072
+client_buffer_size = 20971520
 client_stream_so_linger = 20
 compress = false
 init_proxy_connection_number = 64
@@ -7,7 +7,7 @@ log_dir = "./log"
 log_file = "ppaass-agent.log"
 max_blocking_threads = 128
 max_log_level = "INFO"
-message_framed_buffer_size = 2097152
+message_framed_buffer_size = 20971520
 min_proxy_connection_number = 32
 port = 10080
 proxy_addresses = ["127.0.0.1:80"]
