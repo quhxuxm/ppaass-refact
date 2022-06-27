@@ -641,6 +641,14 @@ impl TryFrom<Vec<u8>> for Message {
     }
 }
 
+impl TryFrom<BytesMut> for Message {
+    type Error = PpaassError;
+
+    fn try_from(value: BytesMut) -> Result<Self, Self::Error> {
+        value.freeze().try_into()
+    }
+}
+
 impl TryFrom<Bytes> for Message {
     type Error = PpaassError;
 

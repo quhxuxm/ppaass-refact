@@ -65,7 +65,7 @@ where
                     src.reserve(header_length);
                     return Ok(None);
                 }
-                let ppaass_flag = src.copy_to_bytes(PPAASS_FLAG.len());
+                let ppaass_flag = src.split_to(PPAASS_FLAG.len());
                 if !PPAASS_FLAG.eq(&ppaass_flag) {
                     error!(
                         "Fail to decode input message because of it dose not begin with ppaass flag, hex data:\n\n{}\n\n",
@@ -97,7 +97,7 @@ where
             pretty_hex(src)
         );
         self.status = DecodeStatus::Data(body_is_compressed, body_length);
-        let body_bytes = src.copy_to_bytes(body_length as usize);
+        let body_bytes = src.split_to(body_length as usize);
         trace!("Input message body bytes:\n\n{}\n\n", pretty_hex(&body_bytes));
         let mut message: Message = if body_is_compressed {
             debug!("Input message body is compressed.");
