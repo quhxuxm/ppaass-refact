@@ -7,6 +7,27 @@
         {
             "type": "lldb",
             "request": "launch",
+            "name": "Run 'ppaass-util'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=ppaass-util",
+                    "--package=util",
+                    "--release"
+                ],
+                "filter": {
+                    "name": "ppaass-util",
+                    "kind": "bin"
+                }
+            },
+            "cwd": "${workspaceFolder}",
+            "args": [
+                "--help"
+            ]
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
             "name": "Debug 'ppaass-proxy'",
             "cargo": {
                 "args": [

@@ -1,10 +1,13 @@
 [package]
+edition = "2021"
 name = "util"
 version = "0.1.0"
-edition = "2021"
-
+[[bin]]
+name = "ppaass-util"
+path = "src/main.rs"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-common = { path = "../common" }
 anyhow = "1"
+clap = {version = "3", features = ["derive"]}
+common = {path = "../common"}
