@@ -183,7 +183,7 @@ impl TryFrom<&mut Bytes> for NetAddress {
                     );
                     return Err(PpaassError::CodecError);
                 }
-                let host_bytes = value.copy_to_bytes(host_name_length);
+                let host_bytes = value.split_to(host_name_length);
                 let host = match String::from_utf8(host_bytes.to_vec()) {
                     Ok(v) => v,
                     Err(e) => {
@@ -394,7 +394,7 @@ impl TryFrom<&mut Bytes> for PayloadEncryptionType {
             error!("Fail to parse PayloadEncryptionType because of no remining in byte buffer.");
             return Err(PpaassError::CodecError);
         }
-        let enc_token = value.copy_to_bytes(enc_type_token_length);
+        let enc_token = value.split_to(enc_type_token_length);
         match enc_type_value {
             ENCRYPTION_TYPE_PLAIN => Ok(PayloadEncryptionType::Plain),
             ENCRYPTION_TYPE_BLOWFISH => Ok(PayloadEncryptionType::Blowfish(enc_token)),
@@ -545,7 +545,7 @@ impl TryFrom<Bytes> for MessagePayload {
             error!("Fail to parse message payload because of no remaining");
             return Err(PpaassError::CodecError);
         }
-        let data = value.copy_to_bytes(data_length);
+        let data = value.split_to(data_length);
         Ok(Self {
             payload_type,
             source_address,
@@ -662,7 +662,7 @@ impl TryFrom<Bytes> for Message {
             error!("Fail to parse message because of no remaining");
             return Err(PpaassError::CodecError);
         };
-        let id_bytes = value.copy_to_bytes(id_length as usize);
+        let id_bytes = value.split_to(id_length as usize);
         let id = match String::from_utf8(id_bytes.to_vec()) {
             Ok(v) => v,
             Err(e) => {
@@ -679,7 +679,7 @@ impl TryFrom<Bytes> for Message {
             error!("Fail to parse message because of no remaining");
             return Err(PpaassError::CodecError);
         };
-        let ref_id_bytes = value.copy_to_bytes(ref_id_length as usize);
+        let ref_id_bytes = value.split_to(ref_id_length as usize);
         let ref_id = match String::from_utf8(ref_id_bytes.to_vec()) {
             Ok(v) => v,
             Err(e) => {
@@ -692,7 +692,7 @@ impl TryFrom<Bytes> for Message {
             error!("Fail to parse message because of no remaining");
             return Err(PpaassError::CodecError);
         };
-        let connection_id_bytes = value.copy_to_bytes(connection_id_length as usize);
+        let connection_id_bytes = value.split_to(connection_id_length as usize);
         let connection_id = match String::from_utf8(connection_id_bytes.to_vec()) {
             Ok(v) => v,
             Err(e) => {
@@ -709,7 +709,7 @@ impl TryFrom<Bytes> for Message {
             error!("Fail to parse message because of no remaining");
             return Err(PpaassError::CodecError);
         };
-        let user_token_bytes = value.copy_to_bytes(user_token_length as usize);
+        let user_token_bytes = value.split_to(user_token_length as usize);
         let user_token = match String::from_utf8(user_token_bytes.to_vec()) {
             Ok(v) => v,
             Err(e) => {
@@ -732,7 +732,7 @@ impl TryFrom<Bytes> for Message {
         let payload = if payload_length == 0 {
             None
         } else if value.remaining() >= payload_length {
-            let payload_bytes = value.copy_to_bytes(payload_length as usize);
+            let payload_bytes = value.split_to(payload_length as usize);
             Some(payload_bytes)
         } else {
             error!("Fail to parse message because of no remaining");
