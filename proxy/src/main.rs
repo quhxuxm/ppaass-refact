@@ -2,20 +2,15 @@ extern crate core;
 
 use std::sync::Arc;
 
+use crate::server::ProxyServer;
 use anyhow::Result;
 use clap::Parser;
 use config::{ProxyArguments, ProxyConfig};
-use tracing::Level;
-
-use common::init_log;
-
-use crate::server::ProxyServer;
-
 pub(crate) mod config;
 pub(crate) mod server;
 pub(crate) mod service;
 
-fn init() -> ProxyConfig {
+fn prepare_configuration() -> ProxyConfig {
     let arguments = ProxyArguments::parse();
     let configuration_file_content = match arguments.configuration_file {
         None => {
@@ -57,14 +52,11 @@ fn init() -> ProxyConfig {
     }
     configuration
 }
+
 fn main() -> Result<()> {
-    let configuration = init();
-    let _tracing_guard = init_log(
-        configuration.log_dir().as_ref().expect("No log directory given."),
-        configuration.log_file().as_ref().expect("No log file name given."),
-        configuration.max_log_level().as_ref().unwrap_or(&Level::ERROR.to_string()),
-    );
+    let configuration = prepare_configuration();
     let proxy_server = ProxyServer::new(Arc::new(configuration))?;
     proxy_server.run()?;
+    proxy_server.shutdown();
     Ok(())
 }

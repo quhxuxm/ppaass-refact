@@ -6,11 +6,13 @@ use std::{
 };
 
 use anyhow::Result;
+use common::init_log;
 use tokio::net::TcpSocket;
 use tokio::runtime::Builder as TokioRuntimeBuilder;
 use tokio::runtime::Runtime as TokioRuntime;
 
-use tracing::{error, instrument};
+use tracing::{error, instrument, Level};
+use tracing_appender::non_blocking::WorkerGuard;
 
 use crate::{
     config::ProxyConfig,
@@ -23,6 +25,7 @@ const DEFAULT_SERVER_PORT: u16 = 80;
 pub(crate) struct ProxyServer {
     runtime: TokioRuntime,
     configuration: Arc<ProxyConfig>,
+    _log_guard: WorkerGuard,
 }
 
 impl ProxyServer {
@@ -34,9 +37,15 @@ impl ProxyServer {
             .thread_keep_alive(Duration::from_secs(configuration.thread_timeout().unwrap_or(2)))
             .max_blocking_threads(configuration.max_blocking_threads().unwrap_or(32))
             .worker_threads(configuration.thread_number().unwrap_or(1024));
+        let _log_guard = init_log(
+            configuration.log_dir().as_ref().expect("No log directory given."),
+            configuration.log_file().as_ref().expect("No log file name given."),
+            configuration.max_log_level().as_ref().unwrap_or(&Level::ERROR.to_string()),
+        );
         Ok(Self {
             runtime: runtime_builder.build()?,
             configuration,
+            _log_guard,
         })
     }
 
@@ -96,5 +105,9 @@ impl ProxyServer {
         let concrete_run_future = self.concrete_run();
         self.runtime.block_on(concrete_run_future)?;
         Ok(())
+    }
+
+    pub(crate) fn shutdown(self) {
+        self.runtime.shutdown_background();
     }
 }
