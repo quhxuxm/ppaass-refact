@@ -109,6 +109,7 @@ impl ProxyServer {
                     };
                     let proxy_rsa_crypto_fetcher = Arc::new(proxy_rsa_crypto_fetcher);
                     println!("ppaass-proxy is listening port: {} ", local_socket_address.port());
+                    info!("ppaass-proxy is listening port: {} ", local_socket_address.port());
                     loop {
                         let (agent_stream, agent_address) = match listener.accept().await {
                             Err(e) => {
