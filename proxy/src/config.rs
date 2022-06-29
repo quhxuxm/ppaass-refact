@@ -12,6 +12,36 @@ pub const DEFAULT_CONNECT_TARGET_TIMEOUT_SECONDS: u64 = 20;
 pub const DEFAULT_TARGET_STREAM_SO_LINGER: u64 = 20;
 
 #[derive(Serialize, Deserialize, Debug, Default)]
+pub(crate) struct ProxyLogConfig {
+    /// The log directory
+    log_dir: Option<String>,
+    /// The log file name prefix
+    log_file: Option<String>,
+    /// The max log level
+    max_log_level: Option<String>,
+}
+
+impl ProxyLogConfig {
+    pub fn log_dir(&self) -> &Option<String> {
+        &self.log_dir
+    }
+    pub fn set_log_dir(&mut self, log_dir: String) {
+        self.log_dir = Some(log_dir);
+    }
+    pub fn log_file(&self) -> &Option<String> {
+        &self.log_file
+    }
+    pub fn set_log_file(&mut self, log_file: String) {
+        self.log_file = Some(log_file)
+    }
+    pub fn max_log_level(&self) -> &Option<String> {
+        &self.max_log_level
+    }
+    pub fn set_max_log_level(&mut self, max_log_level: String) {
+        self.max_log_level = Some(max_log_level)
+    }
+}
+#[derive(Serialize, Deserialize, Debug, Default)]
 pub(crate) struct ProxyConfig {
     /// Port of the ppaass proxy
     port: Option<u16>,
@@ -32,14 +62,8 @@ pub(crate) struct ProxyConfig {
     max_blocking_threads: Option<usize>,
     /// The thread timeout
     thread_timeout: Option<u64>,
-    /// The log directory
-    log_dir: Option<String>,
-    /// The log file name prefix
-    log_file: Option<String>,
     /// Whether enable compressing
     compress: Option<bool>,
-    /// The max log level
-    max_log_level: Option<String>,
     agent_stream_so_linger: Option<u64>,
     target_stream_so_linger: Option<u64>,
     agent_connection_read_timeout: Option<u64>,
@@ -71,18 +95,7 @@ impl ProxyConfig {
     pub fn thread_timeout(&self) -> Option<u64> {
         self.thread_timeout
     }
-    pub fn log_dir(&self) -> &Option<String> {
-        &self.log_dir
-    }
-    pub fn set_log_dir(&mut self, log_dir: String) {
-        self.log_dir = Some(log_dir);
-    }
-    pub fn log_file(&self) -> &Option<String> {
-        &self.log_file
-    }
-    pub fn set_log_file(&mut self, log_file: String) {
-        self.log_file = Some(log_file)
-    }
+
     pub fn max_blocking_threads(&self) -> Option<usize> {
         self.max_blocking_threads
     }
@@ -92,12 +105,7 @@ impl ProxyConfig {
     pub fn set_compress(&mut self, compress: bool) {
         self.compress = Some(compress);
     }
-    pub fn max_log_level(&self) -> &Option<String> {
-        &self.max_log_level
-    }
-    pub fn set_max_log_level(&mut self, max_log_level: String) {
-        self.max_log_level = Some(max_log_level)
-    }
+
     pub fn rsa_root_dir(&self) -> &Option<String> {
         &self.rsa_root_dir
     }

@@ -16,32 +16,6 @@ impl FormatTime for LogTimer {
     }
 }
 
-pub fn init_log(directory: &str, file_name_prefix: &str, max_log_level: &str) -> (WorkerGuard, DefaultGuard) {
-    let file_appender = tracing_appender::rolling::daily(directory, file_name_prefix);
-    let (non_blocking, appender_guard) = tracing_appender::non_blocking(file_appender);
-    let log_level_filter = match LevelFilter::from_str(max_log_level) {
-        Err(e) => {
-            panic!("Fail to initialize log because of error: {:#?}", e);
-        },
-        Ok(v) => v,
-    };
-    let subscriber = Registry::default()
-        .with(
-            Layer::default()
-                .with_level(true)
-                .with_target(true)
-                .with_timer(LogTimer)
-                .with_thread_ids(true)
-                .with_file(true)
-                .with_ansi(false)
-                .with_line_number(true)
-                .with_writer(non_blocking),
-        )
-        .with(log_level_filter);
-    let subscriber_guard = tracing::subscriber::set_default(subscriber);
-    (appender_guard, subscriber_guard)
-}
-
 pub fn generate_uuid() -> String {
     let uuid_str = Uuid::new_v4().to_string();
     uuid_str.replace('-', "")

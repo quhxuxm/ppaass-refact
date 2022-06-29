@@ -1,9 +1,6 @@
-log_dir = "./log"
-log_file = "ppaass-proxy.log"
 max_blocking_threads = 128
-max_log_level = "INFO"
 message_framed_buffer_size = 20971520
-port = 80
+port = 90
 rsa_root_dir = "./rsa/"
 target_buffer_size = 20971520
 #port = 9999
