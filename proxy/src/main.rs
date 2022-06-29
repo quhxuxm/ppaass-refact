@@ -119,12 +119,16 @@ fn main() -> Result<()> {
             },
         };
         if let Err(e) = configuration_file_watch.watch(configuration_file_path, move |event| {
-            info!("Event happen on watching file:{:?}", event);
-            if let Event::Write(_) = event {
-                if let Err(e) = proxy_server_signal_sender_for_watch_configuration.send(ProxyServerSignal::Shutdown) {
-                    eprintln!("Fail to notice proxy server shutdown because of error: {:#?}", e);
-                };
+            info!("Event happen on watching file: {:?}", event);
+            if let Event::NoticeWrite(_) = event {
+                return;
             }
+            if let Event::Remove(_) = event {
+                return;
+            }
+            if let Err(e) = proxy_server_signal_sender_for_watch_configuration.send(ProxyServerSignal::Shutdown) {
+                eprintln!("Fail to notice proxy server shutdown because of error: {:#?}", e);
+            };
         }) {
             eprintln!("Fail to start proxy server configuration file watch because of error: {:#?}", e);
             return Err(anyhow!(e));
