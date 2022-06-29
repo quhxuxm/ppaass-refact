@@ -9,6 +9,33 @@ use serde_derive::Serialize;
 use tracing::error;
 
 #[derive(Serialize, Deserialize, Debug)]
+pub struct AgentLogConfig {
+    log_dir: Option<String>,
+    log_file: Option<String>,
+    max_log_level: Option<String>,
+}
+
+impl AgentLogConfig {
+    pub fn log_dir(&self) -> &Option<String> {
+        &self.log_dir
+    }
+    pub fn set_log_dir(&mut self, log_dir: String) {
+        self.log_dir = Some(log_dir);
+    }
+    pub fn log_file(&self) -> &Option<String> {
+        &self.log_file
+    }
+    pub fn set_log_file(&mut self, log_file: String) {
+        self.log_file = Some(log_file)
+    }
+    pub fn max_log_level(&self) -> &Option<String> {
+        &self.max_log_level
+    }
+    pub fn set_max_log_level(&mut self, max_log_level: String) {
+        self.max_log_level = Some(max_log_level)
+    }
+}
+#[derive(Serialize, Deserialize, Debug)]
 pub struct AgentConfig {
     port: Option<u16>,
     so_recv_buffer_size: Option<u32>,
@@ -20,9 +47,6 @@ pub struct AgentConfig {
     thread_number: Option<usize>,
     max_blocking_threads: Option<usize>,
     thread_timeout: Option<u64>,
-    log_dir: Option<String>,
-    log_file: Option<String>,
-    max_log_level: Option<String>,
     compress: Option<bool>,
     client_stream_so_linger: Option<u64>,
     proxy_stream_so_linger: Option<u64>,
@@ -75,29 +99,11 @@ impl AgentConfig {
     pub fn thread_timeout(&self) -> Option<u64> {
         self.thread_timeout
     }
-    pub fn log_dir(&self) -> &Option<String> {
-        &self.log_dir
-    }
-    pub fn set_log_dir(&mut self, log_dir: String) {
-        self.log_dir = Some(log_dir);
-    }
-    pub fn log_file(&self) -> &Option<String> {
-        &self.log_file
-    }
-    pub fn set_log_file(&mut self, log_file: String) {
-        self.log_file = Some(log_file)
-    }
     pub fn compress(&self) -> Option<bool> {
         self.compress
     }
     pub fn set_compress(&mut self, compress: bool) {
         self.compress = Some(compress);
-    }
-    pub fn max_log_level(&self) -> &Option<String> {
-        &self.max_log_level
-    }
-    pub fn set_max_log_level(&mut self, max_log_level: String) {
-        self.max_log_level = Some(max_log_level)
     }
     pub fn client_stream_so_linger(&self) -> Option<u64> {
         self.client_stream_so_linger

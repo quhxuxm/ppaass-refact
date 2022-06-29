@@ -1,11 +1,7 @@
-use std::str::FromStr;
-
 use chrono::Local;
 
-use tracing::{dispatcher::DefaultGuard, level_filters::LevelFilter};
-use tracing_appender::non_blocking::WorkerGuard;
-use tracing_subscriber::fmt::{time::FormatTime, Layer};
-use tracing_subscriber::{fmt::format::Writer, prelude::__tracing_subscriber_SubscriberExt, Registry};
+use tracing_subscriber::fmt::format::Writer;
+use tracing_subscriber::fmt::time::FormatTime;
 use uuid::Uuid;
 
 pub struct LogTimer;

@@ -11,12 +11,10 @@ use config::{ProxyArguments, ProxyConfig, ProxyLogConfig};
 use hotwatch::{Event, Hotwatch};
 use server::ProxyServerSignal;
 
-use tracing::{info, metadata::LevelFilter, Level};
+use tracing::Level;
+use tracing::{info, metadata::LevelFilter};
 use tracing_subscriber::Registry;
-use tracing_subscriber::{
-    fmt::{time::FormatTime, Layer},
-    prelude::__tracing_subscriber_SubscriberExt,
-};
+use tracing_subscriber::{fmt::Layer, prelude::__tracing_subscriber_SubscriberExt};
 pub(crate) mod config;
 pub(crate) mod server;
 pub(crate) mod service;
@@ -58,7 +56,45 @@ fn merge_arguments_and_config(arguments: &ProxyArguments, config: &mut ProxyConf
 
 fn main() -> Result<()> {
     let arguments = ProxyArguments::parse();
-    merge_arguments_and_config(&arguments, &mut configuration);
+    let mut log_configuration_file = std::fs::File::open("ppaass-proxy-log.toml").expect("Fail to read proxy log configuration file.");
+    let mut log_configuration_file_content = String::new();
+    if let Err(e) = log_configuration_file.read_to_string(&mut log_configuration_file_content) {
+        eprintln!("Fail to read proxy server log configuration file because of error: {:#?}", e);
+        return Err(anyhow!(e));
+    };
+    let mut log_configuration = toml::from_str::<ProxyLogConfig>(&log_configuration_file_content).expect("Fail to parse proxy log configuration file");
+
+    merge_arguments_and_log_config(&arguments, &mut log_configuration);
+    let log_directory = log_configuration.log_dir().as_ref().expect("No log directory given.");
+    let log_file = log_configuration.log_file().as_ref().expect("No log file name given.");
+    let default_log_level = &Level::ERROR.to_string();
+    let log_max_level = log_configuration.max_log_level().as_ref().unwrap_or(default_log_level);
+
+    let file_appender = tracing_appender::rolling::daily(log_directory, log_file);
+    let (non_blocking, _appender_guard) = tracing_appender::non_blocking(file_appender);
+    let log_level_filter = match LevelFilter::from_str(log_max_level) {
+        Err(e) => {
+            panic!("Fail to initialize log because of error: {:#?}", e);
+        },
+        Ok(v) => v,
+    };
+    let subscriber = Registry::default()
+        .with(
+            Layer::default()
+                .with_level(true)
+                .with_target(true)
+                .with_timer(LogTimer)
+                .with_thread_ids(true)
+                .with_file(true)
+                .with_ansi(false)
+                .with_line_number(true)
+                .with_writer(non_blocking),
+        )
+        .with(log_level_filter);
+    if let Err(e) = tracing::subscriber::set_global_default(subscriber) {
+        panic!("Fail to initialize tracing subscriber because of error: {:#?}", e);
+    };
+
     loop {
         let (proxy_server_signal_sender, proxy_server_signal_receiver) = channel();
         let proxy_server_signal_sender_for_watch_configuration = proxy_server_signal_sender.clone();
@@ -119,34 +155,6 @@ fn main() -> Result<()> {
             eprintln!("Fail to start proxy server rsa folder watch because of error: {:#?}", e);
             return Err(anyhow!(e));
         }
-        let log_directory = configuration.log_dir().as_ref().expect("No log directory given.");
-        let log_file = configuration.log_file().as_ref().expect("No log file name given.");
-        let log_max_level = configuration.max_log_level().as_ref().unwrap_or(&Level::ERROR.to_string());
-
-        let file_appender = tracing_appender::rolling::daily(log_directory, log_file);
-        let (non_blocking, appender_guard) = tracing_appender::non_blocking(file_appender);
-        let log_level_filter = match LevelFilter::from_str(log_max_level) {
-            Err(e) => {
-                panic!("Fail to initialize log because of error: {:#?}", e);
-            },
-            Ok(v) => v,
-        };
-        let subscriber = Registry::default()
-            .with(
-                Layer::default()
-                    .with_level(true)
-                    .with_target(true)
-                    .with_timer(LogTimer)
-                    .with_thread_ids(true)
-                    .with_file(true)
-                    .with_ansi(false)
-                    .with_line_number(true)
-                    .with_writer(non_blocking),
-            )
-            .with(log_level_filter);
-        if let Err(e) = tracing::subscriber::set_global_default(subscriber) {
-            panic!("Fail to initialize tracing subscriber because of error: {:#?}", e);
-        };
 
         if let Err(e) = proxy_server_signal_sender.send(ProxyServerSignal::Startup { configuration }) {
             eprintln!("Fail to send startup single to proxy server because of error: {:#?}", e);

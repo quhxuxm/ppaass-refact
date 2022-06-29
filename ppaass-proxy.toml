@@ -1,6 +1,6 @@
 max_blocking_threads = 128
 message_framed_buffer_size = 20971520
-port = 90
+port = 80
 rsa_root_dir = "./rsa/"
 target_buffer_size = 20971520
 #port = 9999
