@@ -1,113 +1,166 @@
-use std::net::SocketAddr;
 use std::time::Duration;
+use std::{net::SocketAddr, sync::mpsc::Receiver};
 use std::{
     net::{Ipv4Addr, SocketAddrV4},
     sync::Arc,
 };
 
-use anyhow::Result;
-use common::init_log;
-use tokio::net::TcpSocket;
-use tokio::runtime::Builder as TokioRuntimeBuilder;
-use tokio::runtime::Runtime as TokioRuntime;
-
-use tracing::{error, instrument, Level};
-use tracing_appender::non_blocking::WorkerGuard;
-
 use crate::{
     config::ProxyConfig,
     service::{AgentConnection, ProxyRsaCryptoFetcher},
 };
+use std::thread::JoinHandle as StdJoinHandler;
+use tokio::{net::TcpSocket, runtime::Builder as TokioRuntimeBuilder};
+
+use anyhow::anyhow;
+use anyhow::Result;
+use tracing::{error, info, instrument};
 
 const DEFAULT_SERVER_PORT: u16 = 80;
 
 #[derive(Debug)]
+pub(crate) enum ProxyServerSignal {
+    Startup { configuration: ProxyConfig },
+    Shutdown,
+}
+#[derive(Debug)]
 pub(crate) struct ProxyServer {
-    runtime: TokioRuntime,
-    configuration: Arc<ProxyConfig>,
-    _log_guard: WorkerGuard,
+    signal_receiver: Receiver<ProxyServerSignal>,
 }
 
 impl ProxyServer {
     #[instrument(skip_all)]
-    pub(crate) fn new(configuration: Arc<ProxyConfig>) -> Result<Self> {
-        let mut runtime_builder = TokioRuntimeBuilder::new_multi_thread();
-        runtime_builder
-            .enable_all()
-            .thread_keep_alive(Duration::from_secs(configuration.thread_timeout().unwrap_or(2)))
-            .max_blocking_threads(configuration.max_blocking_threads().unwrap_or(32))
-            .worker_threads(configuration.thread_number().unwrap_or(1024));
-        let _log_guard = init_log(
-            configuration.log_dir().as_ref().expect("No log directory given."),
-            configuration.log_file().as_ref().expect("No log file name given."),
-            configuration.max_log_level().as_ref().unwrap_or(&Level::ERROR.to_string()),
-        );
-        Ok(Self {
-            runtime: runtime_builder.build()?,
-            configuration,
-            _log_guard,
-        })
+    pub(crate) fn new(signal_receiver: Receiver<ProxyServerSignal>) -> Result<Self> {
+        Ok(Self { signal_receiver })
     }
 
-    #[instrument(skip_all)]
-    async fn concrete_run(&self) -> Result<()> {
-        let server_socket = TcpSocket::new_v4()?;
-        server_socket.set_reuseaddr(true)?;
-        if let Some(so_recv_buffer_size) = self.configuration.so_recv_buffer_size() {
-            server_socket.set_recv_buffer_size(so_recv_buffer_size)?;
-        }
-        if let Some(so_send_buffer_size) = self.configuration.so_send_buffer_size() {
-            server_socket.set_send_buffer_size(so_send_buffer_size)?
-        }
-        let local_socket_address = SocketAddr::V4(SocketAddrV4::new(
-            Ipv4Addr::new(0, 0, 0, 0),
-            self.configuration.port().unwrap_or(DEFAULT_SERVER_PORT),
-        ));
-        server_socket.bind(local_socket_address)?;
-        let listener = server_socket.listen(self.configuration.so_backlog().unwrap_or(1024))?;
-        let proxy_rsa_crypto_fetcher = ProxyRsaCryptoFetcher::new(self.configuration.clone())?;
-        let proxy_rsa_crypto_fetcher = Arc::new(proxy_rsa_crypto_fetcher);
-        println!("ppaass-proxy is listening port: {} ", local_socket_address.port());
-        loop {
-            let (agent_stream, agent_address) = match listener.accept().await {
-                Err(e) => {
-                    error!("Fail to accept agent connection because of error: {:#?}", e);
-                    continue;
-                },
-                Ok((agent_stream, agent_address)) => (agent_stream, agent_address),
-            };
-            if let Err(e) = agent_stream.set_nodelay(true) {
-                error!("Fail to set agent connection no delay because of error: {:#?}", e);
-                continue;
-            }
-            if let Some(so_linger) = self.configuration.agent_stream_so_linger() {
-                if let Err(e) = agent_stream.set_linger(Some(Duration::from_secs(so_linger))) {
-                    error!("Fail to set agent connection linger because of error: {:#?}", e);
-                    continue;
-                }
-            }
-            let proxy_rsa_crypto_fetcher = proxy_rsa_crypto_fetcher.clone();
-            let configuration = self.configuration.clone();
-            tokio::spawn(async move {
-                let agent_connection = AgentConnection::new(agent_stream, agent_address);
-                let agent_connection_id = agent_connection.get_id().to_string();
-                if let Err(e) = agent_connection.exec(proxy_rsa_crypto_fetcher, configuration).await {
-                    error!(
-                        "Error happen when handle agent connection: [{}], agent address:[{}], error:{:#?}",
-                        agent_connection_id, agent_address, e
-                    )
-                }
-            });
-        }
-    }
+    pub(crate) fn run(self) -> Result<StdJoinHandler<()>> {
+        let signal_receiver = self.signal_receiver;
+        let signal = signal_receiver.recv();
+        match signal {
+            Err(e) => {
+                println!("Proxy server going to shutdown because of error: {:#?}.", e);
+                error!("Proxy server going to shutdown because of error: {:#?}.", e);
+                return Err(anyhow!("Proxy server going to shutdown because of error: {:#?}.", e));
+            },
+            Ok(ProxyServerSignal::Shutdown) => {
+                println!("Proxy server going to shutdown.");
+                info!("Proxy server going to shutdown.");
+                return Err(anyhow!("Proxy server going to shutdown."));
+            },
+            Ok(ProxyServerSignal::Startup { configuration }) => {
+                println!("Proxy server going to startup.");
+                info!("Proxy server going to startup.");
+                let configuration = Arc::new(configuration);
 
-    pub(crate) fn run(&self) -> Result<()> {
-        let concrete_run_future = self.concrete_run();
-        self.runtime.block_on(concrete_run_future)?;
-        Ok(())
-    }
+                let mut runtime_builder = TokioRuntimeBuilder::new_multi_thread();
+                runtime_builder
+                    .enable_all()
+                    .thread_keep_alive(Duration::from_secs(configuration.thread_timeout().unwrap_or(2)))
+                    .max_blocking_threads(configuration.max_blocking_threads().unwrap_or(32))
+                    .worker_threads(configuration.thread_number().unwrap_or(1024));
 
-    pub(crate) fn shutdown(self) {
-        self.runtime.shutdown_background();
+                let runtime = runtime_builder.build()?;
+                runtime.spawn(async move {
+                    let server_socket = match TcpSocket::new_v4() {
+                        Err(e) => {
+                            error!("Fail to initialize server tcp socket because of error: {:#?}", e);
+                            return;
+                        },
+                        Ok(v) => v,
+                    };
+                    if let Err(e) = server_socket.set_reuseaddr(true) {
+                        error!("Fail to initialize server tcp socket reuse addr because of error: {:#?}", e);
+                        return;
+                    };
+                    if let Some(so_recv_buffer_size) = configuration.so_recv_buffer_size() {
+                        if let Err(e) = server_socket.set_recv_buffer_size(so_recv_buffer_size) {
+                            error!("Fail to initialize server tcp socket recv_buffer_size because of error: {:#?}", e);
+                            return;
+                        };
+                    }
+                    if let Some(so_send_buffer_size) = configuration.so_send_buffer_size() {
+                        if let Err(e) = server_socket.set_send_buffer_size(so_send_buffer_size) {
+                            error!("Fail to initialize server tcp socket send_buffer_size because of error: {:#?}", e);
+                            return;
+                        }
+                    }
+                    let local_socket_address = SocketAddr::V4(SocketAddrV4::new(
+                        Ipv4Addr::new(0, 0, 0, 0),
+                        configuration.port().unwrap_or(DEFAULT_SERVER_PORT),
+                    ));
+                    if let Err(e) = server_socket.bind(local_socket_address) {
+                        error!("Fail to bind server tcp socket on address {} because of error: {:#?}", local_socket_address, e);
+                        return;
+                    }
+                    let listener = match server_socket.listen(configuration.so_backlog().unwrap_or(1024)) {
+                        Err(e) => {
+                            error!("Fail to make tcp server tcp socket listen because of error: {:#?}", e);
+                            return;
+                        },
+                        Ok(v) => v,
+                    };
+                    let proxy_rsa_crypto_fetcher = match ProxyRsaCryptoFetcher::new(configuration.clone()) {
+                        Err(e) => {
+                            error!("Fail to start up proxy server because of error: {:#?}", e);
+                            return;
+                        },
+                        Ok(v) => v,
+                    };
+                    let proxy_rsa_crypto_fetcher = Arc::new(proxy_rsa_crypto_fetcher);
+                    println!("ppaass-proxy is listening port: {} ", local_socket_address.port());
+                    loop {
+                        let (agent_stream, agent_address) = match listener.accept().await {
+                            Err(e) => {
+                                error!("Fail to accept agent connection because of error: {:#?}", e);
+                                continue;
+                            },
+                            Ok((agent_stream, agent_address)) => (agent_stream, agent_address),
+                        };
+                        if let Err(e) = agent_stream.set_nodelay(true) {
+                            error!("Fail to set agent connection no delay because of error: {:#?}", e);
+                            continue;
+                        }
+                        let agent_stream_so_linger = configuration.agent_stream_so_linger();
+                        if let Some(so_linger) = agent_stream_so_linger.clone() {
+                            if let Err(e) = agent_stream.set_linger(Some(Duration::from_secs(so_linger))) {
+                                error!("Fail to set agent connection linger because of error: {:#?}", e);
+                                continue;
+                            }
+                        }
+                        let proxy_rsa_crypto_fetcher = proxy_rsa_crypto_fetcher.clone();
+                        let configuration = configuration.clone();
+                        tokio::spawn(async move {
+                            let agent_connection = AgentConnection::new(agent_stream, agent_address);
+                            let agent_connection_id = agent_connection.get_id().to_string();
+                            if let Err(e) = agent_connection.exec(proxy_rsa_crypto_fetcher, configuration).await {
+                                error!(
+                                    "Error happen when handle agent connection: [{}], agent address:[{}], error:{:#?}",
+                                    agent_connection_id, agent_address, e
+                                )
+                            }
+                        });
+                    }
+                });
+                let guard = std::thread::spawn(move || loop {
+                    match signal_receiver.recv() {
+                        Ok(ProxyServerSignal::Shutdown) => {
+                            println!("Proxy server going to shutdown.");
+                            info!("Proxy server going to shutdown.");
+                            runtime.shutdown_timeout(Duration::from_secs(60));
+                            break;
+                        },
+                        Ok(other_sighal) => {
+                            info!("Ignore other single when proxy server is running: {:?}", other_sighal);
+                        },
+                        Err(e) => {
+                            error!("Fail to receive proxy server signal because of error: {:#?}", e);
+                            break;
+                        },
+                    }
+                });
+                Ok(guard)
+            },
+        }
     }
 }

@@ -62,7 +62,7 @@ fn init() -> AgentConfig {
 
 fn main() -> Result<()> {
     let configuration = init();
-    let _tracing_guard = init_log(
+    let (_appender_guard, _subscriber_guard) = init_log(
         configuration.log_dir().as_ref().expect("No log directory given."),
         configuration.log_file().as_ref().expect("No log file name given."),
         configuration.max_log_level().as_ref().unwrap_or(&Level::ERROR.to_string()),

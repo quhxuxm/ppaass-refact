@@ -10,7 +10,8 @@ pub const DEFAULT_READ_AGENT_TIMEOUT_SECONDS: u64 = 20;
 pub const DEFAULT_CONNECT_TARGET_RETRY: u16 = 2;
 pub const DEFAULT_CONNECT_TARGET_TIMEOUT_SECONDS: u64 = 20;
 pub const DEFAULT_TARGET_STREAM_SO_LINGER: u64 = 20;
-#[derive(Serialize, Deserialize, Debug)]
+
+#[derive(Serialize, Deserialize, Debug, Default)]
 pub(crate) struct ProxyConfig {
     /// Port of the ppaass proxy
     port: Option<u16>,
