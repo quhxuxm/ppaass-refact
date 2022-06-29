@@ -11,7 +11,7 @@ use config::{ProxyArguments, ProxyConfig};
 use hotwatch::{Event, Hotwatch};
 use server::ProxyServerSignal;
 
-use tracing::Level;
+use tracing::{info, Level};
 
 pub(crate) mod config;
 pub(crate) mod server;
@@ -72,6 +72,7 @@ fn main() -> Result<()> {
             },
         };
         if let Err(e) = configuration_file_watch.watch(configuration_file_path, move |event| {
+            info!("Event happen on watching file:{:?}", event);
             if let Event::Write(_) = event {
                 if let Err(e) = proxy_server_signal_sender_for_watch_configuration.send(ProxyServerSignal::Shutdown) {
                     eprintln!("Fail to notice proxy server shutdown because of error: {:#?}", e);
@@ -79,7 +80,6 @@ fn main() -> Result<()> {
             }
         }) {
             eprintln!("Fail to start proxy server configuration file watch because of error: {:#?}", e);
-
             return Err(anyhow!(e));
         }
 
@@ -92,17 +92,16 @@ fn main() -> Result<()> {
         };
         let mut configuration = toml::from_str::<ProxyConfig>(&configuration_file_content).expect("Fail to parse proxy configuration file");
         merge_arguments_and_connfig(&arguments, &mut configuration);
-
         let rsa_dir_path = configuration.rsa_root_dir().as_ref().expect("Fail to read rsa root directory.");
         let mut rsa_folder_watch = match Hotwatch::new() {
             Err(e) => {
                 eprintln!("Fail to start proxy server rsa folder watch because of error: {:#?}", e);
-
                 return Err(anyhow!(e));
             },
             Ok(v) => v,
         };
-        if let Err(e) = rsa_folder_watch.watch(rsa_dir_path, move |_| {
+        if let Err(e) = rsa_folder_watch.watch(rsa_dir_path, move |event| {
+            info!("Event happen on watching dir:{:?}", event);
             if let Err(e) = proxy_server_signal_sender_for_watch_rsa.send(ProxyServerSignal::Shutdown) {
                 eprintln!("Fail to notice proxy server shutdown because of error: {:#?}", e);
             };
