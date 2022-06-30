@@ -20,6 +20,8 @@ pub(crate) mod service;
 
 pub(crate) mod config;
 
+const AGNT_LOG_CONFIG_FILE: &str = "ppaass-agent-log.toml";
+
 fn merge_arguments_and_log_config(arguments: &AgentArguments, log_config: &mut AgentLogConfig) {
     if let Some(ref log_dir) = arguments.log_dir {
         log_config.set_log_dir(log_dir.to_string())
@@ -34,7 +36,7 @@ fn merge_arguments_and_log_config(arguments: &AgentArguments, log_config: &mut A
 
 fn init() -> AgentConfig {
     let arguments = AgentArguments::parse();
-    let mut log_configuration_file = std::fs::File::open("ppaass-agent-log.toml").expect("Fail to read agnet log configuration file.");
+    let mut log_configuration_file = std::fs::File::open(AGNT_LOG_CONFIG_FILE).expect("Fail to read agnet log configuration file.");
     let mut log_configuration_file_content = String::new();
     log_configuration_file
         .read_to_string(&mut log_configuration_file_content)

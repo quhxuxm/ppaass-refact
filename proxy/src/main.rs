@@ -19,6 +19,8 @@ pub(crate) mod config;
 pub(crate) mod server;
 pub(crate) mod service;
 
+const PROXY_LOG_CONFIG_FILE: &str = "ppaass-proxy-log.toml";
+
 fn merge_arguments_and_log_config(arguments: &ProxyArguments, log_config: &mut ProxyLogConfig) {
     if let Some(ref log_dir) = arguments.log_dir {
         log_config.set_log_dir(log_dir.to_string())
@@ -56,7 +58,7 @@ fn merge_arguments_and_config(arguments: &ProxyArguments, config: &mut ProxyConf
 
 fn main() -> Result<()> {
     let arguments = ProxyArguments::parse();
-    let mut log_configuration_file = std::fs::File::open("ppaass-proxy-log.toml").expect("Fail to read proxy log configuration file.");
+    let mut log_configuration_file = std::fs::File::open(PROXY_LOG_CONFIG_FILE).expect("Fail to read proxy log configuration file.");
     let mut log_configuration_file_content = String::new();
     if let Err(e) = log_configuration_file.read_to_string(&mut log_configuration_file_content) {
         eprintln!("Fail to read proxy server log configuration file because of error: {:#?}", e);
