@@ -4,7 +4,7 @@ use std::{
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
-    time::Duration,
+    time::{Duration, Instant},
 };
 use std::{fmt::Debug, ops::Deref};
 
@@ -43,6 +43,7 @@ pub struct ProxyConnection {
     pub id: String,
     #[pin]
     pub stream: TcpStream,
+    pub active_instant: Instant,
 }
 
 impl Deref for ProxyConnection {
@@ -85,6 +86,27 @@ impl AsyncWrite for ProxyConnection {
         this.stream.poll_shutdown(cx)
     }
 }
+
+impl PartialOrd for ProxyConnection {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.active_instant.partial_cmp(&other.active_instant)
+    }
+}
+
+impl PartialEq for ProxyConnection {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
+impl Ord for ProxyConnection {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.active_instant.cmp(&other.active_instant)
+    }
+}
+
+impl Eq for ProxyConnection {}
+
 #[derive(Debug)]
 pub struct ProxyConnectionPool {
     pool: Arc<Mutex<VecDeque<Option<ProxyConnection>>>>,
@@ -212,7 +234,8 @@ impl ProxyConnectionPool {
                                             return;
                                         },
                                     };
-                                    let FramedParts { io: connection, .. } = framed.into_parts();
+                                    let FramedParts { io: mut connection, .. } = framed.into_parts();
+                                    connection.active_instant = Instant::now();
                                     if let Err(e) = available_stream_sender.send(connection).await {
                                         error!("Connection [{}] check fail because of error(send available stream): {:#?}", connection_id, e);
                                         return;
@@ -283,6 +306,7 @@ impl ProxyConnectionPool {
                         let proxy_connection = ProxyConnection {
                             id: proxy_connection_id.clone(),
                             stream: connected_stream,
+                            active_instant: Instant::now(),
                         };
                         if let Err(e) = pool_initialize_channel_sender.send(proxy_connection).await {
                             error!(
@@ -299,6 +323,7 @@ impl ProxyConnectionPool {
         while let Some(connection) = pool_initialize_channel_receiver.recv().await {
             pool.push_back(Some(connection));
         }
+        pool.make_contiguous().sort();
         debug!("Success to initialize proxy connection pool: {}", pool.len());
         Ok(())
     }
