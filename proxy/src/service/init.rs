@@ -84,6 +84,7 @@ impl InitializeFlow {
             MessageFramedReader::read(ReadMessageFramedRequest {
                 connection_id: connection_id.clone(),
                 message_framed_read,
+                timeout: None,
             }),
         )
         .await?;

@@ -133,6 +133,7 @@ impl ProxyConnectionPool {
                         let user_token = user_token.clone();
                         let rsa_crypto_fetcher = rsa_crypto_fetcher.clone();
                         let available_stream_sender = available_connection_sender.clone();
+                        let proxy_connection_check_timeout = configuration.proxy_connection_check_timeout().clone();
                         tokio::spawn(async move {
                             let MessageFramedGenerateResult {
                                 message_framed_write,
@@ -183,6 +184,7 @@ impl ProxyConnectionPool {
                             match MessageFramedReader::read(ReadMessageFramedRequest {
                                 connection_id: connection_id.clone(),
                                 message_framed_read,
+                                timeout: proxy_connection_check_timeout,
                             })
                             .await
                             {

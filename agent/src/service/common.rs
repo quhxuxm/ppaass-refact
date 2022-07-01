@@ -427,6 +427,7 @@ impl TcpRelayFlow {
             let read_proxy_message_result = MessageFramedReader::read(ReadMessageFramedRequest {
                 connection_id,
                 message_framed_read,
+                timeout: None,
             })
             .await;
             let proxy_raw_data = match read_proxy_message_result {

@@ -108,6 +108,7 @@ impl Socks5UdpAssociateFlow {
         match MessageFramedReader::read(ReadMessageFramedRequest {
             connection_id: proxy_connection_id.clone(),
             message_framed_read,
+            timeout: None,
         })
         .await
         {

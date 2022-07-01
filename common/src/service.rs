@@ -147,6 +147,7 @@ where
 {
     pub connection_id: String,
     pub message_framed_read: MessageFramedRead<T, S>,
+    pub timeout: Option<u64>,
 }
 
 #[derive(Debug)]
@@ -187,15 +188,26 @@ impl MessageFramedReader {
         let ReadMessageFramedRequest {
             connection_id,
             mut message_framed_read,
+            timeout,
         } = request;
-        let result = match message_framed_read.next().await {
-            None => {
+        let timeout_seconds = match timeout {
+            None => u64::MAX,
+            Some(v) => v,
+        };
+        let result = match tokio::time::timeout(Duration::from_secs(timeout_seconds), message_framed_read.next()).await {
+            Err(_) => {
+                return Err(ReadMessageFramedError {
+                    message_framed_read,
+                    source: PpaassError::TimeoutError { elapsed: timeout_seconds },
+                });
+            },
+            Ok(None) => {
                 return Ok(ReadMessageFramedResult {
                     content: None,
                     message_framed_read,
                 });
             },
-            Some(Ok(message)) => ReadMessageFramedResult {
+            Ok(Some(Ok(message))) => ReadMessageFramedResult {
                 content: Some(ReadMessageFramedResultContent {
                     message_id: message.id,
                     user_token: message.user_token,
@@ -224,7 +236,7 @@ impl MessageFramedReader {
                 }),
                 message_framed_read,
             },
-            Some(Err(e)) => {
+            Ok(Some(Err(e))) => {
                 error!("Connection [{}] fail to decode message because of error, error: {:#?}", connection_id, e);
                 return Err(ReadMessageFramedError {
                     message_framed_read,

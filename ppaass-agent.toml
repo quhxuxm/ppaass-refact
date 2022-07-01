@@ -11,6 +11,7 @@ port = 10080
 proxy_addresses = ["127.0.0.1:80"]
 #proxy_addresses = ["149.28.219.182:80"]
 proxy_connection_check_interval_seconds = 20
+proxy_connection_check_timeout = 2
 proxy_connection_number_incremental = 16
 #proxy_public_key_file = "ProxyPublicKey.pem"
 proxy_public_key_file = "ProxyPublicKey-quhao.pem"

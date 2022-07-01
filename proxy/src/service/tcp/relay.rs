@@ -174,6 +174,7 @@ impl TcpRelayFlow {
             let read_agent_message_result = MessageFramedReader::read(ReadMessageFramedRequest {
                 connection_id: connection_id.clone(),
                 message_framed_read,
+                timeout: None,
             })
             .await;
             let (message_framed_read_move_back, agent_data) = match read_agent_message_result {
