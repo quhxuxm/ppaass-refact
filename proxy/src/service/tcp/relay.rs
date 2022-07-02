@@ -164,7 +164,7 @@ impl TcpRelayFlow {
     #[instrument(skip_all, fields(connection_id, agent_address))]
     async fn relay_proxy_to_target<T>(
         connection_id: String, agent_address: SocketAddr, mut message_framed_read: MessageFramedRead<T, TcpStream>, mut target_stream_write: OwnedWriteHalf,
-        configuration: Arc<ProxyConfig>,
+        _configuration: Arc<ProxyConfig>,
     ) -> Result<(), TcpRelayP2TError<T>>
     where
         T: RsaCryptoFetcher + Send + Sync + Debug + 'static,
@@ -177,7 +177,7 @@ impl TcpRelayFlow {
                 timeout: None,
             })
             .await;
-            let (message_framed_read_move_back, agent_data) = match read_agent_message_result {
+            let (message_framed_read_move_back, mut agent_data) = match read_agent_message_result {
                 Err(ReadMessageFramedError { message_framed_read, source }) => {
                     error!(
                         "Connection [{}] error happen when relay data from proxy to target,  agent address={:?}, target address={:?}, error: {:#?}",
@@ -240,21 +240,33 @@ impl TcpRelayFlow {
                 },
             };
             message_framed_read = message_framed_read_move_back;
-            let agent_data_chunks = agent_data.chunks(configuration.target_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE) as usize);
-            for (_, chunk) in agent_data_chunks.enumerate() {
-                if let Err(e) = target_stream_write.write(chunk).await {
-                    let mut connection_closed = false;
-                    if let ErrorKind::ConnectionReset = e.kind() {
-                        connection_closed = true;
-                    }
-                    return Err(TcpRelayP2TError {
-                        message_framed_read,
-                        target_stream_write,
-                        source: anyhow!(e),
-                        connection_closed,
-                    });
-                };
+            if let Err(e) = target_stream_write.write_all_buf(&mut agent_data).await {
+                let mut connection_closed = false;
+                if let ErrorKind::ConnectionReset = e.kind() {
+                    connection_closed = true;
+                }
+                return Err(TcpRelayP2TError {
+                    message_framed_read,
+                    target_stream_write,
+                    source: anyhow!(e),
+                    connection_closed,
+                });
             }
+            // let agent_data_chunks = agent_data.chunks(configuration.target_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE) as usize);
+            // for (_, chunk) in agent_data_chunks.enumerate() {
+            //     if let Err(e) = target_stream_write.write(chunk).await {
+            //         let mut connection_closed = false;
+            //         if let ErrorKind::ConnectionReset = e.kind() {
+            //             connection_closed = true;
+            //         }
+            //         return Err(TcpRelayP2TError {
+            //             message_framed_read,
+            //             target_stream_write,
+            //             source: anyhow!(e),
+            //             connection_closed,
+            //         });
+            //     };
+            // }
             if let Err(e) = target_stream_write.flush().await {
                 let mut connection_closed = false;
                 if let ErrorKind::ConnectionReset = e.kind() {

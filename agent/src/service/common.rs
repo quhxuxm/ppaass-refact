@@ -35,7 +35,7 @@ use super::{
     pool::{ProxyConnection, ProxyConnectionPool},
 };
 
-pub const DEFAULT_BUFFER_SIZE: usize = 1024 * 64;
+pub const DEFAULT_BUFFER_SIZE: usize = 65535;
 
 pub const DEFAULT_CONNECT_PROXY_TIMEOUT_SECONDS: u64 = 20;
 
@@ -417,7 +417,7 @@ impl TcpRelayFlow {
     #[instrument(fields(connection_id), skip_all)]
     async fn relay_proxy_to_client<T>(
         connection_id: String, _target_address_t2a: NetAddress, mut message_framed_read: MessageFramedRead<T, ProxyConnection>,
-        mut client_stream_write: OwnedWriteHalf, configuration: Arc<AgentConfig>,
+        mut client_stream_write: OwnedWriteHalf, _configuration: Arc<AgentConfig>,
     ) -> Result<(), TcpRelayP2CError<T>>
     where
         T: RsaCryptoFetcher + Debug,
@@ -430,7 +430,7 @@ impl TcpRelayFlow {
                 timeout: None,
             })
             .await;
-            let proxy_raw_data = match read_proxy_message_result {
+            let mut proxy_raw_data = match read_proxy_message_result {
                 Err(ReadMessageFramedError { message_framed_read, source }) => {
                     return Err(TcpRelayP2CError {
                         message_framed_read,
@@ -479,22 +479,35 @@ impl TcpRelayFlow {
                 },
             };
 
-            let client_buffer_size = configuration.client_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE);
-            let proxy_raw_data_chunks = proxy_raw_data.chunks(client_buffer_size);
-            for (_, chunk) in proxy_raw_data_chunks.enumerate() {
-                if let Err(e) = client_stream_write.write(chunk).await {
-                    let mut connection_closed = false;
-                    if let ErrorKind::ConnectionReset = e.kind() {
-                        connection_closed = true;
-                    }
-                    return Err(TcpRelayP2CError {
-                        message_framed_read,
-                        client_stream_write,
-                        source: anyhow!(e),
-                        connection_closed,
-                    });
+            if let Err(e) = client_stream_write.write_all_buf(&mut proxy_raw_data).await {
+                let mut connection_closed = false;
+                if let ErrorKind::ConnectionReset = e.kind() {
+                    connection_closed = true;
                 }
-            }
+                return Err(TcpRelayP2CError {
+                    message_framed_read,
+                    client_stream_write,
+                    source: anyhow!(e),
+                    connection_closed,
+                });
+            };
+
+            // let client_buffer_size = configuration.client_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE);
+            // let proxy_raw_data_chunks = proxy_raw_data.chunks(client_buffer_size);
+            // for (_, chunk) in proxy_raw_data_chunks.enumerate() {
+            //     if let Err(e) = client_stream_write.write_all(chunk).await {
+            //         let mut connection_closed = false;
+            //         if let ErrorKind::ConnectionReset = e.kind() {
+            //             connection_closed = true;
+            //         }
+            //         return Err(TcpRelayP2CError {
+            //             message_framed_read,
+            //             client_stream_write,
+            //             source: anyhow!(e),
+            //             connection_closed,
+            //         });
+            //     }
+            // }
             if let Err(e) = client_stream_write.flush().await {
                 return Err(TcpRelayP2CError {
                     message_framed_read,
