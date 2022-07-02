@@ -252,21 +252,6 @@ impl TcpRelayFlow {
                     connection_closed,
                 });
             }
-            // let agent_data_chunks = agent_data.chunks(configuration.target_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE) as usize);
-            // for (_, chunk) in agent_data_chunks.enumerate() {
-            //     if let Err(e) = target_stream_write.write(chunk).await {
-            //         let mut connection_closed = false;
-            //         if let ErrorKind::ConnectionReset = e.kind() {
-            //             connection_closed = true;
-            //         }
-            //         return Err(TcpRelayP2TError {
-            //             message_framed_read,
-            //             target_stream_write,
-            //             source: anyhow!(e),
-            //             connection_closed,
-            //         });
-            //     };
-            // }
             if let Err(e) = target_stream_write.flush().await {
                 let mut connection_closed = false;
                 if let ErrorKind::ConnectionReset = e.kind() {

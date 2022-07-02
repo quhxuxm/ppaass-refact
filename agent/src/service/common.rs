@@ -495,23 +495,6 @@ impl TcpRelayFlow {
                     connection_closed,
                 });
             };
-
-            // let client_buffer_size = configuration.client_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE);
-            // let proxy_raw_data_chunks = proxy_raw_data.chunks(client_buffer_size);
-            // for (_, chunk) in proxy_raw_data_chunks.enumerate() {
-            //     if let Err(e) = client_stream_write.write_all(chunk).await {
-            //         let mut connection_closed = false;
-            //         if let ErrorKind::ConnectionReset = e.kind() {
-            //             connection_closed = true;
-            //         }
-            //         return Err(TcpRelayP2CError {
-            //             message_framed_read,
-            //             client_stream_write,
-            //             source: anyhow!(e),
-            //             connection_closed,
-            //         });
-            //     }
-            // }
             if let Err(e) = client_stream_write.flush().await {
                 return Err(TcpRelayP2CError {
                     message_framed_read,
