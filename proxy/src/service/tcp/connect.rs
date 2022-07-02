@@ -86,7 +86,7 @@ impl TcpConnectFlow {
                 };
                 match MessageFramedWriter::write(WriteMessageFramedRequest {
                     message_framed_write,
-                    message_payload: Some(connect_fail_payload),
+                    message_payload: Some(vec![connect_fail_payload]),
                     payload_encryption_type,
                     user_token: user_token.clone(),
                     ref_id: Some(message_id),
@@ -120,7 +120,7 @@ impl TcpConnectFlow {
         };
         let message_framed_write = match MessageFramedWriter::write(WriteMessageFramedRequest {
             message_framed_write,
-            message_payload: Some(connect_success_payload),
+            message_payload: Some(vec![connect_success_payload]),
             payload_encryption_type,
             user_token: user_token.clone(),
             ref_id: Some(message_id.clone()),

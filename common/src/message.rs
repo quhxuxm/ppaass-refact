@@ -3,6 +3,8 @@ use std::{
     collections::vec_deque::Iter,
     fmt::{Debug, Display, Formatter},
     mem::size_of,
+    pin::Pin,
+    task::{Context, Poll},
 };
 use std::{
     io::Cursor,
@@ -13,6 +15,8 @@ use std::{ops::Deref, str::FromStr};
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 
+use futures::{Stream, TryStream};
+use pin_project::pin_project;
 use pretty_hex::*;
 use rsa::pkcs8::der::bigint::generic_array::typenum::PowerOfTwo;
 use tracing::error;
@@ -785,5 +789,39 @@ impl From<Message> for Bytes {
             },
         }
         result.into()
+    }
+}
+
+#[pin_project]
+pub struct MessageStream {
+    #[pin]
+    inner: Vec<Option<Message>>,
+    index: usize,
+}
+
+impl MessageStream {
+    pub fn new(messages: Vec<Message>) -> Self {
+        let inner = messages.into_iter().map(|item| Some(item)).collect::<Vec<Option<Message>>>();
+        Self { inner, index: 0 }
+    }
+}
+
+impl Stream for MessageStream {
+    type Item = Result<Message, PpaassError>;
+
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let mut this = self.project();
+        let mut index = *this.index;
+        let mut inner_item = this.inner.get_mut().get_mut(index);
+        match inner_item {
+            None => return Poll::Ready(None),
+            Some(mut value) => {
+                let message = value.take();
+                index += 1;
+                *this.index = index;
+                let result = message.ok_or(PpaassError::CodecError);
+                return Poll::Ready(Some(result));
+            },
+        }
     }
 }

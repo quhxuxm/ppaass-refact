@@ -114,12 +114,12 @@ impl Socks5UdpRelayFlow {
                             ref_id: Some(client_connection_id_a2p.clone()),
                             user_token: configuration.user_token().clone().unwrap(),
                             payload_encryption_type,
-                            message_payload: Some(MessagePayload {
+                            message_payload: Some(vec![MessagePayload {
                                 source_address: Some(client_address_a2p.clone()),
                                 target_address: Some(udp_destination_address.into()),
                                 payload_type: PayloadType::AgentPayload(AgentMessagePayloadTypeValue::UdpData),
                                 data: socks5_udp_data.data,
-                            }),
+                            }]),
                         })
                         .await;
                         match write_agent_message_result {

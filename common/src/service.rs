@@ -16,7 +16,7 @@ use tokio_util::codec::Framed;
 
 use tracing::{debug, error, info, instrument, trace};
 
-use crate::{crypto::RsaCryptoFetcher, generate_uuid, Message, MessageCodec, MessagePayload, PayloadEncryptionType, PpaassError};
+use crate::{crypto::RsaCryptoFetcher, generate_uuid, Message, MessageCodec, MessagePayload, MessageStream, PayloadEncryptionType, PpaassError};
 
 pub type MessageFramedRead<T, S> = SplitStream<Framed<S, MessageCodec<T>>>;
 pub type MessageFramedWrite<T, S> = SplitSink<Framed<S, MessageCodec<T>>, Message>;
@@ -54,7 +54,7 @@ where
     S: AsyncRead + AsyncWrite,
 {
     pub message_framed_write: MessageFramedWrite<T, S>,
-    pub message_payload: Option<MessagePayload>,
+    pub message_payload: Option<Vec<MessagePayload>>,
     pub ref_id: Option<String>,
     pub connection_id: Option<String>,
     pub user_token: String,
@@ -112,17 +112,36 @@ impl MessageFramedWriter {
             user_token,
             payload_encryption_type,
         } = request;
-        let message = match message_payload {
-            None => Message::new(generate_uuid(), ref_id, connection_id, user_token, payload_encryption_type, None::<Bytes>),
-            Some(payload) => {
-                let message = Message::new(generate_uuid(), ref_id, connection_id, user_token, payload_encryption_type, Some(payload));
-                debug!("Write message to remote:\n\n{:?}\n\n", message);
-                trace!("Write message payload to remote:\n\n{:#?}\n\n", message.payload);
-                message
+        let messages = match message_payload {
+            None => vec![Message::new(
+                generate_uuid(),
+                ref_id,
+                connection_id,
+                user_token,
+                payload_encryption_type,
+                None::<Bytes>,
+            )],
+            Some(payloads) => {
+                let mut messages = Vec::new();
+                for p in payloads {
+                    let message = Message::new(
+                        generate_uuid(),
+                        ref_id.clone(),
+                        connection_id.clone(),
+                        user_token.clone(),
+                        payload_encryption_type.clone(),
+                        Some(p),
+                    );
+                    debug!("Write message to remote:\n\n{:?}\n\n", message);
+                    trace!("Write message payload to remote:\n\n{:#?}\n\n", message.payload);
+                    messages.push(message);
+                }
+                messages
             },
         };
         let mut message_framed_write = message_framed_write;
-        if let Err(e) = message_framed_write.send(message).await {
+        let mut messages = MessageStream::new(messages);
+        if let Err(e) = message_framed_write.send_all(&mut messages).await {
             error!("Fail to write message because of error: {:#?}", e);
             if let Err(e) = message_framed_write.flush().await {
                 error!("Fail to flush message because of error: {:#?}", e);

@@ -75,7 +75,7 @@ impl UdpAssociateFlow {
         };
         let message_framed_write = match MessageFramedWriter::write(WriteMessageFramedRequest {
             message_framed_write,
-            message_payload: Some(udp_associate_success_payload),
+            message_payload: Some(vec![udp_associate_success_payload]),
             payload_encryption_type,
             user_token: user_token.clone(),
             ref_id: Some(message_id.clone()),
