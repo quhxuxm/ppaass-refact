@@ -374,35 +374,39 @@ impl TcpRelayFlow {
             };
             let payload_data = client_buffer.split().freeze();
             let payload_data_chunks = payload_data.chunks(configuration.message_framed_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE));
+            let mut payloads = vec![];
             for (_, chunk) in payload_data_chunks.enumerate() {
                 let chunk_data = Bytes::copy_from_slice(chunk);
-                let write_agent_message_result = MessageFramedWriter::write(WriteMessageFramedRequest {
-                    connection_id: Some(connection_id.clone()),
-                    message_framed_write,
-                    ref_id: Some(connection_id.clone()),
-                    user_token: configuration.user_token().clone().unwrap(),
-                    payload_encryption_type: payload_encryption_type.clone(),
-                    message_payload: Some(vec![MessagePayload {
-                        source_address: Some(source_address_a2t.clone()),
-                        target_address: Some(target_address_a2t.clone()),
-                        payload_type: PayloadType::AgentPayload(AgentMessagePayloadTypeValue::TcpData),
-                        data: chunk_data,
-                    }]),
-                })
-                .await;
-                message_framed_write = match write_agent_message_result {
-                    Err(WriteMessageFramedError { message_framed_write, source }) => {
-                        error!("Fail to write agent message to proxy because of error: {:#?}", source);
-                        return Err(TcpRelayC2PError {
-                            message_framed_write,
-                            client_stream_read,
-                            source: anyhow!(source),
-                            connection_closed: true,
-                        });
-                    },
-                    Ok(WriteMessageFramedResult { message_framed_write }) => message_framed_write,
+                let payload = MessagePayload {
+                    source_address: Some(source_address_a2t.clone()),
+                    target_address: Some(target_address_a2t.clone()),
+                    payload_type: PayloadType::AgentPayload(AgentMessagePayloadTypeValue::TcpData),
+                    data: chunk_data,
                 };
+                payloads.push(payload)
             }
+
+            let write_agent_message_result = MessageFramedWriter::write(WriteMessageFramedRequest {
+                connection_id: Some(connection_id.clone()),
+                message_framed_write,
+                ref_id: Some(connection_id.clone()),
+                user_token: configuration.user_token().clone().unwrap(),
+                payload_encryption_type: payload_encryption_type.clone(),
+                message_payload: Some(payloads),
+            })
+            .await;
+            message_framed_write = match write_agent_message_result {
+                Err(WriteMessageFramedError { message_framed_write, source }) => {
+                    error!("Fail to write agent message to proxy because of error: {:#?}", source);
+                    return Err(TcpRelayC2PError {
+                        message_framed_write,
+                        client_stream_read,
+                        source: anyhow!(source),
+                        connection_closed: true,
+                    });
+                },
+                Ok(WriteMessageFramedResult { message_framed_write }) => message_framed_write,
+            };
             if let Err(e) = message_framed_write.flush().await {
                 return Err(TcpRelayC2PError {
                     message_framed_write,

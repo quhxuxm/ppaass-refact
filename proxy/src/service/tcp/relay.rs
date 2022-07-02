@@ -365,6 +365,7 @@ impl TcpRelayFlow {
             };
             let payload_data = target_buffer.split().freeze();
             let payload_data_chunks = payload_data.chunks(configuration.message_framed_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE));
+            let mut payloads = vec![];
             for (_, chunk) in payload_data_chunks.enumerate() {
                 let chunk_data = Bytes::copy_from_slice(chunk);
                 let proxy_message_payload = MessagePayload {
@@ -373,51 +374,53 @@ impl TcpRelayFlow {
                     payload_type: PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::TcpData),
                     data: chunk_data,
                 };
-                let payload_encryption_type = match PayloadEncryptionTypeSelector::select(PayloadEncryptionTypeSelectRequest {
-                    encryption_token: generate_uuid().into(),
-                    user_token: user_token.clone(),
-                })
-                .await
-                {
-                    Err(e) => {
-                        error!(
+                payloads.push(proxy_message_payload)
+            }
+
+            let payload_encryption_type = match PayloadEncryptionTypeSelector::select(PayloadEncryptionTypeSelectRequest {
+                encryption_token: generate_uuid().into(),
+                user_token: user_token.clone(),
+            })
+            .await
+            {
+                Err(e) => {
+                    error!(
                             "Connection [{}] fail to select payload encryption type when transfer data from target to proxy, target address={:?}, source address={:?}.",
                             connection_id, target_address, source_address
                         );
-                        return Err(TcpRelayT2PError {
-                            message_framed_write,
-                            target_stream_read,
-                            source: anyhow!(e),
-                            connection_closed: false,
-                        });
-                    },
-                    Ok(PayloadEncryptionTypeSelectResult { payload_encryption_type, .. }) => payload_encryption_type,
-                };
-                message_framed_write = match MessageFramedWriter::write(WriteMessageFramedRequest {
-                    message_framed_write,
-                    ref_id: Some(agent_tcp_connect_message_id.clone()),
-                    user_token: user_token.clone(),
-                    payload_encryption_type,
-                    message_payload: Some(vec![proxy_message_payload]),
-                    connection_id: Some(connection_id.clone()),
-                })
-                .await
-                {
-                    Err(WriteMessageFramedError { message_framed_write, source }) => {
-                        error!(
-                            "Connection [{}] fail to write data from target to proxy, target address={:?}, source address={:?}, error: {:#?}.",
-                            connection_id, target_address, source_address, source
-                        );
-                        return Err(TcpRelayT2PError {
-                            message_framed_write,
-                            target_stream_read,
-                            source: anyhow!(source),
-                            connection_closed: true,
-                        });
-                    },
-                    Ok(WriteMessageFramedResult { message_framed_write, .. }) => message_framed_write,
-                };
-            }
+                    return Err(TcpRelayT2PError {
+                        message_framed_write,
+                        target_stream_read,
+                        source: anyhow!(e),
+                        connection_closed: false,
+                    });
+                },
+                Ok(PayloadEncryptionTypeSelectResult { payload_encryption_type, .. }) => payload_encryption_type,
+            };
+            message_framed_write = match MessageFramedWriter::write(WriteMessageFramedRequest {
+                message_framed_write,
+                ref_id: Some(agent_tcp_connect_message_id.clone()),
+                user_token: user_token.clone(),
+                payload_encryption_type,
+                message_payload: Some(payloads),
+                connection_id: Some(connection_id.clone()),
+            })
+            .await
+            {
+                Err(WriteMessageFramedError { message_framed_write, source }) => {
+                    error!(
+                        "Connection [{}] fail to write data from target to proxy, target address={:?}, source address={:?}, error: {:#?}.",
+                        connection_id, target_address, source_address, source
+                    );
+                    return Err(TcpRelayT2PError {
+                        message_framed_write,
+                        target_stream_read,
+                        source: anyhow!(source),
+                        connection_closed: true,
+                    });
+                },
+                Ok(WriteMessageFramedResult { message_framed_write, .. }) => message_framed_write,
+            };
         }
     }
 }
