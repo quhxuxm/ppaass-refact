@@ -801,7 +801,7 @@ pub struct MessageStream {
 }
 
 impl MessageStream {
-    pub fn new(messages: Vec<Message>) -> Self {
+    fn new(messages: Vec<Message>) -> Self {
         let inner = messages.into_iter().map(|item| Some(item)).collect::<Vec<_>>();
         Self { inner, index: 0 }
     }
@@ -823,5 +823,11 @@ impl Stream for MessageStream {
             });
             return Poll::Ready(Some(result));
         })
+    }
+}
+
+impl From<Vec<Message>> for MessageStream {
+    fn from(messages: Vec<Message>) -> Self {
+        MessageStream::new(messages)
     }
 }

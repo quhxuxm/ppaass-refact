@@ -136,8 +136,8 @@ impl MessageFramedWriter {
                 .collect::<Vec<_>>(),
         };
         let mut message_framed_write = message_framed_write;
-        let mut messages = MessageStream::new(messages);
-        if let Err(e) = message_framed_write.send_all(&mut messages).await {
+        let mut messages_stream: MessageStream = messages.into();
+        if let Err(e) = message_framed_write.send_all(&mut messages_stream).await {
             error!("Fail to write message because of error: {:#?}", e);
             if let Err(e) = message_framed_write.flush().await {
                 error!("Fail to flush message because of error: {:#?}", e);

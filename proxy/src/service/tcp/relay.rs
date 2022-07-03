@@ -83,30 +83,30 @@ impl TcpRelayFlow {
             target_address,
         } = request;
         let (target_stream_read, target_stream_write) = target_stream.into_split();
-        let connection_id_clone = connection_id.clone();
+        let connection_id_p2t = connection_id.clone();
         tokio::spawn(async move {
             if let Err(TcpRelayP2TError {
                 mut target_stream_write,
                 source,
                 connection_closed,
                 ..
-            }) = Self::relay_proxy_to_target(connection_id_clone.clone(), agent_address, message_framed_read, target_stream_write).await
+            }) = Self::relay_proxy_to_target(&connection_id_p2t, agent_address, message_framed_read, target_stream_write).await
             {
                 error!(
                     "Connection [{}] error happen when relay data from proxy to target, error: {:#?}",
-                    connection_id_clone, source
+                    connection_id_p2t, source
                 );
                 if !connection_closed {
                     if let Err(e) = target_stream_write.flush().await {
                         error!(
                             "Connection [{}] fail to flush target stream writer when relay data from proxy to target have error:{:#?}",
-                            connection_id_clone, e
+                            connection_id_p2t, e
                         );
                     };
                     if let Err(e) = target_stream_write.shutdown().await {
                         error!(
                             "Connection [{}] fail to shutdown target stream writer when relay data from proxy to target have error:{:#?}",
-                            connection_id_clone, e
+                            connection_id_p2t, e
                         );
                     };
                 }
@@ -119,10 +119,10 @@ impl TcpRelayFlow {
                 connection_closed,
                 ..
             }) = Self::relay_target_to_proxy(
-                connection_id.clone(),
+                &connection_id,
                 message_framed_write,
-                agent_tcp_connect_message_id,
-                user_token,
+                &agent_tcp_connect_message_id,
+                &user_token,
                 source_address,
                 target_address,
                 target_stream_read,
@@ -155,7 +155,7 @@ impl TcpRelayFlow {
 
     #[instrument(skip_all, fields(connection_id, agent_address))]
     async fn relay_proxy_to_target<T>(
-        connection_id: String, agent_address: SocketAddr, mut message_framed_read: MessageFramedRead<T, TcpStream>, mut target_stream_write: OwnedWriteHalf,
+        connection_id: &str, agent_address: SocketAddr, mut message_framed_read: MessageFramedRead<T, TcpStream>, mut target_stream_write: OwnedWriteHalf,
     ) -> Result<(), TcpRelayP2TError<T>>
     where
         T: RsaCryptoFetcher + Send + Sync + Debug + 'static,
@@ -163,7 +163,7 @@ impl TcpRelayFlow {
         loop {
             let connection_id = connection_id.clone();
             let read_agent_message_result = MessageFramedReader::read(ReadMessageFramedRequest {
-                connection_id: connection_id.clone(),
+                connection_id: connection_id.to_string(),
                 message_framed_read,
                 timeout: None,
             })
@@ -260,7 +260,7 @@ impl TcpRelayFlow {
 
     #[instrument(skip_all, fields(connection_id, agent_connect_message_source_address, agent_connect_message_target_address))]
     async fn relay_target_to_proxy<T>(
-        connection_id: String, mut message_framed_write: MessageFramedWrite<T, TcpStream>, agent_tcp_connect_message_id: String, user_token: String,
+        connection_id: &str, mut message_framed_write: MessageFramedWrite<T, TcpStream>, agent_tcp_connect_message_id: &str, user_token: &str,
         agent_connect_message_source_address: NetAddress, agent_connect_message_target_address: NetAddress, mut target_stream_read: OwnedReadHalf,
         configuration: Arc<ProxyConfig>,
     ) -> Result<(), TcpRelayT2PError<T>>
@@ -355,7 +355,7 @@ impl TcpRelayFlow {
 
             let payload_encryption_type = match PayloadEncryptionTypeSelector::select(PayloadEncryptionTypeSelectRequest {
                 encryption_token: generate_uuid().into(),
-                user_token: user_token.clone(),
+                user_token: user_token.to_string(),
             })
             .await
             {
@@ -375,11 +375,11 @@ impl TcpRelayFlow {
             };
             message_framed_write = match MessageFramedWriter::write(WriteMessageFramedRequest {
                 message_framed_write,
-                ref_id: Some(agent_tcp_connect_message_id.clone()),
-                user_token: user_token.clone(),
+                ref_id: Some(agent_tcp_connect_message_id.to_string()),
+                user_token: user_token.to_string(),
                 payload_encryption_type,
                 message_payloads: Some(payloads),
-                connection_id: Some(connection_id.clone()),
+                connection_id: Some(connection_id.to_string()),
             })
             .await
             {
