@@ -1,11 +1,11 @@
 #agent_private_key_file = "AgentPrivateKey.pem"
 agent_private_key_file = "AgentPrivateKey-quhao.pem"
-client_buffer_size = 20971520
+client_buffer_size = 2097152
 client_stream_so_linger = 20
 compress = false
 init_proxy_connection_number = 64
 max_blocking_threads = 128
-message_framed_buffer_size = 20971520
+message_framed_buffer_size = 2097152
 min_proxy_connection_number = 32
 port = 10080
 proxy_addresses = ["127.0.0.1:80"]
