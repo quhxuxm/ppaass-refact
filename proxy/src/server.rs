@@ -149,14 +149,15 @@ impl ProxyServer {
                             println!("Proxy server going to shutdown.");
                             info!("Proxy server going to shutdown.");
                             runtime.shutdown_timeout(Duration::from_secs(60));
-                            break;
+                            return;
                         },
                         Ok(other_sighal) => {
                             info!("Ignore other single when proxy server is running: {:?}", other_sighal);
                         },
                         Err(e) => {
                             error!("Fail to receive proxy server signal because of error: {:#?}", e);
-                            break;
+                            runtime.shutdown_timeout(Duration::from_secs(60));
+                            return;
                         },
                     }
                 });
