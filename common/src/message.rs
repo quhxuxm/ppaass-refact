@@ -2,6 +2,7 @@
 use std::{
     collections::vec_deque::Iter,
     fmt::{Debug, Display, Formatter},
+    io::{Error, ErrorKind},
     mem::size_of,
     pin::Pin,
     task::{Context, Poll},
@@ -813,20 +814,14 @@ impl Stream for MessageStream {
         let mut this = self.project();
         let mut index = *this.index;
         let mut inner_item = this.inner.get_mut().get_mut(index);
-        match inner_item {
-            None => return Poll::Ready(None),
-            Some(mut value) => {
-                let message = value.take();
-                index += 1;
-                *this.index = index;
-                let result = message.ok_or(PpaassError::IoError {
-                    source: std::io::Error::new(
-                        std::io::ErrorKind::InvalidData,
-                        "Fail to convert message stream because of item is a none value.",
-                    ),
-                });
-                return Poll::Ready(Some(result));
-            },
-        }
+        inner_item.map_or(Poll::Ready(None), |value| {
+            let message = value.take();
+            index += 1;
+            *this.index = index;
+            let result = message.ok_or(PpaassError::IoError {
+                source: Error::new(ErrorKind::InvalidData, "Fail to convert message stream because of item is a none value."),
+            });
+            return Poll::Ready(Some(result));
+        })
     }
 }

@@ -83,7 +83,6 @@ impl TcpRelayFlow {
             target_address,
         } = request;
         let (target_stream_read, target_stream_write) = target_stream.into_split();
-        let configuration_clone = configuration.clone();
         let connection_id_clone = connection_id.clone();
         tokio::spawn(async move {
             if let Err(TcpRelayP2TError {
@@ -91,14 +90,7 @@ impl TcpRelayFlow {
                 source,
                 connection_closed,
                 ..
-            }) = Self::relay_proxy_to_target(
-                connection_id_clone.clone(),
-                agent_address,
-                message_framed_read,
-                target_stream_write,
-                configuration_clone,
-            )
-            .await
+            }) = Self::relay_proxy_to_target(connection_id_clone.clone(), agent_address, message_framed_read, target_stream_write).await
             {
                 error!(
                     "Connection [{}] error happen when relay data from proxy to target, error: {:#?}",
@@ -164,7 +156,6 @@ impl TcpRelayFlow {
     #[instrument(skip_all, fields(connection_id, agent_address))]
     async fn relay_proxy_to_target<T>(
         connection_id: String, agent_address: SocketAddr, mut message_framed_read: MessageFramedRead<T, TcpStream>, mut target_stream_write: OwnedWriteHalf,
-        _configuration: Arc<ProxyConfig>,
     ) -> Result<(), TcpRelayP2TError<T>>
     where
         T: RsaCryptoFetcher + Send + Sync + Debug + 'static,
