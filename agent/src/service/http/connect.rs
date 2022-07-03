@@ -173,7 +173,7 @@ impl HttpConnectFlow {
             payload_encryption_type,
             user_token: configuration.user_token().clone().unwrap(),
             ref_id: None,
-            message_payload: Some(vec![MessagePayload {
+            message_payloads: Some(vec![MessagePayload {
                 source_address: Some(request.client_address.into()),
                 target_address: Some(target_address),
                 payload_type: PayloadType::AgentPayload(AgentMessagePayloadTypeValue::TcpConnect),

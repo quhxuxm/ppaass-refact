@@ -82,7 +82,7 @@ impl Socks5TcpConnectFlow {
             payload_encryption_type,
             user_token: configuration.user_token().clone().unwrap(),
             ref_id: None,
-            message_payload: Some(vec![MessagePayload {
+            message_payloads: Some(vec![MessagePayload {
                 source_address: Some(client_address.into()),
                 target_address: Some(dest_address.clone().into()),
                 payload_type: PayloadType::AgentPayload(AgentMessagePayloadTypeValue::TcpConnect),

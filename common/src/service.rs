@@ -54,7 +54,7 @@ where
     S: AsyncRead + AsyncWrite,
 {
     pub message_framed_write: MessageFramedWrite<T, S>,
-    pub message_payload: Option<Vec<MessagePayload>>,
+    pub message_payloads: Option<Vec<MessagePayload>>,
     pub ref_id: Option<String>,
     pub connection_id: Option<String>,
     pub user_token: String,
@@ -106,13 +106,13 @@ impl MessageFramedWriter {
     {
         let WriteMessageFramedRequest {
             message_framed_write,
-            message_payload,
+            message_payloads,
             ref_id,
             connection_id,
             user_token,
             payload_encryption_type,
         } = request;
-        let messages = match message_payload {
+        let messages = match message_payloads {
             None => vec![Message::new(
                 generate_uuid(),
                 ref_id,
@@ -121,23 +121,19 @@ impl MessageFramedWriter {
                 payload_encryption_type,
                 None::<Bytes>,
             )],
-            Some(payloads) => {
-                let mut messages = Vec::new();
-                for p in payloads {
-                    let message = Message::new(
+            Some(payloads) => payloads
+                .into_iter()
+                .map(|item| {
+                    Message::new(
                         generate_uuid(),
                         ref_id.clone(),
                         connection_id.clone(),
                         user_token.clone(),
                         payload_encryption_type.clone(),
-                        Some(p),
-                    );
-                    debug!("Write message to remote:\n\n{:?}\n\n", message);
-                    trace!("Write message payload to remote:\n\n{:#?}\n\n", message.payload);
-                    messages.push(message);
-                }
-                messages
-            },
+                        Some(item),
+                    )
+                })
+                .collect::<Vec<_>>(),
         };
         let mut message_framed_write = message_framed_write;
         let mut messages = MessageStream::new(messages);
@@ -209,10 +205,7 @@ impl MessageFramedReader {
             mut message_framed_read,
             timeout,
         } = request;
-        let timeout_seconds = match timeout {
-            None => u64::MAX,
-            Some(v) => v,
-        };
+        let timeout_seconds = timeout.unwrap_or(u64::MAX);
         let result = match tokio::time::timeout(Duration::from_secs(timeout_seconds), message_framed_read.next()).await {
             Err(_) => {
                 return Err(ReadMessageFramedError {

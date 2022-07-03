@@ -118,7 +118,7 @@ impl InitializeFlow {
                 };
                 let message_framed_write = match MessageFramedWriter::write(WriteMessageFramedRequest {
                     message_framed_write,
-                    message_payload: Some(vec![heartbeat_success]),
+                    message_payloads: Some(vec![heartbeat_success]),
                     payload_encryption_type,
                     user_token,
                     ref_id: Some(message_id),

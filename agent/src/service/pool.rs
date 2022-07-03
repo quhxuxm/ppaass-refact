@@ -186,7 +186,7 @@ impl ProxyConnectionPool {
                             let mut message_framed_write = match MessageFramedWriter::write(WriteMessageFramedRequest {
                                 connection_id: None,
                                 message_framed_write,
-                                message_payload: Some(vec![heartbeat_message_payload]),
+                                message_payloads: Some(vec![heartbeat_message_payload]),
                                 payload_encryption_type,
                                 ref_id: None,
                                 user_token: user_token.clone(),

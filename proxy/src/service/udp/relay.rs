@@ -151,7 +151,7 @@ impl UdpRelayFlow {
                         message_framed_write = match MessageFramedWriter::write(WriteMessageFramedRequest {
                             connection_id: Some(connection_id.clone()),
                             message_framed_write,
-                            message_payload: Some(vec![MessagePayload {
+                            message_payloads: Some(vec![MessagePayload {
                                 data: Bytes::copy_from_slice(received_data),
                                 payload_type: PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::UdpData),
                                 source_address,

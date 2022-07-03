@@ -801,7 +801,7 @@ pub struct MessageStream {
 
 impl MessageStream {
     pub fn new(messages: Vec<Message>) -> Self {
-        let inner = messages.into_iter().map(|item| Some(item)).collect::<Vec<Option<Message>>>();
+        let inner = messages.into_iter().map(|item| Some(item)).collect::<Vec<_>>();
         Self { inner, index: 0 }
     }
 }
@@ -819,7 +819,12 @@ impl Stream for MessageStream {
                 let message = value.take();
                 index += 1;
                 *this.index = index;
-                let result = message.ok_or(PpaassError::CodecError);
+                let result = message.ok_or(PpaassError::IoError {
+                    source: std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        "Fail to convert message stream because of item is a none value.",
+                    ),
+                });
                 return Poll::Ready(Some(result));
             },
         }

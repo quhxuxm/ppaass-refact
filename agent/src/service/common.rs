@@ -282,7 +282,7 @@ impl TcpRelayFlow {
                 ref_id: Some(connection_id.clone()),
                 user_token: configuration.user_token().clone().unwrap(),
                 payload_encryption_type,
-                message_payload: Some(vec![MessagePayload {
+                message_payloads: Some(vec![MessagePayload {
                     source_address: Some(source_address_a2t.clone()),
                     target_address: Some(target_address_a2t.clone()),
                     payload_type: PayloadType::AgentPayload(AgentMessagePayloadTypeValue::TcpData),
@@ -392,7 +392,7 @@ impl TcpRelayFlow {
                 ref_id: Some(connection_id.clone()),
                 user_token: configuration.user_token().clone().unwrap(),
                 payload_encryption_type: payload_encryption_type.clone(),
-                message_payload: Some(payloads),
+                message_payloads: Some(payloads),
             })
             .await;
             message_framed_write = match write_agent_message_result {

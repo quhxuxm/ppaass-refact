@@ -387,7 +387,7 @@ impl TcpRelayFlow {
                 ref_id: Some(agent_tcp_connect_message_id.clone()),
                 user_token: user_token.clone(),
                 payload_encryption_type,
-                message_payload: Some(payloads),
+                message_payloads: Some(payloads),
                 connection_id: Some(connection_id.clone()),
             })
             .await

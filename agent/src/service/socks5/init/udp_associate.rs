@@ -83,7 +83,7 @@ impl Socks5UdpAssociateFlow {
             payload_encryption_type,
             user_token: configuration.user_token().clone().unwrap(),
             ref_id: None,
-            message_payload: Some(vec![MessagePayload {
+            message_payloads: Some(vec![MessagePayload {
                 // The source address is the udp address that the
                 // client side receiving the udp packets
                 source_address: Some(client_address.clone().into()),
