@@ -61,7 +61,7 @@ impl ProxyServer {
                     .worker_threads(configuration.thread_number().unwrap_or(1024));
 
                 let runtime = runtime_builder.build()?;
-                let proxy_rsa_crypto_fetcher = match ProxyRsaCryptoFetcher::new(configuration.clone()) {
+                let proxy_rsa_crypto_fetcher = match ProxyRsaCryptoFetcher::new(&configuration) {
                     Err(e) => {
                         error!("Fail to start up proxy server because of error: {:#?}", e);
                         return Err(anyhow!("Fail to start up proxy server because of error: {:#?}", e));

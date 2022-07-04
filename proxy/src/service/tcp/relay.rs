@@ -25,17 +25,17 @@ const DEFAULT_BUFFER_SIZE: usize = 64 * 1024;
 
 #[allow(unused)]
 #[derive(Debug)]
-pub(crate) struct TcpRelayFlowRequest<T>
+pub(crate) struct TcpRelayFlowRequest<'a, T>
 where
     T: RsaCryptoFetcher,
 {
-    pub connection_id: String,
+    pub connection_id: &'a str,
     pub message_framed_read: MessageFramedRead<T, TcpStream>,
     pub message_framed_write: MessageFramedWrite<T, TcpStream>,
     pub agent_address: SocketAddr,
     pub target_stream: TcpStream,
-    pub agent_tcp_connect_message_id: String,
-    pub user_token: String,
+    pub agent_tcp_connect_message_id: &'a str,
+    pub user_token: &'a str,
     pub source_address: NetAddress,
     pub target_address: NetAddress,
 }
@@ -67,7 +67,7 @@ pub(crate) struct TcpRelayFlow;
 
 impl TcpRelayFlow {
     #[instrument(skip_all, fields(request.connection_id))]
-    pub async fn exec<T>(request: TcpRelayFlowRequest<T>, configuration: &ProxyConfig) -> Result<()>
+    pub async fn exec<'a, T>(request: TcpRelayFlowRequest<'a, T>, configuration: &ProxyConfig) -> Result<()>
     where
         T: RsaCryptoFetcher + Send + Sync + Debug + 'static,
     {
@@ -83,7 +83,7 @@ impl TcpRelayFlow {
             target_address,
         } = request;
         let (target_stream_read, target_stream_write) = target_stream.into_split();
-        let connection_id_p2t = connection_id.clone();
+        let connection_id_p2t = connection_id.to_owned();
         tokio::spawn(async move {
             if let Err(TcpRelayP2TError {
                 mut target_stream_write,
@@ -114,6 +114,9 @@ impl TcpRelayFlow {
         });
         let target_buffer_size = configuration.target_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE);
         let message_framed_buffer_size = configuration.message_framed_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE);
+        let agent_tcp_connect_message_id_t2p = agent_tcp_connect_message_id.to_owned();
+        let user_token_t2p = user_token.to_owned();
+        let connection_id_t2p = connection_id.to_owned();
         tokio::spawn(async move {
             if let Err(TcpRelayT2PError {
                 mut message_framed_write,
@@ -121,10 +124,10 @@ impl TcpRelayFlow {
                 connection_closed,
                 ..
             }) = Self::relay_target_to_proxy(
-                &connection_id,
+                &connection_id_t2p,
                 message_framed_write,
-                &agent_tcp_connect_message_id,
-                &user_token,
+                &agent_tcp_connect_message_id_t2p,
+                &user_token_t2p,
                 source_address,
                 target_address,
                 target_stream_read,
@@ -135,19 +138,19 @@ impl TcpRelayFlow {
             {
                 error!(
                     "Connection [{}] error happen when relay data from target to proxy, error: {:#?}",
-                    connection_id, source
+                    connection_id_t2p, source
                 );
                 if !connection_closed {
                     if let Err(e) = message_framed_write.flush().await {
                         error!(
                             "Connection [{}] fail to flush proxy writer when relay data from target to proxy have error:{:#?}",
-                            connection_id, e
+                            connection_id_t2p, e
                         );
                     };
                     if let Err(e) = message_framed_write.close().await {
                         error!(
                             "Connection [{}] fail to close proxy writer when relay data from target to proxy have error:{:#?}",
-                            connection_id, e
+                            connection_id_t2p, e
                         );
                     };
                 }

@@ -29,7 +29,7 @@ pub(crate) struct ProxyRsaCryptoFetcher {
 
 impl ProxyRsaCryptoFetcher {
     #[instrument(skip_all)]
-    pub fn new(configuration: Arc<ProxyConfig>) -> Result<Self> {
+    pub fn new(configuration: &ProxyConfig) -> Result<Self> {
         let mut result = Self { cache: HashMap::new() };
         let rsa_dir_path = configuration.rsa_root_dir().as_ref().expect("Fail to read rsa root directory.");
         let rsa_dir = fs::read_dir(rsa_dir_path)?;
@@ -156,15 +156,15 @@ impl AgentConnection {
                     debug!("Connection [{}] is going to handle tcp relay.", connection_id);
                     TcpRelayFlow::exec(
                         TcpRelayFlowRequest {
-                            connection_id: connection_id.clone(),
+                            connection_id: &connection_id,
                             message_framed_read,
                             message_framed_write,
                             agent_address,
                             target_stream,
                             source_address,
                             target_address,
-                            user_token,
-                            agent_tcp_connect_message_id: message_id,
+                            user_token: &user_token,
+                            agent_tcp_connect_message_id: &message_id,
                         },
                         &configuration,
                     )
