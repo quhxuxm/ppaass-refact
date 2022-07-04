@@ -12,7 +12,6 @@ use futures::SinkExt;
 
 use std::{fmt::Debug, net::SocketAddr, time::Duration};
 
-use std::sync::Arc;
 use tokio::{net::TcpStream, time::timeout};
 
 use tracing::{debug, error, instrument};
@@ -69,7 +68,7 @@ pub(crate) struct InitializeFlow;
 
 impl InitializeFlow {
     #[instrument(skip_all, fields(request.connection_id))]
-    pub async fn exec<'a, T>(request: InitFlowRequest<'a, T, TcpStream>, configuration: Arc<ProxyConfig>) -> Result<InitFlowResult<T>>
+    pub async fn exec<'a, T>(request: InitFlowRequest<'a, T, TcpStream>, configuration: &ProxyConfig) -> Result<InitFlowResult<T>>
     where
         T: RsaCryptoFetcher + Send + Sync + Debug + 'static,
     {

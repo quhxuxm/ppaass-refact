@@ -1,6 +1,6 @@
 use std::{fmt::Debug, io::ErrorKind};
 
-use std::{net::SocketAddr, sync::Arc};
+use std::net::SocketAddr;
 
 use anyhow::{anyhow, Result};
 use bytes::{Bytes, BytesMut};
@@ -67,7 +67,7 @@ pub(crate) struct TcpRelayFlow;
 
 impl TcpRelayFlow {
     #[instrument(skip_all, fields(request.connection_id))]
-    pub async fn exec<T>(request: TcpRelayFlowRequest<T>, configuration: Arc<ProxyConfig>) -> Result<()>
+    pub async fn exec<T>(request: TcpRelayFlowRequest<T>, configuration: &ProxyConfig) -> Result<()>
     where
         T: RsaCryptoFetcher + Send + Sync + Debug + 'static,
     {
@@ -112,6 +112,8 @@ impl TcpRelayFlow {
                 }
             }
         });
+        let target_buffer_size = configuration.target_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE);
+        let message_framed_buffer_size = configuration.message_framed_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE);
         tokio::spawn(async move {
             if let Err(TcpRelayT2PError {
                 mut message_framed_write,
@@ -126,7 +128,8 @@ impl TcpRelayFlow {
                 source_address,
                 target_address,
                 target_stream_read,
-                configuration,
+                target_buffer_size,
+                message_framed_buffer_size,
             )
             .await
             {
@@ -262,13 +265,12 @@ impl TcpRelayFlow {
     async fn relay_target_to_proxy<T>(
         connection_id: &str, mut message_framed_write: MessageFramedWrite<T, TcpStream>, agent_tcp_connect_message_id: &str, user_token: &str,
         agent_connect_message_source_address: NetAddress, agent_connect_message_target_address: NetAddress, mut target_stream_read: OwnedReadHalf,
-        configuration: Arc<ProxyConfig>,
+        target_buffer_size: usize, message_framed_buffer_size: usize,
     ) -> Result<(), TcpRelayT2PError<T>>
     where
         T: RsaCryptoFetcher + Send + Sync + 'static,
     {
         loop {
-            let target_buffer_size = configuration.target_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE);
             let mut target_buffer = BytesMut::with_capacity(target_buffer_size);
             let source_address = agent_connect_message_source_address.clone();
             let target_address = agent_connect_message_target_address.clone();
@@ -340,7 +342,8 @@ impl TcpRelayFlow {
                 },
             };
             let payload_data = target_buffer.split().freeze();
-            let payload_data_chunks = payload_data.chunks(configuration.message_framed_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE));
+
+            let payload_data_chunks = payload_data.chunks(message_framed_buffer_size);
             let mut payloads = vec![];
             for (_, chunk) in payload_data_chunks.enumerate() {
                 let chunk_data = Bytes::copy_from_slice(chunk);

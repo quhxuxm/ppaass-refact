@@ -7,7 +7,7 @@ use common::{
     TcpConnectResult, TcpConnector, WriteMessageFramedError, WriteMessageFramedRequest, WriteMessageFramedResult,
 };
 use futures::SinkExt;
-use std::{net::SocketAddr, sync::Arc};
+use std::net::SocketAddr;
 use tokio::net::TcpStream;
 use tracing::{debug, error, instrument};
 
@@ -44,7 +44,7 @@ pub(crate) struct TcpConnectFlow;
 
 impl TcpConnectFlow {
     #[instrument(skip_all, fields(request.connection_id))]
-    pub async fn exec<'a, T>(request: TcpConnectFlowRequest<'a, T>, configuration: Arc<ProxyConfig>) -> Result<TcpConnectFlowResult<T>>
+    pub async fn exec<'a, T>(request: TcpConnectFlowRequest<'a, T>, configuration: &ProxyConfig) -> Result<TcpConnectFlowResult<T>>
     where
         T: RsaCryptoFetcher,
     {

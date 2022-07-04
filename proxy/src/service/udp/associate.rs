@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, sync::Arc};
+use std::net::SocketAddr;
 
 use anyhow::anyhow;
 use anyhow::Result;
@@ -46,7 +46,7 @@ pub(crate) struct UdpAssociateFlow;
 
 impl UdpAssociateFlow {
     #[instrument(skip_all, fields(request.connection_id))]
-    pub async fn exec<'a, T>(request: UdpAssociateFlowRequest<'a, T>, _configuration: Arc<ProxyConfig>) -> Result<UdpAssociateFlowResult<T>>
+    pub async fn exec<'a, T>(request: UdpAssociateFlowRequest<'a, T>, _configuration: &ProxyConfig) -> Result<UdpAssociateFlowResult<T>>
     where
         T: RsaCryptoFetcher,
     {

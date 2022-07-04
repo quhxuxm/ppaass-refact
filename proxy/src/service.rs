@@ -132,7 +132,7 @@ impl AgentConnection {
                     message_framed_write,
                     agent_address: agent_address_clone,
                 },
-                configuration.clone(),
+                &configuration,
             )
             .await?;
             match init_flow_result {
@@ -166,7 +166,7 @@ impl AgentConnection {
                             user_token,
                             agent_tcp_connect_message_id: message_id,
                         },
-                        configuration,
+                        &configuration,
                     )
                     .await?;
                     debug!("Connection [{}] is finish tcp relay.", connection_id);
