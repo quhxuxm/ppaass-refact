@@ -61,6 +61,14 @@ impl ProxyServer {
                     .worker_threads(configuration.thread_number().unwrap_or(1024));
 
                 let runtime = runtime_builder.build()?;
+                let proxy_rsa_crypto_fetcher = match ProxyRsaCryptoFetcher::new(configuration.clone()) {
+                    Err(e) => {
+                        error!("Fail to start up proxy server because of error: {:#?}", e);
+                        return Err(anyhow!("Fail to start up proxy server because of error: {:#?}", e));
+                    },
+                    Ok(v) => v,
+                };
+                let proxy_rsa_crypto_fetcher = Arc::new(proxy_rsa_crypto_fetcher);
                 runtime.spawn(async move {
                     let server_socket = match TcpSocket::new_v4() {
                         Err(e) => {
@@ -100,14 +108,7 @@ impl ProxyServer {
                         },
                         Ok(v) => v,
                     };
-                    let proxy_rsa_crypto_fetcher = match ProxyRsaCryptoFetcher::new(configuration.clone()) {
-                        Err(e) => {
-                            error!("Fail to start up proxy server because of error: {:#?}", e);
-                            return;
-                        },
-                        Ok(v) => v,
-                    };
-                    let proxy_rsa_crypto_fetcher = Arc::new(proxy_rsa_crypto_fetcher);
+
                     println!("ppaass-proxy is listening port: {} ", local_socket_address.port());
                     info!("ppaass-proxy is listening port: {} ", local_socket_address.port());
                     loop {
@@ -133,7 +134,7 @@ impl ProxyServer {
                         let configuration = configuration.clone();
                         tokio::spawn(async move {
                             let agent_connection = AgentConnection::new(agent_stream, agent_address);
-                            let agent_connection_id = agent_connection.get_id().to_string();
+                            let agent_connection_id = agent_connection.get_id().to_owned();
                             if let Err(e) = agent_connection.exec(proxy_rsa_crypto_fetcher, configuration).await {
                                 error!(
                                     "Error happen when handle agent connection: [{}], agent address:[{}], error:{:#?}",
