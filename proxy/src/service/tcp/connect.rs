@@ -142,8 +142,8 @@ impl TcpConnectFlow {
             message_framed_write,
             source_address,
             target_address,
-            user_token: user_token.to_string(),
-            message_id: message_id.to_string(),
+            user_token: user_token.to_owned(),
+            message_id: message_id.to_owned(),
         })
     }
 }

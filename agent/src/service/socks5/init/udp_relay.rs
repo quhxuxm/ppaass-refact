@@ -59,8 +59,8 @@ impl Socks5UdpRelayFlow {
             ..
         } = request;
         let user_token = configuration.user_token().clone().expect("Can not get user token");
-        let client_connection_id_a2p = client_connection_id.to_string();
-        let proxy_connection_id = proxy_connection_id.to_string();
+        let client_connection_id_a2p = client_connection_id.to_owned();
+        let proxy_connection_id = proxy_connection_id.to_owned();
         let associated_udp_socket = Arc::new(associated_udp_socket);
         let associated_udp_socket_a2p = associated_udp_socket.clone();
         let client_address_a2p = client_address.clone();

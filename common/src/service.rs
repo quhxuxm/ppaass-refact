@@ -116,7 +116,7 @@ impl MessageFramedWriter {
             None => vec![Message::new(
                 generate_uuid(),
                 ref_id,
-                connection_id.map(|v| v.to_string()),
+                connection_id.map(|v| v.to_owned()),
                 user_token,
                 payload_encryption_type,
                 None::<Bytes>,
@@ -127,7 +127,7 @@ impl MessageFramedWriter {
                     Message::new(
                         generate_uuid(),
                         ref_id.clone(),
-                        connection_id.map(|v| v.to_string()),
+                        connection_id.map(|v| v.to_owned()),
                         user_token.clone(),
                         payload_encryption_type.clone(),
                         Some(item),
@@ -281,7 +281,7 @@ impl PayloadEncryptionTypeSelector {
         let PayloadEncryptionTypeSelectRequest { user_token, encryption_token } = request;
         Ok(PayloadEncryptionTypeSelectResult {
             payload_encryption_type: PayloadEncryptionType::Blowfish(encryption_token.clone()),
-            user_token: user_token.to_string(),
+            user_token: user_token.to_owned(),
             encryption_token,
         })
     }

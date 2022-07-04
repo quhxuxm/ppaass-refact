@@ -49,9 +49,9 @@ impl UdpRelayFlow {
             mut message_framed_write,
             ..
         } = request;
-        let connection_id = connection_id.to_string();
-        let message_id = message_id.to_string();
-        let user_token = user_token.to_string();
+        let connection_id = connection_id.to_owned();
+        let message_id = message_id.to_owned();
+        let user_token = user_token.to_owned();
         tokio::spawn(async move {
             loop {
                 match MessageFramedReader::read(ReadMessageFramedRequest {

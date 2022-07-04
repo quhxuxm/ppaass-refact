@@ -187,8 +187,8 @@ impl TcpRelayFlow {
         let (client_stream_read, client_stream_write) = client_stream.into_split();
 
         let target_address_p2c = target_address.clone();
-        let client_connection_id_p2c = client_connection_id.to_string();
-        let client_connection_id_c2p = client_connection_id.to_string();
+        let client_connection_id_p2c = client_connection_id.to_owned();
+        let client_connection_id_c2p = client_connection_id.to_owned();
         tokio::spawn(async move {
             if let Err(TcpRelayP2CError {
                 mut client_stream_write,
