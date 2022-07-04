@@ -64,8 +64,8 @@ where
 }
 
 #[derive(Debug)]
-pub(crate) struct Socks5InitFlowRequest {
-    pub client_connection_id: String,
+pub(crate) struct Socks5InitFlowRequest<'a> {
+    pub client_connection_id: &'a str,
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,
     pub buffer: BytesMut,
@@ -75,8 +75,8 @@ pub(crate) struct Socks5InitFlow;
 
 impl Socks5InitFlow {
     #[instrument(fields(request.client_connection_id), skip_all)]
-    pub async fn exec<T>(
-        request: Socks5InitFlowRequest, rsa_crypto_fetcher: Arc<T>, configuration: Arc<AgentConfig>, proxy_connection_pool: Arc<ProxyConnectionPool>,
+    pub async fn exec<'a, T>(
+        request: Socks5InitFlowRequest<'a>, rsa_crypto_fetcher: Arc<T>, configuration: Arc<AgentConfig>, proxy_connection_pool: Arc<ProxyConnectionPool>,
     ) -> Result<Socks5InitFlowResult<T>>
     where
         T: RsaCryptoFetcher + Debug,

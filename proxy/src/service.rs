@@ -127,7 +127,7 @@ impl AgentConnection {
         loop {
             let init_flow_result = InitializeFlow::exec(
                 InitFlowRequest {
-                    connection_id: connection_id.clone(),
+                    connection_id: connection_id.as_str(),
                     message_framed_read,
                     message_framed_write,
                     agent_address: agent_address_clone,
@@ -181,11 +181,11 @@ impl AgentConnection {
                 } => {
                     debug!("Connection [{}] is going to handle udp relay.", connection_id);
                     UdpRelayFlow::exec(UdpRelayFlowRequest {
-                        connection_id: connection_id.clone(),
+                        connection_id: connection_id.as_str(),
                         message_framed_read,
                         message_framed_write,
-                        message_id,
-                        user_token,
+                        message_id: message_id.as_str(),
+                        user_token: user_token.as_str(),
                     })
                     .await?;
                     debug!("Connection [{}] is finish udp relay.", connection_id);

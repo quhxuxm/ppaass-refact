@@ -44,8 +44,8 @@ type HttpFramed<'a> = Framed<&'a mut TcpStream, HttpCodec>;
 
 #[allow(unused)]
 #[derive(Debug)]
-pub(crate) struct HttpConnectFlowRequest {
-    pub client_connection_id: String,
+pub(crate) struct HttpConnectFlowRequest<'a> {
+    pub client_connection_id: &'a str,
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,
     pub initial_buf: BytesMut,
@@ -83,8 +83,8 @@ impl HttpConnectFlow {
 }
 
 impl HttpConnectFlow {
-    pub async fn exec<T>(
-        request: HttpConnectFlowRequest, rsa_crypto_fetcher: Arc<T>, configuration: Arc<AgentConfig>, proxy_connection_pool: Arc<ProxyConnectionPool>,
+    pub async fn exec<'a, T>(
+        request: HttpConnectFlowRequest<'a>, rsa_crypto_fetcher: Arc<T>, configuration: Arc<AgentConfig>, proxy_connection_pool: Arc<ProxyConnectionPool>,
     ) -> Result<HttpConnectFlowResult<T>>
     where
         T: RsaCryptoFetcher + Debug,
@@ -164,7 +164,7 @@ impl HttpConnectFlow {
 
         let PayloadEncryptionTypeSelectResult { payload_encryption_type, .. } = PayloadEncryptionTypeSelector::select(PayloadEncryptionTypeSelectRequest {
             encryption_token: generate_uuid().into(),
-            user_token: configuration.user_token().clone().unwrap(),
+            user_token: configuration.user_token().clone().expect("Can not get user token").as_str(),
         })
         .await?;
         let message_framed_write = match MessageFramedWriter::write(WriteMessageFramedRequest {
@@ -195,7 +195,7 @@ impl HttpConnectFlow {
             },
         };
         match MessageFramedReader::read(ReadMessageFramedRequest {
-            connection_id: proxy_connection_id.clone(),
+            connection_id: proxy_connection_id.as_str(),
             message_framed_read,
             timeout: None,
         })

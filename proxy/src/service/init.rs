@@ -27,11 +27,11 @@ use super::{
 const DEFAULT_AGENT_CONNECTION_READ_TIMEOUT: u64 = 1200;
 
 #[derive(Debug)]
-pub(crate) struct InitFlowRequest<T, TcpStream>
+pub(crate) struct InitFlowRequest<'a, T, TcpStream>
 where
     T: RsaCryptoFetcher,
 {
-    pub connection_id: String,
+    pub connection_id: &'a str,
     pub message_framed_read: MessageFramedRead<T, TcpStream>,
     pub message_framed_write: MessageFramedWrite<T, TcpStream>,
     pub agent_address: SocketAddr,
@@ -69,7 +69,7 @@ pub(crate) struct InitializeFlow;
 
 impl InitializeFlow {
     #[instrument(skip_all, fields(request.connection_id))]
-    pub async fn exec<T>(request: InitFlowRequest<T, TcpStream>, configuration: Arc<ProxyConfig>) -> Result<InitFlowResult<T>>
+    pub async fn exec<'a, T>(request: InitFlowRequest<'a, T, TcpStream>, configuration: Arc<ProxyConfig>) -> Result<InitFlowResult<T>>
     where
         T: RsaCryptoFetcher + Send + Sync + Debug + 'static,
     {
@@ -107,7 +107,7 @@ impl InitializeFlow {
                 let PayloadEncryptionTypeSelectResult { payload_encryption_type, .. } =
                     PayloadEncryptionTypeSelector::select(PayloadEncryptionTypeSelectRequest {
                         encryption_token: generate_uuid().into(),
-                        user_token: user_token.clone(),
+                        user_token: user_token.as_str(),
                     })
                     .await?;
                 let heartbeat_success = MessagePayload {
@@ -122,7 +122,7 @@ impl InitializeFlow {
                     payload_encryption_type,
                     user_token: user_token.as_str(),
                     ref_id: Some(message_id.as_str()),
-                    connection_id: Some(connection_id.as_str()),
+                    connection_id: Some(connection_id),
                 })
                 .await
                 {
@@ -174,14 +174,14 @@ impl InitializeFlow {
                     ..
                 } = TcpConnectFlow::exec(
                     TcpConnectFlowRequest {
-                        connection_id: connection_id.clone(),
-                        message_id,
+                        connection_id,
+                        message_id: message_id.as_str(),
                         message_framed_read,
                         message_framed_write,
                         agent_address,
                         source_address,
                         target_address,
-                        user_token,
+                        user_token: user_token.as_str(),
                     },
                     configuration,
                 )
@@ -231,9 +231,9 @@ impl InitializeFlow {
                         message_framed_write,
                         agent_address,
                         connection_id,
-                        message_id,
+                        message_id: message_id.as_str(),
                         source_address,
-                        user_token,
+                        user_token: user_token.as_str(),
                     },
                     configuration,
                 )

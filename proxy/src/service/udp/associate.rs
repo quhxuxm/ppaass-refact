@@ -16,13 +16,13 @@ use tracing::{info, instrument};
 use crate::config::ProxyConfig;
 
 #[allow(unused)]
-pub(crate) struct UdpAssociateFlowRequest<T>
+pub(crate) struct UdpAssociateFlowRequest<'a, T>
 where
     T: RsaCryptoFetcher,
 {
-    pub connection_id: String,
-    pub message_id: String,
-    pub user_token: String,
+    pub connection_id: &'a str,
+    pub message_id: &'a str,
+    pub user_token: &'a str,
     pub source_address: NetAddress,
     pub agent_address: SocketAddr,
     pub message_framed_read: MessageFramedRead<T, TcpStream>,
@@ -46,7 +46,7 @@ pub(crate) struct UdpAssociateFlow;
 
 impl UdpAssociateFlow {
     #[instrument(skip_all, fields(request.connection_id))]
-    pub async fn exec<T>(request: UdpAssociateFlowRequest<T>, _configuration: Arc<ProxyConfig>) -> Result<UdpAssociateFlowResult<T>>
+    pub async fn exec<'a, T>(request: UdpAssociateFlowRequest<'a, T>, _configuration: Arc<ProxyConfig>) -> Result<UdpAssociateFlowResult<T>>
     where
         T: RsaCryptoFetcher,
     {
@@ -77,9 +77,9 @@ impl UdpAssociateFlow {
             message_framed_write,
             message_payloads: Some(vec![udp_associate_success_payload]),
             payload_encryption_type,
-            user_token: user_token.as_str(),
-            ref_id: Some(message_id.as_str()),
-            connection_id: Some(connection_id.as_str()),
+            user_token,
+            ref_id: Some(message_id),
+            connection_id: Some(connection_id),
         })
         .await
         {
@@ -92,11 +92,11 @@ impl UdpAssociateFlow {
             },
         };
         Ok(UdpAssociateFlowResult {
-            connection_id,
+            connection_id: connection_id.to_string(),
             message_framed_read,
             message_framed_write,
-            message_id,
-            user_token,
+            message_id: message_id.to_string(),
+            user_token: user_token.to_string(),
             source_address,
         })
     }

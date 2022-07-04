@@ -25,8 +25,8 @@ use crate::service::{
 use crate::{config::AgentConfig, message::socks5::Socks5Addr};
 
 #[derive(Debug)]
-pub(crate) struct Socks5UdpAssociateFlowRequest {
-    pub client_connection_id: String,
+pub(crate) struct Socks5UdpAssociateFlowRequest<'a> {
+    pub client_connection_id: &'a str,
     pub client_address: Socks5Addr,
 }
 
@@ -47,8 +47,9 @@ pub(crate) struct Socks5UdpAssociateFlow;
 
 impl Socks5UdpAssociateFlow {
     #[instrument(skip_all, fields(request.client_connection_id))]
-    pub(crate) async fn exec<T>(
-        request: Socks5UdpAssociateFlowRequest, rsa_crypto_fetcher: Arc<T>, configuration: Arc<AgentConfig>, proxy_connection_pool: Arc<ProxyConnectionPool>,
+    pub(crate) async fn exec<'a, T>(
+        request: Socks5UdpAssociateFlowRequest<'a>, rsa_crypto_fetcher: Arc<T>, configuration: Arc<AgentConfig>,
+        proxy_connection_pool: Arc<ProxyConnectionPool>,
     ) -> Result<Socks5UdpAssociateFlowResult<T>>
     where
         T: RsaCryptoFetcher + Debug,
@@ -74,7 +75,7 @@ impl Socks5UdpAssociateFlow {
 
         let PayloadEncryptionTypeSelectResult { payload_encryption_type, .. } = PayloadEncryptionTypeSelector::select(PayloadEncryptionTypeSelectRequest {
             encryption_token: generate_uuid().into(),
-            user_token: configuration.user_token().clone().unwrap(),
+            user_token: configuration.user_token().clone().expect("Can not get user token").as_str(),
         })
         .await?;
         let message_framed_write = match MessageFramedWriter::write(WriteMessageFramedRequest {
@@ -106,7 +107,7 @@ impl Socks5UdpAssociateFlow {
         };
 
         match MessageFramedReader::read(ReadMessageFramedRequest {
-            connection_id: proxy_connection_id.clone(),
+            connection_id: proxy_connection_id.as_str(),
             message_framed_read,
             timeout: None,
         })

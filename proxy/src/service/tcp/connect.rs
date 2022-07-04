@@ -13,13 +13,13 @@ use tracing::{debug, error, instrument};
 
 use crate::config::{ProxyConfig, DEFAULT_TARGET_STREAM_SO_LINGER};
 
-pub(crate) struct TcpConnectFlowRequest<T>
+pub(crate) struct TcpConnectFlowRequest<'a, T>
 where
     T: RsaCryptoFetcher,
 {
-    pub connection_id: String,
-    pub message_id: String,
-    pub user_token: String,
+    pub connection_id: &'a str,
+    pub message_id: &'a str,
+    pub user_token: &'a str,
     pub source_address: NetAddress,
     pub target_address: NetAddress,
     pub agent_address: SocketAddr,
@@ -44,7 +44,7 @@ pub(crate) struct TcpConnectFlow;
 
 impl TcpConnectFlow {
     #[instrument(skip_all, fields(request.connection_id))]
-    pub async fn exec<T>(request: TcpConnectFlowRequest<T>, configuration: Arc<ProxyConfig>) -> Result<TcpConnectFlowResult<T>>
+    pub async fn exec<'a, T>(request: TcpConnectFlowRequest<'a, T>, configuration: Arc<ProxyConfig>) -> Result<TcpConnectFlowResult<T>>
     where
         T: RsaCryptoFetcher,
     {
@@ -62,7 +62,7 @@ impl TcpConnectFlow {
         } = request;
         let PayloadEncryptionTypeSelectResult { payload_encryption_type, .. } = PayloadEncryptionTypeSelector::select(PayloadEncryptionTypeSelectRequest {
             encryption_token: generate_uuid().into(),
-            user_token: user_token.clone(),
+            user_token,
         })
         .await?;
         let connect_to_target_result = TcpConnector::connect(TcpConnectRequest {
@@ -88,9 +88,9 @@ impl TcpConnectFlow {
                     message_framed_write,
                     message_payloads: Some(vec![connect_fail_payload]),
                     payload_encryption_type,
-                    user_token: user_token.as_str(),
-                    ref_id: Some(message_id.as_str()),
-                    connection_id: Some(connection_id.as_str()),
+                    user_token,
+                    ref_id: Some(message_id),
+                    connection_id: Some(connection_id),
                 })
                 .await
                 {
@@ -122,9 +122,9 @@ impl TcpConnectFlow {
             message_framed_write,
             message_payloads: Some(vec![connect_success_payload]),
             payload_encryption_type,
-            user_token: user_token.as_str(),
-            ref_id: Some(message_id.as_str()),
-            connection_id: Some(connection_id.as_str()),
+            user_token,
+            ref_id: Some(message_id),
+            connection_id: Some(connection_id),
         })
         .await
         {
@@ -142,8 +142,8 @@ impl TcpConnectFlow {
             message_framed_write,
             source_address,
             target_address,
-            user_token,
-            message_id,
+            user_token: user_token.to_string(),
+            message_id: message_id.to_string(),
         })
     }
 }

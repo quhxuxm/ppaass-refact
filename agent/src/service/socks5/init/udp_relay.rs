@@ -22,14 +22,14 @@ use crate::{config::AgentConfig, message::socks5::Socks5UdpDataPacket, service::
 const SIZE_64KB: usize = 65535;
 
 #[derive(Debug)]
-pub struct Socks5UdpRelayFlowRequest<T>
+pub struct Socks5UdpRelayFlowRequest<'a, T>
 where
     T: RsaCryptoFetcher,
 {
     pub associated_udp_socket: UdpSocket,
     pub associated_udp_address: SocketAddr,
-    pub client_connection_id: String,
-    pub proxy_connection_id: String,
+    pub client_connection_id: &'a str,
+    pub proxy_connection_id: &'a str,
     pub client_stream: TcpStream,
     pub message_framed_write: MessageFramedWrite<T, ProxyConnection>,
     pub message_framed_read: MessageFramedRead<T, ProxyConnection>,
@@ -45,7 +45,7 @@ pub struct Socks5UdpRelayFlow;
 
 impl Socks5UdpRelayFlow {
     #[instrument(skip_all, fields(request.client_connection_id, request.proxy_connection_id))]
-    pub async fn exec<T>(request: Socks5UdpRelayFlowRequest<T>, configuration: Arc<AgentConfig>) -> Result<Socks5UdpRelayFlowResult>
+    pub async fn exec<'a, T>(request: Socks5UdpRelayFlowRequest<'a, T>, configuration: Arc<AgentConfig>) -> Result<Socks5UdpRelayFlowResult>
     where
         T: RsaCryptoFetcher + Send + Sync + Debug + 'static,
     {
@@ -58,9 +58,9 @@ impl Socks5UdpRelayFlow {
             mut message_framed_read,
             ..
         } = request;
-        let user_token = configuration.user_token().clone().unwrap();
-        let user_token_clone = user_token.clone();
-        let client_connection_id_a2p = client_connection_id.clone();
+        let user_token = configuration.user_token().clone().expect("Can not get user token");
+        let client_connection_id_a2p = client_connection_id.to_string();
+        let proxy_connection_id = proxy_connection_id.to_string();
         let associated_udp_socket = Arc::new(associated_udp_socket);
         let associated_udp_socket_a2p = associated_udp_socket.clone();
         let client_address_a2p = client_address.clone();
@@ -95,7 +95,7 @@ impl Socks5UdpRelayFlow {
                         let udp_destination_address = socks5_udp_data.address;
                         let payload_encryption_type = match PayloadEncryptionTypeSelector::select(PayloadEncryptionTypeSelectRequest {
                             encryption_token: generate_uuid().into(),
-                            user_token: user_token_clone.clone(),
+                            user_token: user_token.as_str(),
                         })
                         .await
                         {
@@ -150,7 +150,7 @@ impl Socks5UdpRelayFlow {
         tokio::spawn(async move {
             loop {
                 match MessageFramedReader::read(ReadMessageFramedRequest {
-                    connection_id: proxy_connection_id.clone(),
+                    connection_id: proxy_connection_id.as_str(),
                     message_framed_read,
                     timeout: None,
                 })

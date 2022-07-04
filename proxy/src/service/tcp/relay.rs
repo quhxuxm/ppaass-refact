@@ -163,7 +163,7 @@ impl TcpRelayFlow {
         loop {
             let connection_id = connection_id.clone();
             let read_agent_message_result = MessageFramedReader::read(ReadMessageFramedRequest {
-                connection_id: connection_id.to_string(),
+                connection_id,
                 message_framed_read,
                 timeout: None,
             })
@@ -355,7 +355,7 @@ impl TcpRelayFlow {
 
             let payload_encryption_type = match PayloadEncryptionTypeSelector::select(PayloadEncryptionTypeSelectRequest {
                 encryption_token: generate_uuid().into(),
-                user_token: user_token.to_string(),
+                user_token,
             })
             .await
             {

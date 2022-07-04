@@ -166,7 +166,7 @@ impl ProxyConnectionPool {
                                 payload_encryption_type,
                                 ..
                             } = match PayloadEncryptionTypeSelector::select(PayloadEncryptionTypeSelectRequest {
-                                user_token: user_token.clone(),
+                                user_token: user_token.as_str(),
                                 encryption_token: generate_uuid().into(),
                             })
                             .await
@@ -204,7 +204,7 @@ impl ProxyConnectionPool {
                                 return;
                             }
                             match MessageFramedReader::read(ReadMessageFramedRequest {
-                                connection_id: connection_id.clone(),
+                                connection_id: connection_id.as_str(),
                                 message_framed_read,
                                 timeout: proxy_connection_check_timeout,
                             })

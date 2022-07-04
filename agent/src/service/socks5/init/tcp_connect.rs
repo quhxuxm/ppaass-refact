@@ -28,8 +28,8 @@ use crate::{
 
 pub(crate) struct Socks5TcpConnectFlow;
 
-pub(crate) struct Socks5TcpConnectFlowRequest {
-    pub client_connection_id: String,
+pub(crate) struct Socks5TcpConnectFlowRequest<'a> {
+    pub client_connection_id: &'a str,
     pub client_address: SocketAddr,
     pub dest_address: Socks5Addr,
 }
@@ -49,8 +49,8 @@ where
 
 impl Socks5TcpConnectFlow {
     #[instrument(skip_all, fields(request.client_connection_id))]
-    pub async fn exec<T>(
-        request: Socks5TcpConnectFlowRequest, rsa_crypto_fetcher: Arc<T>, configuration: Arc<AgentConfig>, proxy_connection_pool: Arc<ProxyConnectionPool>,
+    pub async fn exec<'a, T>(
+        request: Socks5TcpConnectFlowRequest<'a>, rsa_crypto_fetcher: Arc<T>, configuration: Arc<AgentConfig>, proxy_connection_pool: Arc<ProxyConnectionPool>,
     ) -> Result<Socks5TcpConnectFlowResult<T>>
     where
         T: RsaCryptoFetcher + Debug,
@@ -73,7 +73,7 @@ impl Socks5TcpConnectFlow {
 
         let PayloadEncryptionTypeSelectResult { payload_encryption_type, .. } = PayloadEncryptionTypeSelector::select(PayloadEncryptionTypeSelectRequest {
             encryption_token: generate_uuid().into(),
-            user_token: configuration.user_token().clone().unwrap(),
+            user_token: configuration.user_token().clone().expect("Can not get user token").as_str(),
         })
         .await?;
         let message_framed_write = match MessageFramedWriter::write(WriteMessageFramedRequest {
@@ -102,7 +102,7 @@ impl Socks5TcpConnectFlow {
             },
         };
         match MessageFramedReader::read(ReadMessageFramedRequest {
-            connection_id: proxy_connection_id.clone(),
+            connection_id: proxy_connection_id.as_str(),
             message_framed_read,
             timeout: None,
         })

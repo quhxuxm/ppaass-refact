@@ -20,13 +20,13 @@ const SIZE_64KB: usize = 65535;
 
 #[allow(unused)]
 #[derive(Debug)]
-pub(crate) struct UdpRelayFlowRequest<T>
+pub(crate) struct UdpRelayFlowRequest<'a, T>
 where
     T: RsaCryptoFetcher,
 {
-    pub connection_id: String,
-    pub message_id: String,
-    pub user_token: String,
+    pub connection_id: &'a str,
+    pub message_id: &'a str,
+    pub user_token: &'a str,
     pub message_framed_read: MessageFramedRead<T, TcpStream>,
     pub message_framed_write: MessageFramedWrite<T, TcpStream>,
 }
@@ -37,7 +37,7 @@ pub(crate) struct UdpRelayFlow;
 
 impl UdpRelayFlow {
     #[instrument(skip_all, fields(request.connection_id))]
-    pub async fn exec<T>(request: UdpRelayFlowRequest<T>) -> Result<UdpRelayFlowResult>
+    pub async fn exec<'a, T>(request: UdpRelayFlowRequest<'a, T>) -> Result<UdpRelayFlowResult>
     where
         T: RsaCryptoFetcher + Send + Sync + Debug + 'static,
     {
@@ -49,10 +49,13 @@ impl UdpRelayFlow {
             mut message_framed_write,
             ..
         } = request;
+        let connection_id = connection_id.to_string();
+        let message_id = message_id.to_string();
+        let user_token = user_token.to_string();
         tokio::spawn(async move {
             loop {
                 match MessageFramedReader::read(ReadMessageFramedRequest {
-                    connection_id: connection_id.clone(),
+                    connection_id: connection_id.as_str(),
                     message_framed_read,
                     timeout: None,
                 })
@@ -137,7 +140,7 @@ impl UdpRelayFlow {
                             ..
                         } = match PayloadEncryptionTypeSelector::select(PayloadEncryptionTypeSelectRequest {
                             encryption_token: generate_uuid().into(),
-                            user_token: user_token.clone(),
+                            user_token: user_token.as_str(),
                         })
                         .await
                         {

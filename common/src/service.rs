@@ -155,12 +155,12 @@ impl MessageFramedWriter {
 }
 
 #[derive(Debug)]
-pub struct ReadMessageFramedRequest<T, S>
+pub struct ReadMessageFramedRequest<'a, T, S>
 where
     T: RsaCryptoFetcher,
     S: AsyncRead + AsyncWrite,
 {
-    pub connection_id: String,
+    pub connection_id: &'a str,
     pub message_framed_read: MessageFramedRead<T, S>,
     pub timeout: Option<u64>,
 }
@@ -195,7 +195,7 @@ pub struct MessageFramedReader;
 
 impl MessageFramedReader {
     #[instrument(skip_all, fields(request.connection_id))]
-    pub async fn read<T, S>(request: ReadMessageFramedRequest<T, S>) -> Result<ReadMessageFramedResult<T, S>, ReadMessageFramedError<T, S>>
+    pub async fn read<'a, T, S>(request: ReadMessageFramedRequest<'a, T, S>) -> Result<ReadMessageFramedResult<T, S>, ReadMessageFramedError<T, S>>
     where
         T: RsaCryptoFetcher + Debug,
         S: AsyncRead + AsyncWrite,
@@ -261,8 +261,8 @@ impl MessageFramedReader {
 }
 
 #[derive(Debug)]
-pub struct PayloadEncryptionTypeSelectRequest {
-    pub user_token: String,
+pub struct PayloadEncryptionTypeSelectRequest<'a> {
+    pub user_token: &'a str,
     pub encryption_token: Bytes,
 }
 
@@ -277,11 +277,11 @@ pub struct PayloadEncryptionTypeSelector;
 
 impl PayloadEncryptionTypeSelector {
     #[instrument(fields(request.user_token))]
-    pub async fn select(request: PayloadEncryptionTypeSelectRequest) -> Result<PayloadEncryptionTypeSelectResult, PpaassError> {
+    pub async fn select<'a>(request: PayloadEncryptionTypeSelectRequest<'a>) -> Result<PayloadEncryptionTypeSelectResult, PpaassError> {
         let PayloadEncryptionTypeSelectRequest { user_token, encryption_token } = request;
         Ok(PayloadEncryptionTypeSelectResult {
             payload_encryption_type: PayloadEncryptionType::Blowfish(encryption_token.clone()),
-            user_token,
+            user_token: user_token.to_string(),
             encryption_token,
         })
     }

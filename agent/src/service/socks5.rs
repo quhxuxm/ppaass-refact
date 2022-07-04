@@ -57,7 +57,7 @@ impl Socks5FlowProcessor {
             buffer,
             ..
         } = Socks5AuthenticateFlow::exec(Socks5AuthenticateFlowRequest {
-            client_connection_id: client_connection_id.clone(),
+            client_connection_id: client_connection_id.as_str(),
             client_stream,
             client_address,
             buffer,
@@ -66,7 +66,7 @@ impl Socks5FlowProcessor {
         debug!("Client connection [{}] success to do authenticate, begin to init.", client_connection_id);
         let init_flow_result = Socks5InitFlow::exec(
             Socks5InitFlowRequest {
-                client_connection_id: client_connection_id.clone(),
+                client_connection_id: client_connection_id.as_str(),
                 client_stream,
                 client_address,
                 buffer,
@@ -89,8 +89,8 @@ impl Socks5FlowProcessor {
             } => {
                 let TcpRelayFlowResult { client_address } = TcpRelayFlow::exec(
                     TcpRelayFlowRequest {
-                        client_connection_id: client_connection_id.clone(),
-                        proxy_connection_id: proxy_connection_id.clone(),
+                        client_connection_id: client_connection_id.as_str(),
+                        proxy_connection_id: proxy_connection_id.as_str(),
                         client_address,
                         client_stream,
                         message_framed_write,
@@ -125,8 +125,8 @@ impl Socks5FlowProcessor {
                     Socks5UdpRelayFlowRequest {
                         associated_udp_socket,
                         associated_udp_address,
-                        client_connection_id: client_connection_id.clone(),
-                        proxy_connection_id: proxy_connection_id.clone(),
+                        client_connection_id: client_connection_id.as_str(),
+                        proxy_connection_id: proxy_connection_id.as_str(),
                         client_address: client_address.clone(),
                         client_stream,
                         message_framed_write,

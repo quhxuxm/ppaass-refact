@@ -21,8 +21,8 @@ use super::{common::TcpRelayFlowResult, pool::ProxyConnectionPool};
 mod connect;
 
 #[derive(Debug)]
-pub(crate) struct HttpFlowRequest {
-    pub client_connection_id: String,
+pub(crate) struct HttpFlowRequest<'a> {
+    pub client_connection_id: &'a str,
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,
     pub buffer: BytesMut,
@@ -35,8 +35,8 @@ pub(crate) struct HttpFlow;
 
 impl HttpFlow {
     #[instrument(level = "error")]
-    pub async fn exec<T>(
-        request: HttpFlowRequest, rsa_crypto_fetcher: Arc<T>, configuration: Arc<AgentConfig>, proxy_connection_pool: Arc<ProxyConnectionPool>,
+    pub async fn exec<'a, T>(
+        request: HttpFlowRequest<'a>, rsa_crypto_fetcher: Arc<T>, configuration: Arc<AgentConfig>, proxy_connection_pool: Arc<ProxyConnectionPool>,
     ) -> Result<HttpFlowResult>
     where
         T: RsaCryptoFetcher + Send + Sync + Debug + 'static,
@@ -59,7 +59,7 @@ impl HttpFlow {
             proxy_connection_id,
         } = HttpConnectFlow::exec(
             HttpConnectFlowRequest {
-                client_connection_id: client_connection_id.clone(),
+                client_connection_id,
                 client_address,
                 client_stream,
                 initial_buf: buffer,
@@ -72,7 +72,7 @@ impl HttpFlow {
         let TcpRelayFlowResult { .. } = TcpRelayFlow::exec(
             TcpRelayFlowRequest {
                 client_connection_id,
-                proxy_connection_id,
+                proxy_connection_id: proxy_connection_id.as_str(),
                 client_address,
                 client_stream,
                 message_framed_write,

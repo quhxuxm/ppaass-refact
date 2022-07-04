@@ -15,8 +15,8 @@ use crate::message::socks5::{Socks5AuthCommandResultContent, Socks5AuthMethod};
 
 #[allow(unused)]
 #[derive(Debug)]
-pub(crate) struct Socks5AuthenticateFlowRequest {
-    pub client_connection_id: String,
+pub(crate) struct Socks5AuthenticateFlowRequest<'a> {
+    pub client_connection_id: &'a str,
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,
     pub buffer: BytesMut,
@@ -34,7 +34,7 @@ pub(crate) struct Socks5AuthenticateFlow;
 
 impl Socks5AuthenticateFlow {
     #[instrument(skip_all, fields(request.client_connection_id))]
-    pub async fn exec(request: Socks5AuthenticateFlowRequest) -> Result<Socks5AuthenticateFlowResult> {
+    pub async fn exec<'a>(request: Socks5AuthenticateFlowRequest<'a>) -> Result<Socks5AuthenticateFlowResult> {
         let Socks5AuthenticateFlowRequest {
             client_connection_id,
             mut client_stream,

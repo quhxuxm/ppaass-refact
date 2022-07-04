@@ -81,7 +81,7 @@ impl ClientConnection {
                 let FramedParts { read_buf: buffer, .. } = framed.into_parts();
                 let HttpFlowResult = HttpFlow::exec(
                     HttpFlowRequest {
-                        client_connection_id: client_connection_id.clone(),
+                        client_connection_id: client_connection_id.as_str(),
                         client_stream,
                         client_address,
                         buffer,
@@ -120,12 +120,12 @@ impl ClientConnection {
 
 #[allow(unused)]
 #[derive(Debug)]
-pub(crate) struct TcpRelayFlowRequest<T>
+pub(crate) struct TcpRelayFlowRequest<'a, T>
 where
     T: RsaCryptoFetcher,
 {
-    pub client_connection_id: String,
-    pub proxy_connection_id: String,
+    pub client_connection_id: &'a str,
+    pub proxy_connection_id: &'a str,
     pub client_stream: TcpStream,
     pub client_address: SocketAddr,
     pub message_framed_write: MessageFramedWrite<T, ProxyConnection>,
@@ -168,7 +168,7 @@ pub(crate) struct TcpRelayFlow;
 
 impl TcpRelayFlow {
     #[instrument(fields(request.client_connection_id), skip_all)]
-    pub async fn exec<T>(request: TcpRelayFlowRequest<T>, configuration: Arc<AgentConfig>) -> Result<TcpRelayFlowResult>
+    pub async fn exec<'a, T>(request: TcpRelayFlowRequest<'a, T>, configuration: Arc<AgentConfig>) -> Result<TcpRelayFlowResult>
     where
         T: RsaCryptoFetcher + Send + Sync + Debug + 'static,
     {
@@ -185,16 +185,17 @@ impl TcpRelayFlow {
         } = request;
 
         let (client_stream_read, client_stream_write) = client_stream.into_split();
-        let connection_id_p2c = client_connection_id.clone();
-        let target_address_p2c = target_address.clone();
 
+        let target_address_p2c = target_address.clone();
+        let client_connection_id_p2c = client_connection_id.to_string();
+        let client_connection_id_c2p = client_connection_id.to_string();
         tokio::spawn(async move {
             if let Err(TcpRelayP2CError {
                 mut client_stream_write,
                 source,
                 connection_closed,
                 ..
-            }) = Self::relay_proxy_to_client(connection_id_p2c, target_address_p2c, message_framed_read, client_stream_write).await
+            }) = Self::relay_proxy_to_client(&client_connection_id_p2c, target_address_p2c, message_framed_read, client_stream_write).await
             {
                 error!("Error happen when relay data from proxy to client, error: {:#?}", source);
                 if let Err(e) = client_stream_write.flush().await {
@@ -215,7 +216,7 @@ impl TcpRelayFlow {
                 connection_closed,
                 ..
             }) = Self::relay_client_to_proxy(
-                client_connection_id,
+                &client_connection_id_c2p,
                 init_data,
                 message_framed_write,
                 source_address,
@@ -243,7 +244,7 @@ impl TcpRelayFlow {
 
     #[instrument(fields(connection_id), skip_all)]
     async fn relay_client_to_proxy<T>(
-        connection_id: String, init_data: Option<Vec<u8>>, mut message_framed_write: MessageFramedWrite<T, ProxyConnection>, source_address_a2t: NetAddress,
+        connection_id: &str, init_data: Option<Vec<u8>>, mut message_framed_write: MessageFramedWrite<T, ProxyConnection>, source_address_a2t: NetAddress,
         target_address_a2t: NetAddress, mut client_stream_read: OwnedReadHalf, configuration: Arc<AgentConfig>,
     ) -> Result<(), TcpRelayC2PError<T>>
     where
@@ -253,7 +254,7 @@ impl TcpRelayFlow {
         if let Some(init_data) = init_data {
             let payload_encryption_type = match PayloadEncryptionTypeSelector::select(PayloadEncryptionTypeSelectRequest {
                 encryption_token: generate_uuid().into(),
-                user_token: user_token.clone(),
+                user_token: user_token.as_str(),
             })
             .await
             {
@@ -269,9 +270,9 @@ impl TcpRelayFlow {
                 Ok(PayloadEncryptionTypeSelectResult { payload_encryption_type, .. }) => payload_encryption_type,
             };
             let write_agent_message_result = MessageFramedWriter::write(WriteMessageFramedRequest {
-                connection_id: Some(connection_id.as_str()),
+                connection_id: Some(connection_id),
                 message_framed_write,
-                ref_id: Some(connection_id.as_str()),
+                ref_id: Some(connection_id),
                 user_token: configuration.user_token().clone().expect("Can not get user token").as_str(),
                 payload_encryption_type,
                 message_payloads: Some(vec![MessagePayload {
@@ -349,7 +350,7 @@ impl TcpRelayFlow {
             };
             let payload_encryption_type = match PayloadEncryptionTypeSelector::select(PayloadEncryptionTypeSelectRequest {
                 encryption_token: generate_uuid().into(),
-                user_token: user_token.clone(),
+                user_token: user_token.as_str(),
             })
             .await
             {
@@ -379,9 +380,9 @@ impl TcpRelayFlow {
             }
 
             let write_agent_message_result = MessageFramedWriter::write(WriteMessageFramedRequest {
-                connection_id: Some(connection_id.as_str()),
+                connection_id: Some(connection_id),
                 message_framed_write,
-                ref_id: Some(connection_id.as_str()),
+                ref_id: Some(connection_id),
                 user_token: configuration.user_token().clone().expect("Can not get user token").as_str(),
                 payload_encryption_type: payload_encryption_type.clone(),
                 message_payloads: Some(payloads),
@@ -412,14 +413,13 @@ impl TcpRelayFlow {
 
     #[instrument(fields(connection_id), skip_all)]
     async fn relay_proxy_to_client<T>(
-        connection_id: String, _target_address_t2a: NetAddress, mut message_framed_read: MessageFramedRead<T, ProxyConnection>,
+        connection_id: &str, _target_address_t2a: NetAddress, mut message_framed_read: MessageFramedRead<T, ProxyConnection>,
         mut client_stream_write: OwnedWriteHalf,
     ) -> Result<(), TcpRelayP2CError<T>>
     where
         T: RsaCryptoFetcher + Debug,
     {
         loop {
-            let connection_id = connection_id.clone();
             let read_proxy_message_result = MessageFramedReader::read(ReadMessageFramedRequest {
                 connection_id,
                 message_framed_read,
