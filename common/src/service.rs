@@ -48,20 +48,20 @@ impl MessageFramedGenerator {
     }
 }
 
-pub struct WriteMessageFramedRequest<T, S>
+pub struct WriteMessageFramedRequest<'a, T, S>
 where
     T: RsaCryptoFetcher,
     S: AsyncRead + AsyncWrite,
 {
     pub message_framed_write: MessageFramedWrite<T, S>,
     pub message_payloads: Option<Vec<MessagePayload>>,
-    pub ref_id: Option<String>,
-    pub connection_id: Option<String>,
-    pub user_token: String,
+    pub ref_id: Option<&'a str>,
+    pub connection_id: Option<&'a str>,
+    pub user_token: &'a str,
     pub payload_encryption_type: PayloadEncryptionType,
 }
 
-impl<T, S> Debug for WriteMessageFramedRequest<T, S>
+impl<'a, T, S> Debug for WriteMessageFramedRequest<'a, T, S>
 where
     T: RsaCryptoFetcher,
     S: AsyncRead + AsyncWrite,
@@ -70,7 +70,7 @@ where
         write!(
             f,
             "WriteMessageServiceRequest: ref_id={}, user_token={}, payload_encryption_type={:#?}",
-            self.ref_id.as_ref().unwrap_or(&"".to_string()),
+            self.ref_id.unwrap_or(""),
             self.user_token,
             self.payload_encryption_type
         )
@@ -99,7 +99,7 @@ pub struct MessageFramedWriter;
 
 impl MessageFramedWriter {
     #[instrument(fields(request.connection_id))]
-    pub async fn write<T, S>(request: WriteMessageFramedRequest<T, S>) -> Result<WriteMessageFramedResult<T, S>, WriteMessageFramedError<T, S>>
+    pub async fn write<'a, T, S>(request: WriteMessageFramedRequest<'a, T, S>) -> Result<WriteMessageFramedResult<T, S>, WriteMessageFramedError<T, S>>
     where
         T: RsaCryptoFetcher,
         S: AsyncRead + AsyncWrite,
@@ -116,7 +116,7 @@ impl MessageFramedWriter {
             None => vec![Message::new(
                 generate_uuid(),
                 ref_id,
-                connection_id,
+                connection_id.map(|v| v.to_string()),
                 user_token,
                 payload_encryption_type,
                 None::<Bytes>,
@@ -127,7 +127,7 @@ impl MessageFramedWriter {
                     Message::new(
                         generate_uuid(),
                         ref_id.clone(),
-                        connection_id.clone(),
+                        connection_id.map(|v| v.to_string()),
                         user_token.clone(),
                         payload_encryption_type.clone(),
                         Some(item),

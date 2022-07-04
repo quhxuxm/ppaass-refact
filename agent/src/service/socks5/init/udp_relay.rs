@@ -109,10 +109,10 @@ impl Socks5UdpRelayFlow {
                             Ok(PayloadEncryptionTypeSelectResult { payload_encryption_type, .. }) => payload_encryption_type,
                         };
                         let write_agent_message_result = MessageFramedWriter::write(WriteMessageFramedRequest {
-                            connection_id: Some(client_connection_id_a2p.clone()),
+                            connection_id: Some(client_connection_id_a2p.as_str()),
                             message_framed_write,
-                            ref_id: Some(client_connection_id_a2p.clone()),
-                            user_token: configuration.user_token().clone().unwrap(),
+                            ref_id: Some(client_connection_id_a2p.as_str()),
+                            user_token: configuration.user_token().clone().expect("Can not get user token").as_str(),
                             payload_encryption_type,
                             message_payloads: Some(vec![MessagePayload {
                                 source_address: Some(client_address_a2p.clone()),

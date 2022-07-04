@@ -120,9 +120,9 @@ impl InitializeFlow {
                     message_framed_write,
                     message_payloads: Some(vec![heartbeat_success]),
                     payload_encryption_type,
-                    user_token,
-                    ref_id: Some(message_id),
-                    connection_id: Some(connection_id),
+                    user_token: user_token.as_str(),
+                    ref_id: Some(message_id.as_str()),
+                    connection_id: Some(connection_id.as_str()),
                 })
                 .await
                 {

@@ -189,7 +189,7 @@ impl ProxyConnectionPool {
                                 message_payloads: Some(vec![heartbeat_message_payload]),
                                 payload_encryption_type,
                                 ref_id: None,
-                                user_token: user_token.clone(),
+                                user_token: user_token.as_str(),
                             })
                             .await
                             {

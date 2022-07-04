@@ -375,11 +375,11 @@ impl TcpRelayFlow {
             };
             message_framed_write = match MessageFramedWriter::write(WriteMessageFramedRequest {
                 message_framed_write,
-                ref_id: Some(agent_tcp_connect_message_id.to_string()),
-                user_token: user_token.to_string(),
+                ref_id: Some(agent_tcp_connect_message_id),
+                user_token,
                 payload_encryption_type,
                 message_payloads: Some(payloads),
-                connection_id: Some(connection_id.to_string()),
+                connection_id: Some(connection_id),
             })
             .await
             {

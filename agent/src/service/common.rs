@@ -269,10 +269,10 @@ impl TcpRelayFlow {
                 Ok(PayloadEncryptionTypeSelectResult { payload_encryption_type, .. }) => payload_encryption_type,
             };
             let write_agent_message_result = MessageFramedWriter::write(WriteMessageFramedRequest {
-                connection_id: Some(connection_id.clone()),
+                connection_id: Some(connection_id.as_str()),
                 message_framed_write,
-                ref_id: Some(connection_id.clone()),
-                user_token: configuration.user_token().clone().unwrap(),
+                ref_id: Some(connection_id.as_str()),
+                user_token: configuration.user_token().clone().expect("Can not get user token").as_str(),
                 payload_encryption_type,
                 message_payloads: Some(vec![MessagePayload {
                     source_address: Some(source_address_a2t.clone()),
@@ -379,10 +379,10 @@ impl TcpRelayFlow {
             }
 
             let write_agent_message_result = MessageFramedWriter::write(WriteMessageFramedRequest {
-                connection_id: Some(connection_id.clone()),
+                connection_id: Some(connection_id.as_str()),
                 message_framed_write,
-                ref_id: Some(connection_id.clone()),
-                user_token: configuration.user_token().clone().unwrap(),
+                ref_id: Some(connection_id.as_str()),
+                user_token: configuration.user_token().clone().expect("Can not get user token").as_str(),
                 payload_encryption_type: payload_encryption_type.clone(),
                 message_payloads: Some(payloads),
             })

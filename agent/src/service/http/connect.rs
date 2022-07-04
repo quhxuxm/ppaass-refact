@@ -168,10 +168,10 @@ impl HttpConnectFlow {
         })
         .await?;
         let message_framed_write = match MessageFramedWriter::write(WriteMessageFramedRequest {
-            connection_id: Some(proxy_connection_id.clone()),
+            connection_id: Some(proxy_connection_id.as_str()),
             message_framed_write,
             payload_encryption_type,
-            user_token: configuration.user_token().clone().unwrap(),
+            user_token: configuration.user_token().clone().expect("Can not get user token").as_str(),
             ref_id: None,
             message_payloads: Some(vec![MessagePayload {
                 source_address: Some(request.client_address.into()),
