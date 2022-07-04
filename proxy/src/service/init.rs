@@ -96,6 +96,8 @@ impl InitializeFlow {
                         message_id,
                         message_payload:
                             Some(MessagePayload {
+                                source_address,
+                                target_address,
                                 payload_type: PayloadType::AgentPayload(AgentMessagePayloadTypeValue::Heartbeat),
                                 ..
                             }),
@@ -126,10 +128,12 @@ impl InitializeFlow {
                 .await
                 {
                     Err(WriteMessageFramedError { source, .. }) => {
+                        error!("Connection [{}] fail to write heartbeat success to agent because of error, source address: {:?}, target address: {:?}, client address: {:?}", connection_id, source_address, target_address, agent_address);
                         return Err(anyhow!(source));
                     },
                     Ok(WriteMessageFramedResult { mut message_framed_write }) => {
                         if let Err(e) = message_framed_write.flush().await {
+                            error!("Connection [{}] fail to write heartbeat success to agent because of error, source address: {:?}, target address: {:?}, client address: {:?}", connection_id, source_address, target_address, agent_address);
                             return Err(anyhow!(e));
                         }
                         message_framed_write
