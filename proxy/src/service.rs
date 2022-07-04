@@ -121,7 +121,7 @@ impl AgentConnection {
         let MessageFramedGenerateResult {
             mut message_framed_write,
             mut message_framed_read,
-        } = MessageFramedGenerator::generate(agent_stream, message_framed_buffer_size, compress, rsa_crypto_fetcher.clone()).await;
+        } = MessageFramedGenerator::generate(agent_stream, message_framed_buffer_size, compress, rsa_crypto_fetcher).await;
         debug!("Connection [{}] is going to handle tcp connect.", connection_id);
 
         loop {
