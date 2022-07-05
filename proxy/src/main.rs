@@ -135,13 +135,7 @@ fn main() -> Result<()> {
             eprintln!("Fail to start proxy server configuration file watch because of error: {:#?}", e);
             return Err(anyhow!(e));
         }
-        let mut configuration_file = std::fs::File::open(configuration_file_path).expect("Fail to read proxy configuration file.");
-        let mut configuration_file_content = String::new();
-        if let Err(e) = configuration_file.read_to_string(&mut configuration_file_content) {
-            eprintln!("Fail to read proxy server configuration file because of error: {:#?}", e);
-
-            return Err(anyhow!(e));
-        };
+        let configuration_file_content = std::fs::read_to_string(configuration_file_path).expect("Fail to read proxy configuration file.");
         let mut configuration = toml::from_str::<ProxyConfig>(&configuration_file_content).expect("Fail to parse proxy configuration file");
         merge_arguments_and_config(&arguments, &mut configuration);
         let rsa_dir_path = configuration.rsa_root_dir().as_ref().expect("Fail to read rsa root directory.");
