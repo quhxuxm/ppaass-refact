@@ -1,7 +1,6 @@
 use anyhow::anyhow;
 use anyhow::Result;
 
-use bytes::Bytes;
 use common::{
     generate_uuid, AgentMessagePayloadTypeValue, MessageFramedRead, MessageFramedReader, MessageFramedWrite, MessageFramedWriter, MessagePayload, NetAddress,
     PayloadEncryptionTypeSelectRequest, PayloadEncryptionTypeSelectResult, PayloadEncryptionTypeSelector, PayloadType, PpaassError,
@@ -115,7 +114,7 @@ impl InitializeFlow {
                     source_address: None,
                     target_address: None,
                     payload_type: PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::HeartbeatSuccess),
-                    data: Bytes::new(),
+                    data: None,
                 };
                 let message_framed_write = match MessageFramedWriter::write(WriteMessageFramedRequest {
                     message_framed_write,

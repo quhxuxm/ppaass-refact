@@ -7,7 +7,7 @@ use std::{
 
 use anyhow::anyhow;
 use anyhow::Result;
-use bytes::Bytes;
+
 use common::{
     generate_uuid, AgentMessagePayloadTypeValue, MessageFramedGenerateResult, MessageFramedGenerator, MessageFramedRead, MessageFramedReader,
     MessageFramedWrite, MessageFramedWriter, MessagePayload, NetAddress, PayloadEncryptionTypeSelectRequest, PayloadEncryptionTypeSelectResult,
@@ -90,7 +90,7 @@ impl Socks5UdpAssociateFlow {
                 source_address: Some(client_address.clone().into()),
                 target_address: None,
                 payload_type: PayloadType::AgentPayload(AgentMessagePayloadTypeValue::UdpAssociate),
-                data: Bytes::new(),
+                data: None,
             }]),
         })
         .await

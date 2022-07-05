@@ -279,7 +279,7 @@ impl TcpRelayFlow {
                     source_address: Some(source_address_a2t.clone()),
                     target_address: Some(target_address_a2t.clone()),
                     payload_type: PayloadType::AgentPayload(AgentMessagePayloadTypeValue::TcpData),
-                    data: init_data.into(),
+                    data: Some(init_data.into()),
                 }]),
             })
             .await;
@@ -374,7 +374,7 @@ impl TcpRelayFlow {
                     source_address: Some(source_address_a2t.clone()),
                     target_address: Some(target_address_a2t.clone()),
                     payload_type: PayloadType::AgentPayload(AgentMessagePayloadTypeValue::TcpData),
-                    data: chunk_data,
+                    data: Some(chunk_data),
                 };
                 payloads.push(payload)
             }
@@ -441,7 +441,7 @@ impl TcpRelayFlow {
                         Some(ReadMessageFramedResultContent {
                             message_payload:
                                 Some(MessagePayload {
-                                    data,
+                                    data: Some(data),
                                     payload_type: PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::TcpData),
                                     ..
                                 }),

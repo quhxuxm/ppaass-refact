@@ -1,6 +1,6 @@
 use anyhow::anyhow;
 use anyhow::Result;
-use bytes::Bytes;
+
 use common::{
     generate_uuid, MessageFramedRead, MessageFramedWrite, MessageFramedWriter, MessagePayload, NetAddress, PayloadEncryptionTypeSelectRequest,
     PayloadEncryptionTypeSelectResult, PayloadEncryptionTypeSelector, PayloadType, ProxyMessagePayloadTypeValue, RsaCryptoFetcher, TcpConnectRequest,
@@ -82,7 +82,7 @@ impl TcpConnectFlow {
                     source_address: Some(source_address),
                     target_address: Some(target_address),
                     payload_type: PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::TcpConnectFail),
-                    data: Bytes::new(),
+                    data: None,
                 };
                 match MessageFramedWriter::write(WriteMessageFramedRequest {
                     message_framed_write,
@@ -116,7 +116,7 @@ impl TcpConnectFlow {
             source_address: Some(source_address.clone()),
             target_address: Some(target_address.clone()),
             payload_type: PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::TcpConnectSuccess),
-            data: Bytes::new(),
+            data: None,
         };
         let message_framed_write = match MessageFramedWriter::write(WriteMessageFramedRequest {
             message_framed_write,

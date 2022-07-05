@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 
 use anyhow::anyhow;
 use anyhow::Result;
-use bytes::Bytes;
+
 use common::{
     generate_uuid, MessageFramedRead, MessageFramedWrite, MessageFramedWriter, MessagePayload, NetAddress, PayloadEncryptionTypeSelectRequest,
     PayloadEncryptionTypeSelectResult, PayloadEncryptionTypeSelector, PayloadType, ProxyMessagePayloadTypeValue, RsaCryptoFetcher, WriteMessageFramedError,
@@ -71,7 +71,7 @@ impl UdpAssociateFlow {
             source_address: Some(source_address.clone()),
             target_address: None,
             payload_type: PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::UdpAssociateSuccess),
-            data: Bytes::new(),
+            data: None,
         };
         let message_framed_write = match MessageFramedWriter::write(WriteMessageFramedRequest {
             message_framed_write,

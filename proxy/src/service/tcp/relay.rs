@@ -215,7 +215,7 @@ impl TcpRelayFlow {
                             message_payload:
                                 Some(MessagePayload {
                                     payload_type: PayloadType::AgentPayload(AgentMessagePayloadTypeValue::TcpData),
-                                    data,
+                                    data: Some(data),
                                     ..
                                 }),
                             ..
@@ -354,7 +354,7 @@ impl TcpRelayFlow {
                     source_address: Some(source_address.clone()),
                     target_address: Some(target_address.clone()),
                     payload_type: PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::TcpData),
-                    data: chunk_data,
+                    data: Some(chunk_data),
                 };
                 payloads.push(proxy_message_payload)
             }

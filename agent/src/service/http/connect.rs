@@ -7,7 +7,7 @@ use anyhow::anyhow;
 use anyhow::Result;
 use bytecodec::bytes::BytesEncoder;
 use bytecodec::EncodeExt;
-use bytes::{Bytes, BytesMut};
+use bytes::BytesMut;
 
 use common::{
     generate_uuid, AgentMessagePayloadTypeValue, MessageFramedGenerateResult, MessageFramedGenerator, MessageFramedRead, MessageFramedReader,
@@ -177,7 +177,7 @@ impl HttpConnectFlow {
                 source_address: Some(request.client_address.into()),
                 target_address: Some(target_address),
                 payload_type: PayloadType::AgentPayload(AgentMessagePayloadTypeValue::TcpConnect),
-                data: Bytes::new(),
+                data: None,
             }]),
         })
         .await

@@ -82,7 +82,7 @@ impl UdpRelayFlow {
                                         source_address,
                                         target_address: Some(target_address),
                                         payload_type: PayloadType::AgentPayload(AgentMessagePayloadTypeValue::UdpData),
-                                        data,
+                                        data: Some(data),
                                     }),
                                 user_token,
                             }),
@@ -155,7 +155,7 @@ impl UdpRelayFlow {
                             connection_id: Some(connection_id.as_str()),
                             message_framed_write,
                             message_payloads: Some(vec![MessagePayload {
-                                data: Bytes::copy_from_slice(received_data),
+                                data: Some(Bytes::copy_from_slice(received_data)),
                                 payload_type: PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::UdpData),
                                 source_address,
                                 target_address: Some(target_address),

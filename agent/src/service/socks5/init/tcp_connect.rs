@@ -4,7 +4,6 @@ use std::{io::ErrorKind, sync::Arc};
 
 use anyhow::anyhow;
 use anyhow::Result;
-use bytes::Bytes;
 
 use futures::SinkExt;
 
@@ -86,7 +85,7 @@ impl Socks5TcpConnectFlow {
                 source_address: Some(client_address.into()),
                 target_address: Some(dest_address.clone().into()),
                 payload_type: PayloadType::AgentPayload(AgentMessagePayloadTypeValue::TcpConnect),
-                data: Bytes::new(),
+                data: None,
             }]),
         })
         .await

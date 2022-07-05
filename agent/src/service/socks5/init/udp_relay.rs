@@ -118,7 +118,7 @@ impl Socks5UdpRelayFlow {
                                 source_address: Some(client_address_a2p.clone()),
                                 target_address: Some(udp_destination_address.into()),
                                 payload_type: PayloadType::AgentPayload(AgentMessagePayloadTypeValue::UdpData),
-                                data: socks5_udp_data.data,
+                                data: Some(socks5_udp_data.data),
                             }]),
                         })
                         .await;
@@ -172,7 +172,7 @@ impl Socks5UdpRelayFlow {
                                         source_address: Some(source_address),
                                         target_address: Some(target_address),
                                         payload_type: PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::UdpData),
-                                        data,
+                                        data: Some(data),
                                     }),
                                 ..
                             }),

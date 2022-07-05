@@ -8,7 +8,6 @@ use std::{
 };
 use std::{fmt::Debug, ops::Deref};
 
-use bytes::Bytes;
 use common::{
     generate_uuid, AgentMessagePayloadTypeValue, MessageFramedGenerateResult, MessageFramedGenerator, MessageFramedReader, MessageFramedWriter, MessagePayload,
     PayloadEncryptionTypeSelectRequest, PayloadEncryptionTypeSelectResult, PayloadEncryptionTypeSelector, PayloadType, ProxyMessagePayloadTypeValue,
@@ -178,7 +177,7 @@ impl ProxyConnectionPool {
                                 Ok(v) => v,
                             };
                             let heartbeat_message_payload = MessagePayload {
-                                data: Bytes::new(),
+                                data: None,
                                 source_address: None,
                                 target_address: None,
                                 payload_type: PayloadType::AgentPayload(AgentMessagePayloadTypeValue::Heartbeat),

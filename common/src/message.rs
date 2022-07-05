@@ -452,7 +452,7 @@ pub struct MessagePayload {
     /// The payload type
     pub payload_type: PayloadType,
     /// The data
-    pub data: Bytes,
+    pub data: Option<Bytes>,
 }
 
 impl Debug for MessagePayload {
@@ -461,7 +461,7 @@ impl Debug for MessagePayload {
             .field("source_address", &self.source_address)
             .field("target_address", &self.target_address)
             .field("payload_type", &self.payload_type)
-            .field("data", &format!("\n\n{}\n", pretty_hex(&self.data)))
+            .field("data", &format!("\n\n{}\n", pretty_hex(self.data.as_ref().unwrap_or(&Bytes::new()))))
             .finish()
     }
 }
@@ -488,9 +488,17 @@ impl From<MessagePayload> for Bytes {
                 result.put::<Bytes>(target_address.into());
             },
         }
-        result.put_u64(value.data.len() as u64);
-        result.put(value.data);
-        result.into()
+        match value.data {
+            None => {
+                result.put_u64(0);
+                result.into()
+            },
+            Some(data_content) => {
+                result.put_u64(data_content.len() as u64);
+                result.put(data_content);
+                result.into()
+            },
+        }
     }
 }
 
@@ -546,6 +554,14 @@ impl TryFrom<Bytes> for MessagePayload {
             return Err(PpaassError::CodecError);
         }
         let data_length = value.get_u64() as usize;
+        if data_length == 0 {
+            return Ok(Self {
+                payload_type,
+                source_address,
+                target_address,
+                data: None,
+            });
+        }
         if value.remaining() < data_length {
             error!("Fail to parse message payload because of no remaining");
             return Err(PpaassError::CodecError);
@@ -555,7 +571,7 @@ impl TryFrom<Bytes> for MessagePayload {
             payload_type,
             source_address,
             target_address,
-            data,
+            data: Some(data),
         })
     }
 }
