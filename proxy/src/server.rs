@@ -140,8 +140,10 @@ impl ProxyServer {
                                 error!(
                                     "Error happen when handle agent connection: [{}], agent address:[{}], error:{:#?}",
                                     agent_connection_id, agent_address, e
-                                )
+                                );
+                                return;
                             }
+                            info!("Agent connection [{agent_connection_id}] complete exec successfully.");
                         });
                     }
                 });
