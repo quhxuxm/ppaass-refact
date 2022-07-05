@@ -138,9 +138,9 @@ impl MessageFramedWriter {
         let mut message_framed_write = message_framed_write;
         let mut messages_stream: MessageStream = messages.into();
         if let Err(e) = message_framed_write.send_all(&mut messages_stream).await {
-            error!("Fail to write message because of error: {:#?}", e);
+            error!("Connection [{connection_id:?}] fail to write message because of error: {:#?}", e);
             if let Err(e) = message_framed_write.close().await {
-                error!("Fail to close message writer because of error: {:#?}", e);
+                error!("Connection [{connection_id:?}] fail to close message writer because of error: {:#?}", e);
             };
             return Err(WriteMessageFramedError {
                 message_framed_write,
@@ -148,9 +148,9 @@ impl MessageFramedWriter {
             });
         }
         if let Err(e) = message_framed_write.flush().await {
-            error!("Fail to flush message because of error: {:#?}", e);
+            error!("Connection [{connection_id:?}] fail to flush message because of error: {:#?}", e);
             if let Err(e) = message_framed_write.close().await {
-                error!("Fail to close message writer because of error: {:#?}", e);
+                error!("Connection [{connection_id:?}] fail to close message writer because of error: {e:#?}");
             };
             return Err(WriteMessageFramedError {
                 message_framed_write,
@@ -215,6 +215,7 @@ impl MessageFramedReader {
         let timeout_seconds = timeout.unwrap_or(u64::MAX);
         let result = match tokio::time::timeout(Duration::from_secs(timeout_seconds), message_framed_read.next()).await {
             Err(_) => {
+                error!("Connection [{connection_id}] fail to read message from frame because of timeout:{timeout_seconds}");
                 return Err(ReadMessageFramedError {
                     message_framed_read,
                     source: PpaassError::TimeoutError { elapsed: timeout_seconds },
@@ -241,10 +242,7 @@ impl MessageFramedReader {
                                 Some(v)
                             },
                             Err(e) => {
-                                error!(
-                                    "Connection [{}] fail to decode message payload because of error, error: {:#?}",
-                                    connection_id, e
-                                );
+                                error!("Connection [{connection_id}] fail to decode message payload because of error, error: {e:#?}");
                                 return Err(ReadMessageFramedError {
                                     message_framed_read,
                                     source: e,
@@ -256,7 +254,7 @@ impl MessageFramedReader {
                 message_framed_read,
             },
             Ok(Some(Err(e))) => {
-                error!("Connection [{}] fail to decode message because of error, error: {:#?}", connection_id, e);
+                error!("Connection [{connection_id}] fail to decode message because of error, error: {e:#?}");
                 return Err(ReadMessageFramedError {
                     message_framed_read,
                     source: e,
@@ -314,12 +312,11 @@ impl TcpConnector {
             connect_addresses,
             connected_stream_so_linger,
         } = request;
-        debug!("Begin connect to target: {:?}", connect_addresses);
+        debug!("Begin connect to target: {connect_addresses:?}");
         let connected_stream = TcpStream::connect(&connect_addresses.as_slice()).await?;
         connected_stream.set_nodelay(true)?;
         connected_stream.set_linger(Some(Duration::from_secs(connected_stream_so_linger)))?;
-
-        debug!("Success connect to target: {:?}", connect_addresses);
+        debug!("Success connect to target: {connect_addresses:?}");
         Ok(TcpConnectResult { connected_stream })
     }
 }
