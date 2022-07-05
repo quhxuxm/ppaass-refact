@@ -138,24 +138,24 @@ impl ProxyConnectionPool {
         let pool_clone_for_timer = result.pool.clone();
         tokio::spawn(
             async move {
+                let mut interval = tokio::time::interval(Duration::from_secs(proxy_connection_check_interval_seconds));
                 loop {
-                    let mut pool = pool_clone_for_timer.lock().await;
-                    let (available_connection_sender, mut available_connection_receiver) = mpsc::channel::<ProxyConnection>(2048);
-                    for connection in pool.iter_mut() {
-                        let mut interval = tokio::time::interval(Duration::from_secs(proxy_connection_check_interval_seconds));
-                        let connection = std::mem::take(connection);
-                        let connection = match connection {
-                            None => continue,
-                            Some(v) => v,
-                        };
-                        let connection_id = connection.id.clone();
-                        debug!("Checking proxy connection: {connection_id}");
-                        let user_token = user_token.clone();
-                        let rsa_crypto_fetcher = rsa_crypto_fetcher.clone();
-                        let available_stream_sender = available_connection_sender.clone();
-                        let proxy_connection_check_timeout = configuration.proxy_connection_check_timeout().clone();
-                        tokio::spawn(async move {
-                            loop {
+                    {
+                        let mut pool = pool_clone_for_timer.lock().await;
+                        let (available_connection_sender, mut available_connection_receiver) = mpsc::channel::<ProxyConnection>(2048);
+                        for connection in pool.iter_mut() {
+                            let connection = std::mem::take(connection);
+                            let connection = match connection {
+                                None => continue,
+                                Some(v) => v,
+                            };
+                            let connection_id = connection.id.clone();
+                            debug!("Checking proxy connection: {connection_id}");
+                            let user_token = user_token.clone();
+                            let rsa_crypto_fetcher = rsa_crypto_fetcher.clone();
+                            let available_stream_sender_for_single_connection = available_connection_sender.clone();
+                            let proxy_connection_check_timeout = configuration.proxy_connection_check_timeout().clone();
+                            tokio::spawn(async move {
                                 let MessageFramedGenerateResult {
                                     message_framed_write,
                                     message_framed_read,
@@ -231,11 +231,10 @@ impl ProxyConnectionPool {
                                         };
                                         let FramedParts { io: mut connection, .. } = framed.into_parts();
                                         connection.active_instant = Instant::now();
-                                        if let Err(e) = available_stream_sender.send(connection).await {
+                                        if let Err(e) = available_stream_sender_for_single_connection.send(connection).await {
                                             error!("Connection [{}] check fail because of error(send available stream): {:#?}", connection_id, e);
                                             return;
                                         };
-                                        interval.tick().await;
                                         return;
                                     },
                                     Ok(ReadMessageFramedResult { .. }) => {
@@ -243,18 +242,19 @@ impl ProxyConnectionPool {
                                         return;
                                     },
                                 }
-                            }
-                        });
+                            });
+                        }
+                        pool.clear();
+                        drop(available_connection_sender);
+                        while let Some(connection) = available_connection_receiver.recv().await {
+                            pool.push_back(Some(connection));
+                        }
+                        if let Err(e) = Self::initialize_pool(proxy_addresses.clone(), configuration.clone(), &mut pool).await {
+                            error!("Fail to initialize proxy connection pool because of error in timer, error: {:#?}", e);
+                        };
+                        debug!("Current pool size: {}", pool.len());
                     }
-                    pool.clear();
-                    drop(available_connection_sender);
-                    while let Some(connection) = available_connection_receiver.recv().await {
-                        pool.push_back(Some(connection));
-                    }
-                    if let Err(e) = Self::initialize_pool(proxy_addresses.clone(), configuration.clone(), &mut pool).await {
-                        error!("Fail to initialize proxy connection pool because of error in timer, error: {:#?}", e);
-                    };
-                    debug!("Current pool size: {}", pool.len());
+                    interval.tick().await;
                 }
             }
             .instrument(debug_span!("PROXY_CONNECTION_POOL_HEARTBEAT_TIMER")),
