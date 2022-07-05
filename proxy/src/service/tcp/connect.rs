@@ -75,7 +75,7 @@ impl TcpConnectFlow {
         } = match connect_to_target_result {
             Err(e) => {
                 let error_message = format!("Connection [{connection_id}] fail connect to target {target_address:#?} because of error: {e:#?}");
-                error!(error_message);
+                error!("{error_message}");
                 let connect_fail_payload = MessagePayload {
                     source_address: Some(source_address),
                     target_address: Some(target_address),
