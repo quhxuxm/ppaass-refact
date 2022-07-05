@@ -125,7 +125,7 @@ impl ProxyConnectionPool {
         let buffer_size = configuration.message_framed_buffer_size().unwrap_or(DEFAULT_BUFFER_SIZE);
         let compress = configuration.compress().unwrap_or(true);
         let user_token = configuration.user_token().clone().expect("No user token configured.");
-        let pool = Arc::new(Mutex::new(VecDeque::new()));
+        let pool = Arc::new(Mutex::new(VecDeque::<Option<ProxyConnection>>::new()));
         let result = Self {
             proxy_addresses: proxy_addresses.clone(),
             configuration: configuration.clone(),
@@ -138,109 +138,111 @@ impl ProxyConnectionPool {
         let pool_clone_for_timer = result.pool.clone();
         tokio::spawn(
             async move {
-                let mut interval = tokio::time::interval(Duration::from_secs(proxy_connection_check_interval_seconds));
                 loop {
-                    interval.tick().await;
                     let mut pool = pool_clone_for_timer.lock().await;
                     let (available_connection_sender, mut available_connection_receiver) = mpsc::channel::<ProxyConnection>(2048);
                     for connection in pool.iter_mut() {
+                        let mut interval = tokio::time::interval(Duration::from_secs(proxy_connection_check_interval_seconds));
                         let connection = std::mem::take(connection);
                         let connection = match connection {
                             None => continue,
                             Some(v) => v,
                         };
                         let connection_id = connection.id.clone();
-                        debug!("Checking proxy connection: {}", connection_id);
+                        debug!("Checking proxy connection: {connection_id}");
                         let user_token = user_token.clone();
                         let rsa_crypto_fetcher = rsa_crypto_fetcher.clone();
                         let available_stream_sender = available_connection_sender.clone();
                         let proxy_connection_check_timeout = configuration.proxy_connection_check_timeout().clone();
                         tokio::spawn(async move {
-                            let MessageFramedGenerateResult {
-                                message_framed_write,
-                                message_framed_read,
-                            } = MessageFramedGenerator::generate(connection, buffer_size, compress, rsa_crypto_fetcher.clone()).await;
-                            let PayloadEncryptionTypeSelectResult {
-                                user_token,
-                                payload_encryption_type,
-                                ..
-                            } = match PayloadEncryptionTypeSelector::select(PayloadEncryptionTypeSelectRequest {
-                                user_token: user_token.as_str(),
-                                encryption_token: generate_uuid().into(),
-                            })
-                            .await
-                            {
-                                Err(e) => {
-                                    error!("Connection [{}] check fail because of error: {:#?}", connection_id, e);
-                                    return;
-                                },
-                                Ok(v) => v,
-                            };
-                            let heartbeat_message_payload = MessagePayload {
-                                data: None,
-                                source_address: None,
-                                target_address: None,
-                                payload_type: PayloadType::AgentPayload(AgentMessagePayloadTypeValue::Heartbeat),
-                            };
-                            let message_framed_write = match MessageFramedWriter::write(WriteMessageFramedRequest {
-                                connection_id: None,
-                                message_framed_write,
-                                message_payloads: Some(vec![heartbeat_message_payload]),
-                                payload_encryption_type,
-                                ref_id: None,
-                                user_token: user_token.as_str(),
-                            })
-                            .await
-                            {
-                                Err(WriteMessageFramedError { source, .. }) => {
-                                    error!("Connection [{}] check fail because of error(heartbeat write): {:#?}", connection_id, source);
-                                    return;
-                                },
-                                Ok(WriteMessageFramedResult { message_framed_write }) => message_framed_write,
-                            };
-                            match MessageFramedReader::read(ReadMessageFramedRequest {
-                                connection_id: connection_id.as_str(),
-                                message_framed_read,
-                                timeout: proxy_connection_check_timeout,
-                            })
-                            .await
-                            {
-                                Err(ReadMessageFramedError { source, .. }) => {
-                                    error!("Connection [{}] check fail because of error(heartbeat read): {:#?}", connection_id, source);
-                                    return;
-                                },
-                                Ok(ReadMessageFramedResult {
+                            loop {
+                                interval.tick().await;
+                                let MessageFramedGenerateResult {
+                                    message_framed_write,
                                     message_framed_read,
-                                    content:
-                                        Some(ReadMessageFramedResultContent {
-                                            message_payload:
-                                                Some(MessagePayload {
-                                                    payload_type: PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::HeartbeatSuccess),
-                                                    ..
-                                                }),
-                                            ..
-                                        }),
-                                }) => {
-                                    info!("Heartbeat for proxy connection [{}] success.", connection_id);
-                                    let framed = match message_framed_read.reunite(message_framed_write) {
-                                        Ok(f) => f,
-                                        Err(e) => {
-                                            error!("Connection [{}] check fail because of error(merge read and write): {:#?}", connection_id, e);
-                                            return;
-                                        },
-                                    };
-                                    let FramedParts { io: mut connection, .. } = framed.into_parts();
-                                    connection.active_instant = Instant::now();
-                                    if let Err(e) = available_stream_sender.send(connection).await {
-                                        error!("Connection [{}] check fail because of error(send available stream): {:#?}", connection_id, e);
+                                } = MessageFramedGenerator::generate(connection, buffer_size, compress, rsa_crypto_fetcher.clone()).await;
+                                let PayloadEncryptionTypeSelectResult {
+                                    user_token,
+                                    payload_encryption_type,
+                                    ..
+                                } = match PayloadEncryptionTypeSelector::select(PayloadEncryptionTypeSelectRequest {
+                                    user_token: user_token.as_str(),
+                                    encryption_token: generate_uuid().into(),
+                                })
+                                .await
+                                {
+                                    Err(e) => {
+                                        error!("Connection [{}] check fail because of error: {:#?}", connection_id, e);
                                         return;
-                                    };
-                                    return;
-                                },
-                                Ok(ReadMessageFramedResult { .. }) => {
-                                    error!("Connection [{}] check fail because of closed(heartbeat read)", connection_id);
-                                    return;
-                                },
+                                    },
+                                    Ok(v) => v,
+                                };
+                                let heartbeat_message_payload = MessagePayload {
+                                    data: None,
+                                    source_address: None,
+                                    target_address: None,
+                                    payload_type: PayloadType::AgentPayload(AgentMessagePayloadTypeValue::Heartbeat),
+                                };
+                                let message_framed_write = match MessageFramedWriter::write(WriteMessageFramedRequest {
+                                    connection_id: None,
+                                    message_framed_write,
+                                    message_payloads: Some(vec![heartbeat_message_payload]),
+                                    payload_encryption_type,
+                                    ref_id: None,
+                                    user_token: user_token.as_str(),
+                                })
+                                .await
+                                {
+                                    Err(WriteMessageFramedError { source, .. }) => {
+                                        error!("Connection [{}] check fail because of error(heartbeat write): {:#?}", connection_id, source);
+                                        return;
+                                    },
+                                    Ok(WriteMessageFramedResult { message_framed_write }) => message_framed_write,
+                                };
+                                match MessageFramedReader::read(ReadMessageFramedRequest {
+                                    connection_id: connection_id.as_str(),
+                                    message_framed_read,
+                                    timeout: proxy_connection_check_timeout,
+                                })
+                                .await
+                                {
+                                    Err(ReadMessageFramedError { source, .. }) => {
+                                        error!("Connection [{}] check fail because of error(heartbeat read): {:#?}", connection_id, source);
+                                        return;
+                                    },
+                                    Ok(ReadMessageFramedResult {
+                                        message_framed_read,
+                                        content:
+                                            Some(ReadMessageFramedResultContent {
+                                                message_payload:
+                                                    Some(MessagePayload {
+                                                        payload_type: PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::HeartbeatSuccess),
+                                                        ..
+                                                    }),
+                                                ..
+                                            }),
+                                    }) => {
+                                        info!("Heartbeat for proxy connection [{}] success.", connection_id);
+                                        let framed = match message_framed_read.reunite(message_framed_write) {
+                                            Ok(f) => f,
+                                            Err(e) => {
+                                                error!("Connection [{}] check fail because of error(merge read and write): {:#?}", connection_id, e);
+                                                return;
+                                            },
+                                        };
+                                        let FramedParts { io: mut connection, .. } = framed.into_parts();
+                                        connection.active_instant = Instant::now();
+                                        if let Err(e) = available_stream_sender.send(connection).await {
+                                            error!("Connection [{}] check fail because of error(send available stream): {:#?}", connection_id, e);
+                                            return;
+                                        };
+                                        return;
+                                    },
+                                    Ok(ReadMessageFramedResult { .. }) => {
+                                        error!("Connection [{}] check fail because of closed(heartbeat read)", connection_id);
+                                        return;
+                                    },
+                                }
                             }
                         });
                     }
