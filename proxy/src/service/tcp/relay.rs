@@ -273,7 +273,7 @@ impl TcpRelayFlow {
         T: RsaCryptoFetcher + Send + Sync + 'static,
     {
         loop {
-            let mut target_buffer = BytesMut::with_capacity(target_buffer_size);
+            let mut target_buffer = vec![0u8; target_buffer_size];
             let source_address = agent_connect_message_source_address.clone();
             let target_address = agent_connect_message_target_address.clone();
             match target_stream_read.read(&mut target_buffer).await {
