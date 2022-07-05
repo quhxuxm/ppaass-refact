@@ -156,7 +156,6 @@ impl ProxyConnectionPool {
                         let proxy_connection_check_timeout = configuration.proxy_connection_check_timeout().clone();
                         tokio::spawn(async move {
                             loop {
-                                interval.tick().await;
                                 let MessageFramedGenerateResult {
                                     message_framed_write,
                                     message_framed_read,
@@ -236,6 +235,7 @@ impl ProxyConnectionPool {
                                             error!("Connection [{}] check fail because of error(send available stream): {:#?}", connection_id, e);
                                             return;
                                         };
+                                        interval.tick().await;
                                         return;
                                     },
                                     Ok(ReadMessageFramedResult { .. }) => {
