@@ -167,7 +167,6 @@ impl TcpRelayFlow {
         T: RsaCryptoFetcher + Send + Sync + Debug + 'static,
     {
         loop {
-            let connection_id = connection_id.clone();
             let read_agent_message_result = MessageFramedReader::read(ReadMessageFramedRequest {
                 connection_id,
                 message_framed_read,
@@ -345,7 +344,6 @@ impl TcpRelayFlow {
                 },
             };
             let payload_data = target_buffer.split().freeze();
-
             let payload_data_chunks = payload_data.chunks(message_framed_buffer_size);
             let mut payloads = vec![];
             for (_, chunk) in payload_data_chunks.enumerate() {
@@ -358,7 +356,6 @@ impl TcpRelayFlow {
                 };
                 payloads.push(proxy_message_payload)
             }
-
             let payload_encryption_type = match PayloadEncryptionTypeSelector::select(PayloadEncryptionTypeSelectRequest {
                 encryption_token: generate_uuid().into(),
                 user_token,
