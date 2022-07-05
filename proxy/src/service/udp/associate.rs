@@ -9,7 +9,6 @@ use common::{
     WriteMessageFramedRequest, WriteMessageFramedResult,
 };
 
-use futures::SinkExt;
 use tokio::net::TcpStream;
 use tracing::{info, instrument};
 
@@ -84,12 +83,7 @@ impl UdpAssociateFlow {
         .await
         {
             Err(WriteMessageFramedError { source, .. }) => return Err(anyhow!(source)),
-            Ok(WriteMessageFramedResult { mut message_framed_write }) => {
-                if let Err(e) = message_framed_write.flush().await {
-                    return Err(anyhow!(e));
-                }
-                message_framed_write
-            },
+            Ok(WriteMessageFramedResult { message_framed_write }) => message_framed_write,
         };
         Ok(UdpAssociateFlowResult {
             connection_id: connection_id.to_string(),

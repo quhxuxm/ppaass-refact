@@ -14,7 +14,7 @@ use common::{
     PayloadEncryptionTypeSelector, PayloadType, PpaassError, ProxyMessagePayloadTypeValue, ReadMessageFramedError, ReadMessageFramedRequest,
     ReadMessageFramedResult, ReadMessageFramedResultContent, RsaCryptoFetcher, WriteMessageFramedError, WriteMessageFramedRequest, WriteMessageFramedResult,
 };
-use futures::SinkExt;
+
 use tokio::net::UdpSocket;
 use tracing::{debug, error, instrument};
 
@@ -98,12 +98,7 @@ impl Socks5UdpAssociateFlow {
             Err(WriteMessageFramedError { source, .. }) => {
                 return Err(anyhow!(source));
             },
-            Ok(WriteMessageFramedResult { mut message_framed_write }) => {
-                if let Err(e) = message_framed_write.flush().await {
-                    return Err(anyhow!(e));
-                }
-                message_framed_write
-            },
+            Ok(WriteMessageFramedResult { message_framed_write }) => message_framed_write,
         };
 
         match MessageFramedReader::read(ReadMessageFramedRequest {

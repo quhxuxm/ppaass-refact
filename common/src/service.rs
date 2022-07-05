@@ -139,9 +139,16 @@ impl MessageFramedWriter {
         let mut messages_stream: MessageStream = messages.into();
         if let Err(e) = message_framed_write.send_all(&mut messages_stream).await {
             error!("Fail to write message because of error: {:#?}", e);
-            if let Err(e) = message_framed_write.flush().await {
-                error!("Fail to flush message because of error: {:#?}", e);
-            }
+            if let Err(e) = message_framed_write.close().await {
+                error!("Fail to close message writer because of error: {:#?}", e);
+            };
+            return Err(WriteMessageFramedError {
+                message_framed_write,
+                source: e,
+            });
+        }
+        if let Err(e) = message_framed_write.flush().await {
+            error!("Fail to flush message because of error: {:#?}", e);
             if let Err(e) = message_framed_write.close().await {
                 error!("Fail to close message writer because of error: {:#?}", e);
             };

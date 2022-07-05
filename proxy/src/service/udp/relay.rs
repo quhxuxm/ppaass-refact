@@ -179,7 +179,6 @@ impl UdpRelayFlow {
                             "Connection [{}] has a invalid payload when read from agent, message id:{}, user token:{}.",
                             connection_id, message_id, user_token
                         );
-
                         return;
                     },
                 };

@@ -5,8 +5,6 @@ use std::{io::ErrorKind, sync::Arc};
 use anyhow::anyhow;
 use anyhow::Result;
 
-use futures::SinkExt;
-
 use tracing::{debug, error, instrument};
 
 use common::{
@@ -93,12 +91,7 @@ impl Socks5TcpConnectFlow {
             Err(WriteMessageFramedError { source, .. }) => {
                 return Err(anyhow!(source));
             },
-            Ok(WriteMessageFramedResult { mut message_framed_write }) => {
-                if let Err(e) = message_framed_write.flush().await {
-                    return Err(anyhow!(e));
-                }
-                message_framed_write
-            },
+            Ok(WriteMessageFramedResult { message_framed_write }) => message_framed_write,
         };
         match MessageFramedReader::read(ReadMessageFramedRequest {
             connection_id: proxy_connection_id.as_str(),

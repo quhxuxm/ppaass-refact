@@ -12,7 +12,7 @@ use common::{
     ReadMessageFramedError, ReadMessageFramedRequest, ReadMessageFramedResult, ReadMessageFramedResultContent, RsaCryptoFetcher, WriteMessageFramedError,
     WriteMessageFramedRequest, WriteMessageFramedResult,
 };
-use futures::SinkExt;
+
 use pretty_hex::*;
 use tokio::net::{TcpStream, UdpSocket};
 use tracing::{debug, error, instrument};
@@ -134,13 +134,6 @@ impl Socks5UdpRelayFlow {
                                 message_framed_write: message_framed_write_from_result,
                             }) => {
                                 message_framed_write = message_framed_write_from_result;
-                                if let Err(e) = message_framed_write.flush().await {
-                                    error!(
-                                        "Client connection [{}] fail to flush agent message to proxy because of error: {:#?}",
-                                        client_connection_id_a2p, e
-                                    );
-                                    return;
-                                };
                             },
                         };
                     },

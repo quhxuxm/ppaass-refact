@@ -14,7 +14,7 @@ use common::{
     ReadMessageFramedError, ReadMessageFramedRequest, ReadMessageFramedResult, ReadMessageFramedResultContent, RsaCryptoFetcher, TcpConnectRequest,
     TcpConnectResult, TcpConnector, WriteMessageFramedError, WriteMessageFramedRequest, WriteMessageFramedResult,
 };
-use futures::SinkExt;
+
 use tokio::{
     io::{AsyncRead, AsyncWrite, ReadBuf},
     net::TcpStream,
@@ -182,7 +182,7 @@ impl ProxyConnectionPool {
                                 target_address: None,
                                 payload_type: PayloadType::AgentPayload(AgentMessagePayloadTypeValue::Heartbeat),
                             };
-                            let mut message_framed_write = match MessageFramedWriter::write(WriteMessageFramedRequest {
+                            let message_framed_write = match MessageFramedWriter::write(WriteMessageFramedRequest {
                                 connection_id: None,
                                 message_framed_write,
                                 message_payloads: Some(vec![heartbeat_message_payload]),
@@ -198,10 +198,6 @@ impl ProxyConnectionPool {
                                 },
                                 Ok(WriteMessageFramedResult { message_framed_write }) => message_framed_write,
                             };
-                            if let Err(e) = message_framed_write.flush().await {
-                                error!("Connection [{}] check fail because of error(heartbeat flush): {:#?}", connection_id, e);
-                                return;
-                            }
                             match MessageFramedReader::read(ReadMessageFramedRequest {
                                 connection_id: connection_id.as_str(),
                                 message_framed_read,

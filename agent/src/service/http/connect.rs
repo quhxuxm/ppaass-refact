@@ -186,13 +186,7 @@ impl HttpConnectFlow {
                 Self::send_error_to_client(&client_connection_id, http_client_framed).await?;
                 return Err(anyhow!(source));
             },
-            Ok(WriteMessageFramedResult { mut message_framed_write }) => {
-                if let Err(e) = message_framed_write.flush().await {
-                    Self::send_error_to_client(&client_connection_id, http_client_framed).await?;
-                    return Err(anyhow!(e));
-                }
-                message_framed_write
-            },
+            Ok(WriteMessageFramedResult { message_framed_write }) => message_framed_write,
         };
         match MessageFramedReader::read(ReadMessageFramedRequest {
             connection_id: proxy_connection_id.as_str(),

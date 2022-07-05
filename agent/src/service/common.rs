@@ -293,18 +293,7 @@ impl TcpRelayFlow {
                         connection_closed: true,
                     });
                 },
-                Ok(WriteMessageFramedResult { mut message_framed_write }) => {
-                    if let Err(e) = message_framed_write.flush().await {
-                        error!("Fail to flush agent message to proxy because of error: {:#?}", e);
-                        return Err(TcpRelayC2PError {
-                            message_framed_write,
-                            client_stream_read,
-                            source: anyhow!(e),
-                            connection_closed: false,
-                        });
-                    };
-                    message_framed_write
-                },
+                Ok(WriteMessageFramedResult { message_framed_write }) => message_framed_write,
             };
         }
         loop {

@@ -7,7 +7,6 @@ use common::{
     ProxyMessagePayloadTypeValue, ReadMessageFramedRequest, ReadMessageFramedResult, ReadMessageFramedResultContent, RsaCryptoFetcher, WriteMessageFramedError,
     WriteMessageFramedRequest, WriteMessageFramedResult,
 };
-use futures::SinkExt;
 
 use std::{fmt::Debug, net::SocketAddr, time::Duration};
 
@@ -130,13 +129,7 @@ impl InitializeFlow {
                         error!("Connection [{}] fail to write heartbeat success to agent because of error, source address: {:?}, target address: {:?}, client address: {:?}", connection_id, source_address, target_address, agent_address);
                         return Err(anyhow!(source));
                     },
-                    Ok(WriteMessageFramedResult { mut message_framed_write }) => {
-                        if let Err(e) = message_framed_write.flush().await {
-                            error!("Connection [{}] fail to write heartbeat success to agent because of error, source address: {:?}, target address: {:?}, client address: {:?}", connection_id, source_address, target_address, agent_address);
-                            return Err(anyhow!(e));
-                        }
-                        message_framed_write
-                    },
+                    Ok(WriteMessageFramedResult { message_framed_write }) => message_framed_write,
                 };
 
                 return Ok(InitFlowResult::Heartbeat {

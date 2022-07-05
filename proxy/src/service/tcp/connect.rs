@@ -6,7 +6,7 @@ use common::{
     PayloadEncryptionTypeSelectResult, PayloadEncryptionTypeSelector, PayloadType, ProxyMessagePayloadTypeValue, RsaCryptoFetcher, TcpConnectRequest,
     TcpConnectResult, TcpConnector, WriteMessageFramedError, WriteMessageFramedRequest, WriteMessageFramedResult,
 };
-use futures::SinkExt;
+
 use std::net::SocketAddr;
 use tokio::net::TcpStream;
 use tracing::{debug, error, instrument};
@@ -74,17 +74,15 @@ impl TcpConnectFlow {
             connected_stream: target_stream,
         } = match connect_to_target_result {
             Err(e) => {
-                error!(
-                    "Connection [{}] fail connect to target {:#?} because of error: {:#?}",
-                    connection_id, target_address, e
-                );
+                let error_message = format!("Connection [{connection_id}] fail connect to target {target_address:#?} because of error: {e:#?}");
+                error!(error_message);
                 let connect_fail_payload = MessagePayload {
                     source_address: Some(source_address),
                     target_address: Some(target_address),
                     payload_type: PayloadType::ProxyPayload(ProxyMessagePayloadTypeValue::TcpConnectFail),
                     data: None,
                 };
-                match MessageFramedWriter::write(WriteMessageFramedRequest {
+                if let Err(WriteMessageFramedError { source, .. }) = MessageFramedWriter::write(WriteMessageFramedRequest {
                     message_framed_write,
                     message_payloads: Some(vec![connect_fail_payload]),
                     payload_encryption_type,
@@ -94,16 +92,10 @@ impl TcpConnectFlow {
                 })
                 .await
                 {
-                    Err(WriteMessageFramedError { source, .. }) => {
-                        return Err(anyhow!(source));
-                    },
-                    Ok(WriteMessageFramedResult { mut message_framed_write }) => {
-                        if let Err(e) = message_framed_write.flush().await {
-                            return Err(anyhow!(e));
-                        }
-                    },
+                    error!("Connection [{connection_id}] fail to write connect fail result to agent because of error: {source:#?}");
+                    return Err(anyhow!(source));
                 };
-                return Err(anyhow!(e));
+                return Err(anyhow!(error_message));
             },
             Ok(v) => v,
         };
@@ -129,12 +121,7 @@ impl TcpConnectFlow {
         .await
         {
             Err(WriteMessageFramedError { source, .. }) => return Err(anyhow!(source)),
-            Ok(WriteMessageFramedResult { mut message_framed_write }) => {
-                if let Err(e) = message_framed_write.flush().await {
-                    return Err(anyhow!(e));
-                }
-                message_framed_write
-            },
+            Ok(WriteMessageFramedResult { message_framed_write }) => message_framed_write,
         };
         Ok(TcpConnectFlowResult {
             target_stream,
