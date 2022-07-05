@@ -14,7 +14,7 @@ use tokio::{net::TcpSocket, runtime::Builder as TokioRuntimeBuilder};
 
 use anyhow::anyhow;
 use anyhow::Result;
-use tracing::{error, info, instrument};
+use tracing::{debug, error, info, instrument};
 
 const DEFAULT_SERVER_PORT: u16 = 80;
 
@@ -143,7 +143,7 @@ impl ProxyServer {
                                 );
                                 return;
                             }
-                            info!("Agent connection [{agent_connection_id}] complete exec successfully.");
+                            debug!("Agent connection [{agent_connection_id}] complete exec successfully.");
                         });
                     }
                 });
