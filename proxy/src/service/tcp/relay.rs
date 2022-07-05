@@ -276,7 +276,7 @@ impl TcpRelayFlow {
             let mut target_buffer = BytesMut::with_capacity(target_buffer_size);
             let source_address = agent_connect_message_source_address.clone();
             let target_address = agent_connect_message_target_address.clone();
-            match target_stream_read.read_buf(&mut target_buffer).await {
+            match target_stream_read.read(&mut target_buffer).await {
                 Err(e) => {
                     error!(
                         "Connection [{}] error happen when relay data from target to proxy, target address={:?}, source address={:?}, error: {:#?}",
