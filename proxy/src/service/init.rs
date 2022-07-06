@@ -3,19 +3,22 @@ use anyhow::Result;
 
 use common::{
     generate_uuid, AgentMessagePayloadTypeValue, MessageFramedRead, MessageFramedReader, MessageFramedWrite, MessageFramedWriter, MessagePayload, NetAddress,
-    PayloadEncryptionTypeSelectRequest, PayloadEncryptionTypeSelectResult, PayloadEncryptionTypeSelector, PayloadType, PpaassError,
-    ProxyMessagePayloadTypeValue, ReadMessageFramedError, ReadMessageFramedRequest, ReadMessageFramedResult, ReadMessageFramedResultContent, RsaCryptoFetcher,
-    WriteMessageFramedError, WriteMessageFramedRequest, WriteMessageFramedResult,
+    PayloadEncryptionTypeSelectRequest, PayloadEncryptionTypeSelectResult, PayloadEncryptionTypeSelector, PayloadType, ProxyMessagePayloadTypeValue,
+    ReadMessageFramedError, ReadMessageFramedRequest, ReadMessageFramedResult, ReadMessageFramedResultContent, RsaCryptoFetcher, WriteMessageFramedError,
+    WriteMessageFramedRequest, WriteMessageFramedResult,
 };
 use tokio_util::codec::FramedParts;
 
-use std::{fmt::Debug, net::SocketAddr, time::Duration};
+use std::{fmt::Debug, net::SocketAddr};
 
-use tokio::{io::AsyncWriteExt, net::TcpStream, time::timeout};
+use tokio::{io::AsyncWriteExt, net::TcpStream};
 
 use tracing::{debug, error, instrument};
 
-use crate::config::ProxyConfig;
+use crate::{
+    config::ProxyConfig,
+    service::{tcp::connect::TcpConnectFlowError, udp::associate::UdpAssociateFlowError},
+};
 
 use super::{
     tcp::connect::{TcpConnectFlow, TcpConnectFlowRequest, TcpConnectFlowResult},
@@ -66,6 +69,32 @@ where
 pub(crate) struct InitializeFlow;
 
 impl InitializeFlow {
+    async fn shutdown_connection<T>(
+        connection_id: &str, message_framed_read: MessageFramedRead<T, TcpStream>, message_framed_write: MessageFramedWrite<T, TcpStream>,
+    ) -> Result<()>
+    where
+        T: RsaCryptoFetcher,
+    {
+        match message_framed_read.reunite(message_framed_write) {
+            Err(e) => {
+                return Err(anyhow!(
+                    "Connection [{connection_id}] handle agent connection fail and also fail to recover because of error: {e}."
+                ))
+            },
+            Ok(v) => {
+                let FramedParts {
+                    mut io,
+                    mut read_buf,
+                    mut write_buf,
+                    ..
+                } = v.into_parts();
+                read_buf.clear();
+                write_buf.clear();
+                io.shutdown().await?;
+            },
+        };
+        Ok(())
+    }
     #[instrument(skip_all, fields(request.connection_id))]
     pub async fn exec<'a, T>(request: InitFlowRequest<'a, T, TcpStream>, configuration: &ProxyConfig) -> Result<InitFlowResult<T>>
     where
@@ -156,16 +185,7 @@ impl InitializeFlow {
                     "Connection [{}] begin tcp connect, source address: {:?}, target address: {:?}, client address: {:?}",
                     connection_id, source_address, target_address, agent_address
                 );
-                let TcpConnectFlowResult {
-                    target_stream,
-                    message_framed_read,
-                    message_framed_write,
-                    source_address,
-                    target_address,
-                    user_token,
-                    message_id,
-                    ..
-                } = TcpConnectFlow::exec(
+                match TcpConnectFlow::exec(
                     TcpConnectFlowRequest {
                         connection_id,
                         message_id: message_id.as_str(),
@@ -178,20 +198,46 @@ impl InitializeFlow {
                     },
                     configuration,
                 )
-                .await?;
-                debug!(
-                    "Connection [{}] complete tcp connect, source address: {:?}, target address: {:?}, client address: {:?}",
-                    connection_id, source_address, target_address, agent_address
-                );
-                return Ok(InitFlowResult::Tcp {
-                    message_framed_write,
-                    message_framed_read,
-                    target_stream,
-                    message_id,
-                    source_address,
-                    target_address,
-                    user_token,
-                });
+                .await
+                {
+                    Err(TcpConnectFlowError {
+                        connection_id,
+                        message_framed_read,
+                        message_framed_write,
+                        source,
+                        ..
+                    }) => {
+                        error!("Connection [{connection_id}] handle agent connection fail to do tcp connect because of error: {source:#?}.");
+                        Self::shutdown_connection(connection_id.as_str(), message_framed_read, message_framed_write).await?;
+                        Err(anyhow!(
+                            "Connection [{connection_id}] handle agent connection fail to do tcp connect because of error: {source:#?}."
+                        ))
+                    },
+                    Ok(TcpConnectFlowResult {
+                        target_stream,
+                        message_framed_read,
+                        message_framed_write,
+                        source_address,
+                        target_address,
+                        user_token,
+                        message_id,
+                        ..
+                    }) => {
+                        debug!(
+                            "Connection [{}] complete tcp connect, source address: {:?}, target address: {:?}, client address: {:?}",
+                            connection_id, source_address, target_address, agent_address
+                        );
+                        Ok(InitFlowResult::Tcp {
+                            message_framed_write,
+                            message_framed_read,
+                            target_stream,
+                            message_id,
+                            source_address,
+                            target_address,
+                            user_token,
+                        })
+                    },
+                }
             },
             Ok(ReadMessageFramedResult {
                 message_framed_read,
@@ -211,14 +257,7 @@ impl InitializeFlow {
                 ..
             }) => {
                 debug!("Connection [{}] begin udp associate, client address: {:?}", connection_id, source_address);
-                let UdpAssociateFlowResult {
-                    connection_id,
-                    message_id,
-                    user_token,
-                    message_framed_read,
-                    message_framed_write,
-                    source_address,
-                } = UdpAssociateFlow::exec(
+                match UdpAssociateFlow::exec(
                     UdpAssociateFlowRequest {
                         message_framed_read,
                         message_framed_write,
@@ -230,60 +269,50 @@ impl InitializeFlow {
                     },
                     configuration,
                 )
-                .await?;
-                debug!("Connection [{}] complete udp associate, client address: {:?}", connection_id, source_address);
-                return Ok(InitFlowResult::Udp {
-                    message_framed_write,
-                    message_framed_read,
-                    message_id,
-                    source_address,
-                    user_token,
-                });
+                .await
+                {
+                    Err(UdpAssociateFlowError {
+                        connection_id,
+                        message_framed_read,
+                        message_framed_write,
+                        source,
+                        ..
+                    }) => {
+                        error!("Connection [{connection_id}] handle agent connection fail to do udp associate because of error: {source:#?}.");
+                        Self::shutdown_connection(connection_id.as_str(), message_framed_read, message_framed_write).await?;
+                        Err(anyhow!(
+                            "Connection [{connection_id}] handle agent connection fail to do udp associate because of error: {source:#?}."
+                        ))
+                    },
+                    Ok(UdpAssociateFlowResult {
+                        connection_id,
+                        message_id,
+                        user_token,
+                        message_framed_read,
+                        message_framed_write,
+                        source_address,
+                    }) => {
+                        debug!("Connection [{}] complete udp associate, client address: {:?}", connection_id, source_address);
+                        Ok(InitFlowResult::Udp {
+                            message_framed_write,
+                            message_framed_read,
+                            message_id,
+                            source_address,
+                            user_token,
+                        })
+                    },
+                }
             },
             Ok(ReadMessageFramedResult { message_framed_read, .. }) => {
                 error!("Connection [{connection_id}] handle agent connection fail because of invalid message content.");
-                match message_framed_read.reunite(message_framed_write) {
-                    Err(e) => {
-                        return Err(anyhow!(
-                            "Connection [{connection_id}] handle agent connection fail because of invalid message content and also fail to recover because of error: {e}."
-                        ))
-                    },
-                    Ok(v) => {
-                        let FramedParts {
-                            mut io,
-                            mut read_buf,
-                            mut write_buf,
-                            ..
-                        } = v.into_parts();
-                        read_buf.clear();
-                        write_buf.clear();
-                        io.shutdown().await?;
-                    },
-                };
+                Self::shutdown_connection(connection_id, message_framed_read, message_framed_write).await?;
                 Err(anyhow!(
                     "Connection [{connection_id}] handle agent connection fail because of invalid message content."
                 ))
             },
             Err(ReadMessageFramedError { message_framed_read, source }) => {
                 error!("Connection [{connection_id}] handle agent connection fail because of error: {source}.");
-                match message_framed_read.reunite(message_framed_write) {
-                    Err(e) => {
-                        return Err(anyhow!(
-                            "Connection [{connection_id}] handle agent connection fail and also fail to recover because of error: {e}."
-                        ))
-                    },
-                    Ok(v) => {
-                        let FramedParts {
-                            mut io,
-                            mut read_buf,
-                            mut write_buf,
-                            ..
-                        } = v.into_parts();
-                        read_buf.clear();
-                        write_buf.clear();
-                        io.shutdown().await?;
-                    },
-                };
+                Self::shutdown_connection(connection_id, message_framed_read, message_framed_write).await?;
                 Err(anyhow!("Connection [{connection_id}] handle agent connection fail because of error: {source}."))
             },
         }

@@ -10,7 +10,7 @@ use common::{
 };
 
 use tokio::net::TcpStream;
-use tracing::{info, instrument};
+use tracing::info;
 
 use crate::config::ProxyConfig;
 
@@ -41,11 +41,26 @@ where
     pub source_address: NetAddress,
 }
 
+#[allow(unused)]
+pub(crate) struct UdpAssociateFlowError<T>
+where
+    T: RsaCryptoFetcher,
+{
+    pub connection_id: String,
+    pub message_id: String,
+    pub user_token: String,
+    pub message_framed_read: MessageFramedRead<T, TcpStream>,
+    pub message_framed_write: MessageFramedWrite<T, TcpStream>,
+    pub source_address: NetAddress,
+    pub source: anyhow::Error,
+}
+
 pub(crate) struct UdpAssociateFlow;
 
 impl UdpAssociateFlow {
-    #[instrument(skip_all, fields(request.connection_id))]
-    pub async fn exec<'a, T>(request: UdpAssociateFlowRequest<'a, T>, _configuration: &ProxyConfig) -> Result<UdpAssociateFlowResult<T>>
+    pub async fn exec<'a, T>(
+        request: UdpAssociateFlowRequest<'a, T>, _configuration: &ProxyConfig,
+    ) -> Result<UdpAssociateFlowResult<T>, UdpAssociateFlowError<T>>
     where
         T: RsaCryptoFetcher,
     {
@@ -60,11 +75,25 @@ impl UdpAssociateFlow {
         } = request;
         info!("Connection [{}] associate udp success.", connection_id);
 
-        let PayloadEncryptionTypeSelectResult { payload_encryption_type, .. } = PayloadEncryptionTypeSelector::select(PayloadEncryptionTypeSelectRequest {
+        let payload_encryption_type = match PayloadEncryptionTypeSelector::select(PayloadEncryptionTypeSelectRequest {
             encryption_token: generate_uuid().into(),
             user_token: user_token.clone(),
         })
-        .await?;
+        .await
+        {
+            Err(e) => {
+                return Err(UdpAssociateFlowError {
+                    connection_id: connection_id.to_owned(),
+                    message_id: message_id.to_owned(),
+                    user_token: user_token.to_owned(),
+                    message_framed_read,
+                    message_framed_write,
+                    source_address,
+                    source: anyhow!(e),
+                })
+            },
+            Ok(PayloadEncryptionTypeSelectResult { payload_encryption_type, .. }) => payload_encryption_type,
+        };
 
         let udp_associate_success_payload = MessagePayload {
             source_address: Some(source_address.clone()),
@@ -82,7 +111,19 @@ impl UdpAssociateFlow {
         })
         .await
         {
-            Err(WriteMessageFramedError { source, .. }) => return Err(anyhow!(source)),
+            Err(WriteMessageFramedError {
+                source, message_framed_write, ..
+            }) => {
+                return Err(UdpAssociateFlowError {
+                    connection_id: connection_id.to_owned(),
+                    message_id: message_id.to_owned(),
+                    user_token: user_token.to_owned(),
+                    message_framed_read,
+                    message_framed_write,
+                    source_address,
+                    source: anyhow!(source),
+                })
+            },
             Ok(WriteMessageFramedResult { message_framed_write }) => message_framed_write,
         };
         Ok(UdpAssociateFlowResult {
