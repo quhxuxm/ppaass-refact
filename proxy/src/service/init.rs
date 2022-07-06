@@ -4,13 +4,14 @@ use anyhow::Result;
 use common::{
     generate_uuid, AgentMessagePayloadTypeValue, MessageFramedRead, MessageFramedReader, MessageFramedWrite, MessageFramedWriter, MessagePayload, NetAddress,
     PayloadEncryptionTypeSelectRequest, PayloadEncryptionTypeSelectResult, PayloadEncryptionTypeSelector, PayloadType, PpaassError,
-    ProxyMessagePayloadTypeValue, ReadMessageFramedRequest, ReadMessageFramedResult, ReadMessageFramedResultContent, RsaCryptoFetcher, WriteMessageFramedError,
-    WriteMessageFramedRequest, WriteMessageFramedResult,
+    ProxyMessagePayloadTypeValue, ReadMessageFramedError, ReadMessageFramedRequest, ReadMessageFramedResult, ReadMessageFramedResultContent, RsaCryptoFetcher,
+    WriteMessageFramedError, WriteMessageFramedRequest, WriteMessageFramedResult,
 };
+use tokio_util::codec::FramedParts;
 
 use std::{fmt::Debug, net::SocketAddr, time::Duration};
 
-use tokio::{net::TcpStream, time::timeout};
+use tokio::{io::AsyncWriteExt, net::TcpStream, time::timeout};
 
 use tracing::{debug, error, instrument};
 
@@ -76,15 +77,13 @@ impl InitializeFlow {
             message_framed_write,
             agent_address,
         } = request;
-        let read_agent_message_result = timeout(
-            Duration::from_secs(configuration.agent_connection_read_timeout().unwrap_or(DEFAULT_AGENT_CONNECTION_READ_TIMEOUT)),
-            MessageFramedReader::read(ReadMessageFramedRequest {
-                connection_id: connection_id.clone(),
-                message_framed_read,
-                timeout: None,
-            }),
-        )
-        .await?;
+        let read_timeout = configuration.agent_connection_read_timeout().unwrap_or(DEFAULT_AGENT_CONNECTION_READ_TIMEOUT);
+        let read_agent_message_result = MessageFramedReader::read(ReadMessageFramedRequest {
+            connection_id: connection_id.clone(),
+            message_framed_read,
+            timeout: Some(read_timeout),
+        })
+        .await;
         match read_agent_message_result {
             Ok(ReadMessageFramedResult {
                 message_framed_read,
@@ -131,7 +130,6 @@ impl InitializeFlow {
                     },
                     Ok(WriteMessageFramedResult { message_framed_write }) => message_framed_write,
                 };
-
                 return Ok(InitFlowResult::Heartbeat {
                     message_framed_write,
                     message_framed_read,
@@ -242,9 +240,51 @@ impl InitializeFlow {
                     user_token,
                 });
             },
-            _ => {
-                error!("Handle agent connection fail because of unknown error.");
-                Err(anyhow!(PpaassError::CodecError))
+            Ok(ReadMessageFramedResult { message_framed_read, .. }) => {
+                error!("Connection [{connection_id}] handle agent connection fail because of invalid message content.");
+                match message_framed_read.reunite(message_framed_write) {
+                    Err(e) => {
+                        return Err(anyhow!(
+                            "Connection [{connection_id}] handle agent connection fail because of invalid message content and also fail to recover because of error: {e}."
+                        ))
+                    },
+                    Ok(v) => {
+                        let FramedParts {
+                            mut io,
+                            mut read_buf,
+                            mut write_buf,
+                            ..
+                        } = v.into_parts();
+                        read_buf.clear();
+                        write_buf.clear();
+                        io.shutdown().await?;
+                    },
+                };
+                Err(anyhow!(
+                    "Connection [{connection_id}] handle agent connection fail because of invalid message content."
+                ))
+            },
+            Err(ReadMessageFramedError { message_framed_read, source }) => {
+                error!("Connection [{connection_id}] handle agent connection fail because of error: {source}.");
+                match message_framed_read.reunite(message_framed_write) {
+                    Err(e) => {
+                        return Err(anyhow!(
+                            "Connection [{connection_id}] handle agent connection fail and also fail to recover because of error: {e}."
+                        ))
+                    },
+                    Ok(v) => {
+                        let FramedParts {
+                            mut io,
+                            mut read_buf,
+                            mut write_buf,
+                            ..
+                        } = v.into_parts();
+                        read_buf.clear();
+                        write_buf.clear();
+                        io.shutdown().await?;
+                    },
+                };
+                Err(anyhow!("Connection [{connection_id}] handle agent connection fail because of error: {source}."))
             },
         }
     }

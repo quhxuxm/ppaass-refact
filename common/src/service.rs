@@ -214,7 +214,7 @@ impl MessageFramedReader {
         } = request;
         let timeout_seconds = timeout.unwrap_or(u64::MAX);
         let result = match tokio::time::timeout(Duration::from_secs(timeout_seconds), message_framed_read.next()).await {
-            Err(_) => {
+            Err(_elapsed) => {
                 error!("Connection [{connection_id}] fail to read message from frame because of timeout:{timeout_seconds}");
                 return Err(ReadMessageFramedError {
                     message_framed_read,
