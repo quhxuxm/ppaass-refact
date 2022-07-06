@@ -16,7 +16,7 @@ use tracing::{debug, error, instrument};
 
 use crate::{
     config::ProxyConfig,
-    service::{shutdown_message_framed, tcp::connect::TcpConnectFlowError, udp::associate::UdpAssociateFlowError},
+    service::{tcp::connect::TcpConnectFlowError, udp::associate::UdpAssociateFlowError},
 };
 
 use super::{
@@ -173,15 +173,8 @@ impl InitializeFlow {
                 )
                 .await
                 {
-                    Err(TcpConnectFlowError {
-                        connection_id,
-                        message_framed_read,
-                        message_framed_write,
-                        source,
-                        ..
-                    }) => {
+                    Err(TcpConnectFlowError { connection_id, source, .. }) => {
                         error!("Connection [{connection_id}] handle agent connection fail to do tcp connect because of error: {source:#?}.");
-                        shutdown_message_framed(connection_id.as_str(), message_framed_read, message_framed_write).await?;
                         Err(anyhow!(
                             "Connection [{connection_id}] handle agent connection fail to do tcp connect because of error: {source:#?}."
                         ))
@@ -244,15 +237,8 @@ impl InitializeFlow {
                 )
                 .await
                 {
-                    Err(UdpAssociateFlowError {
-                        connection_id,
-                        message_framed_read,
-                        message_framed_write,
-                        source,
-                        ..
-                    }) => {
+                    Err(UdpAssociateFlowError { connection_id, source, .. }) => {
                         error!("Connection [{connection_id}] handle agent connection fail to do udp associate because of error: {source:#?}.");
-                        shutdown_message_framed(connection_id.as_str(), message_framed_read, message_framed_write).await?;
                         Err(anyhow!(
                             "Connection [{connection_id}] handle agent connection fail to do udp associate because of error: {source:#?}."
                         ))
@@ -276,16 +262,14 @@ impl InitializeFlow {
                     },
                 }
             },
-            Ok(ReadMessageFramedResult { message_framed_read, .. }) => {
+            Ok(ReadMessageFramedResult { .. }) => {
                 error!("Connection [{connection_id}] handle agent connection fail because of invalid message content.");
-                shutdown_message_framed(connection_id, message_framed_read, message_framed_write).await?;
                 Err(anyhow!(
                     "Connection [{connection_id}] handle agent connection fail because of invalid message content."
                 ))
             },
-            Err(ReadMessageFramedError { message_framed_read, source }) => {
+            Err(ReadMessageFramedError { source, .. }) => {
                 error!("Connection [{connection_id}] handle agent connection fail because of error: {source}.");
-                shutdown_message_framed(connection_id, message_framed_read, message_framed_write).await?;
                 Err(anyhow!("Connection [{connection_id}] handle agent connection fail because of error: {source}."))
             },
         }

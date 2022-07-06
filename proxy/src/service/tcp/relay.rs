@@ -165,13 +165,14 @@ impl TcpRelayFlow {
         T: RsaCryptoFetcher + Send + Sync + Debug + 'static,
     {
         loop {
-            let read_agent_message_result = MessageFramedReader::read(ReadMessageFramedRequest {
+            let mut agent_data;
+            (message_framed_read, agent_data) = match MessageFramedReader::read(ReadMessageFramedRequest {
                 connection_id,
                 message_framed_read,
                 timeout: None,
             })
-            .await;
-            let (message_framed_read_move_back, mut agent_data) = match read_agent_message_result {
+            .await
+            {
                 Err(ReadMessageFramedError { message_framed_read, source }) => {
                     let target_peer_addr = target_stream_write.peer_addr();
                     error!(
@@ -246,7 +247,7 @@ impl TcpRelayFlow {
                     });
                 },
             };
-            message_framed_read = message_framed_read_move_back;
+
             if let Err(e) = target_stream_write.write_all_buf(&mut agent_data).await {
                 let mut target_stream_closed = false;
                 if let ErrorKind::ConnectionReset = e.kind() {
