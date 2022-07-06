@@ -148,10 +148,10 @@ impl AgentConnection {
                     target_stream,
                     message_framed_read,
                     message_framed_write,
-                    message_id,
                     source_address,
                     target_address,
                     user_token,
+                    ..
                 } => {
                     debug!("Connection [{}] is going to handle tcp relay.", connection_id);
                     TcpRelayFlow::exec(
@@ -164,7 +164,6 @@ impl AgentConnection {
                             source_address,
                             target_address,
                             user_token: &user_token,
-                            agent_tcp_connect_message_id: &message_id,
                         },
                         &configuration,
                     )
