@@ -2,10 +2,13 @@ use std::{collections::HashMap, net::SocketAddr};
 use std::{fmt::Debug, sync::Arc};
 use std::{fs, path::Path};
 
-use tokio::net::TcpStream;
+use tokio::{io::AsyncWriteExt, net::TcpStream};
 
-use common::{generate_uuid, MessageFramedGenerateResult, MessageFramedGenerator, PpaassError, RsaCrypto, RsaCryptoFetcher};
+use common::{
+    generate_uuid, MessageFramedGenerateResult, MessageFramedGenerator, MessageFramedRead, MessageFramedWrite, PpaassError, RsaCrypto, RsaCryptoFetcher,
+};
 
+use tokio_util::codec::FramedParts;
 use tracing::{debug, error, instrument};
 
 use crate::service::{
@@ -15,6 +18,7 @@ use crate::service::{
 };
 use crate::{config::ProxyConfig, service::init::InitializeFlow};
 
+use anyhow::anyhow;
 use anyhow::Result;
 mod init;
 mod tcp;
@@ -196,4 +200,31 @@ impl AgentConnection {
 
         Ok(())
     }
+}
+
+pub async fn shutdown_message_framed<T>(
+    connection_id: &str, message_framed_read: MessageFramedRead<T, TcpStream>, message_framed_write: MessageFramedWrite<T, TcpStream>,
+) -> Result<()>
+where
+    T: RsaCryptoFetcher,
+{
+    match message_framed_read.reunite(message_framed_write) {
+        Err(e) => {
+            return Err(anyhow!(
+                "Connection [{connection_id}] handle agent connection fail and also fail to recover because of error: {e}."
+            ))
+        },
+        Ok(v) => {
+            let FramedParts {
+                mut io,
+                mut read_buf,
+                mut write_buf,
+                ..
+            } = v.into_parts();
+            read_buf.clear();
+            write_buf.clear();
+            io.shutdown().await?;
+        },
+    };
+    Ok(())
 }
