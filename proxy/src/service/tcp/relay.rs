@@ -175,17 +175,21 @@ impl TcpRelayFlow {
             .await;
             let (message_framed_read_move_back, mut agent_data) = match read_agent_message_result {
                 Err(ReadMessageFramedError { message_framed_read, source }) => {
+                    let target_peer_addr = target_stream_write.peer_addr();
                     error!(
                         "Connection [{}] error happen when relay data from proxy to target,  agent address={:?}, target address={:?}, error: {:#?}",
-                        connection_id,
-                        agent_address,
-                        target_stream_write.peer_addr(),
-                        source
+                        connection_id, agent_address, target_peer_addr, source
                     );
                     return Err(TcpRelayP2TError {
                         message_framed_read,
                         target_stream_write,
-                        source: anyhow!(source),
+                        source: anyhow!(
+                            "Connection [{}] error happen when relay data from proxy to target,  agent address={:?}, target address={:?}, error: {:#?}",
+                            connection_id,
+                            agent_address,
+                            target_peer_addr,
+                            source
+                        ),
                         connection_closed: false,
                     });
                 },
@@ -193,16 +197,21 @@ impl TcpRelayFlow {
                     message_framed_read,
                     content: None,
                 }) => {
+                    let target_peer_addr = target_stream_write.peer_addr();
                     debug!(
                         "Connection [{}] read all data from agent, agent address={:?}, target address = {:?}.",
-                        connection_id,
-                        agent_address,
-                        target_stream_write.peer_addr()
+                        connection_id, agent_address, target_peer_addr
                     );
                     target_stream_write.flush().await.map_err(|e| TcpRelayP2TError {
                         message_framed_read,
                         target_stream_write,
-                        source: anyhow!(e),
+                        source: anyhow!(
+                            "Connection [{}] read all data from agent, agent address={:?}, target address = {:?}, error: {:#?}.",
+                            connection_id,
+                            agent_address,
+                            target_peer_addr,
+                            e
+                        ),
                         connection_closed: false,
                     })?;
                     return Ok(());
@@ -221,16 +230,20 @@ impl TcpRelayFlow {
                         }),
                 }) => (message_framed_read, data),
                 Ok(ReadMessageFramedResult { message_framed_read, .. }) => {
+                    let target_peer_addr = target_stream_write.peer_addr();
                     error!(
                         "Connection [{}] receive invalid data from agent when relay data from proxy to target,  agent address={:?}, target address={:?}",
-                        connection_id,
-                        agent_address,
-                        target_stream_write.peer_addr()
+                        connection_id, agent_address, target_peer_addr
                     );
                     return Err(TcpRelayP2TError {
                         message_framed_read,
                         target_stream_write,
-                        source: anyhow!(PpaassError::CodecError),
+                        source: anyhow!(
+                            "Connection [{}] receive invalid data from agent when relay data from proxy to target,  agent address={:?}, target address={:?}",
+                            connection_id,
+                            agent_address,
+                            target_peer_addr
+                        ),
                         connection_closed: false,
                     });
                 },
@@ -285,7 +298,13 @@ impl TcpRelayFlow {
                     return Err(TcpRelayT2PError {
                         message_framed_write,
                         target_stream_read,
-                        source: anyhow!(e),
+                        source: anyhow!(
+                            "Connection [{}] error happen when relay data from target to proxy, target address={:?}, source address={:?}, error: {:#?}",
+                            connection_id,
+                            target_address,
+                            source_address,
+                            e
+                        ),
                         connection_closed: false,
                     });
                 },
@@ -302,7 +321,8 @@ impl TcpRelayFlow {
                         return Err(TcpRelayT2PError {
                             message_framed_write,
                             target_stream_read,
-                            source: anyhow!(e),
+                            source: anyhow!("Connection [{}] fail to flush data from target to proxy when all data read from target, target address={:?}, source address={:?}, error: {:#?}.",
+                            connection_id, target_address, source_address, e),
                             connection_closed: false,
                         });
                     };
@@ -317,7 +337,7 @@ impl TcpRelayFlow {
                                 return Err(TcpRelayT2PError {
                                     message_framed_write,
                                     target_stream_read,
-                                    source: anyhow!(source),
+                                    source: anyhow!("Connection [{}] fail to close data from target to proxy when all data read from target, target address={:?}, source address={:?}, error: {:#?}.",connection_id, target_address, source_address, source),
                                     connection_closed: false,
                                 });
                             },
@@ -327,7 +347,7 @@ impl TcpRelayFlow {
                                 return Err(TcpRelayT2PError {
                                     message_framed_write,
                                     target_stream_read,
-                                    source: anyhow!(e),
+                                    source: anyhow!("Connection [{}] fail to close data from target to proxy when all data read from target, target address={:?}, source address={:?}, error: {:#?}.",connection_id, target_address, source_address, e),
                                     connection_closed: false,
                                 });
                             },
@@ -364,13 +384,14 @@ impl TcpRelayFlow {
             {
                 Err(e) => {
                     error!(
-                            "Connection [{}] fail to select payload encryption type when transfer data from target to proxy, target address={:?}, source address={:?}.",
-                            connection_id, target_address, source_address
+                            "Connection [{}] fail to select payload encryption type when transfer data from target to proxy, target address={:?}, source address={:?}, error: {:#?}.",
+                            connection_id, target_address, source_address, e
                         );
                     return Err(TcpRelayT2PError {
                         message_framed_write,
                         target_stream_read,
-                        source: anyhow!(e),
+                        source: anyhow!("Connection [{}] fail to select payload encryption type when transfer data from target to proxy, target address={:?}, source address={:?}, error: {:#?}.",
+                            connection_id, target_address, source_address, e),
                         connection_closed: false,
                     });
                 },
@@ -394,7 +415,13 @@ impl TcpRelayFlow {
                     return Err(TcpRelayT2PError {
                         message_framed_write,
                         target_stream_read,
-                        source: anyhow!(source),
+                        source: anyhow!(
+                            "Connection [{}] fail to write data from target to proxy, target address={:?}, source address={:?}, error: {:#?}.",
+                            connection_id,
+                            target_address,
+                            source_address,
+                            source
+                        ),
                         connection_closed: true,
                     });
                 },
