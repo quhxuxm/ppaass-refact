@@ -56,8 +56,8 @@ where
     connection_id: &'a str,
     message_framed_write: MessageFramedWrite<T, TcpStream>,
     user_token: &'a str,
-    agent_connect_message_source_address: NetAddress,
-    agent_connect_message_target_address: NetAddress,
+    source_address: NetAddress,
+    target_address: NetAddress,
     target_read: OwnedReadHalf,
     target_buffer_size: usize,
     message_framed_buffer_size: usize,
@@ -110,8 +110,8 @@ impl TcpRelayFlow {
                     connection_id: &connection_id,
                     message_framed_write,
                     user_token: &user_token,
-                    agent_connect_message_source_address: source_address,
-                    agent_connect_message_target_address: target_address,
+                    source_address,
+                    target_address,
                     target_read,
                     target_buffer_size,
                     message_framed_buffer_size,
@@ -202,8 +202,8 @@ impl TcpRelayFlow {
             connection_id,
             mut message_framed_write,
             user_token,
-            agent_connect_message_source_address,
-            agent_connect_message_target_address,
+            source_address,
+            target_address,
             target_read: mut target_stream_read,
             target_buffer_size,
             message_framed_buffer_size,
@@ -214,8 +214,8 @@ impl TcpRelayFlow {
     {
         loop {
             let mut target_buffer = BytesMut::with_capacity(target_buffer_size);
-            let source_address = agent_connect_message_source_address.clone();
-            let target_address = agent_connect_message_target_address.clone();
+            let source_address = source_address.clone();
+            let target_address = target_address.clone();
             match target_stream_read.read_buf(&mut target_buffer).await {
                 Err(e) => {
                     error!(
