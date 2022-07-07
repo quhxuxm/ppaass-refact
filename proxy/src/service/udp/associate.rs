@@ -59,12 +59,7 @@ pub(crate) struct UdpAssociateFlow;
 
 impl UdpAssociateFlow {
     pub async fn exec<'a, T>(
-        request: UdpAssociateFlowRequest<'a, T>, _configuration: &ProxyConfig,
-    ) -> Result<UdpAssociateFlowResult<T>, UdpAssociateFlowError<T>>
-    where
-        T: RsaCryptoFetcher,
-    {
-        let UdpAssociateFlowRequest {
+        UdpAssociateFlowRequest {
             connection_id,
             message_id,
             user_token,
@@ -72,9 +67,13 @@ impl UdpAssociateFlow {
             message_framed_write,
             source_address,
             ..
-        } = request;
+        }: UdpAssociateFlowRequest<'a, T>,
+        _configuration: &ProxyConfig,
+    ) -> Result<UdpAssociateFlowResult<T>, UdpAssociateFlowError<T>>
+    where
+        T: RsaCryptoFetcher,
+    {
         info!("Connection [{}] associate udp success.", connection_id);
-
         let payload_encryption_type = match PayloadEncryptionTypeSelector::select(PayloadEncryptionTypeSelectRequest {
             encryption_token: generate_uuid().into(),
             user_token: user_token.clone(),

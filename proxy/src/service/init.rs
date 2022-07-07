@@ -69,24 +69,26 @@ pub(crate) struct InitializeFlow;
 
 impl InitializeFlow {
     #[instrument(skip_all, fields(request.connection_id))]
-    pub async fn exec<'a, T>(request: InitFlowRequest<'a, T, TcpStream>, configuration: &ProxyConfig) -> Result<InitFlowResult<T>>
-    where
-        T: RsaCryptoFetcher + Send + Sync + Debug + 'static,
-    {
-        let InitFlowRequest {
+    pub async fn exec<'a, T>(
+        InitFlowRequest {
             connection_id,
             message_framed_read,
             message_framed_write,
             agent_address,
-        } = request;
+        }: InitFlowRequest<'a, T, TcpStream>,
+        configuration: &ProxyConfig,
+    ) -> Result<InitFlowResult<T>>
+    where
+        T: RsaCryptoFetcher + Send + Sync + Debug + 'static,
+    {
         let read_timeout = configuration.agent_connection_read_timeout().unwrap_or(DEFAULT_AGENT_CONNECTION_READ_TIMEOUT);
-        let read_agent_message_result = MessageFramedReader::read(ReadMessageFramedRequest {
+        match MessageFramedReader::read(ReadMessageFramedRequest {
             connection_id: connection_id.clone(),
             message_framed_read,
             timeout: Some(read_timeout),
         })
-        .await;
-        match read_agent_message_result {
+        .await
+        {
             Ok(ReadMessageFramedResult {
                 message_framed_read,
                 content:

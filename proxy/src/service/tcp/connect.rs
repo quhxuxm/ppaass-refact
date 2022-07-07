@@ -58,12 +58,8 @@ where
 pub(crate) struct TcpConnectFlow;
 
 impl TcpConnectFlow {
-    pub async fn exec<'a, T>(request: TcpConnectFlowRequest<'a, T>, configuration: &ProxyConfig) -> Result<TcpConnectFlowResult<T>, TcpConnectFlowError<T>>
-    where
-        T: RsaCryptoFetcher,
-    {
-        let target_stream_so_linger = configuration.target_stream_so_linger().unwrap_or(DEFAULT_TARGET_STREAM_SO_LINGER);
-        let TcpConnectFlowRequest {
+    pub async fn exec<'a, T>(
+        TcpConnectFlowRequest {
             connection_id,
             message_id,
             user_token,
@@ -73,7 +69,13 @@ impl TcpConnectFlow {
             message_framed_read,
             agent_address,
             ..
-        } = request;
+        }: TcpConnectFlowRequest<'a, T>,
+        configuration: &ProxyConfig,
+    ) -> Result<TcpConnectFlowResult<T>, TcpConnectFlowError<T>>
+    where
+        T: RsaCryptoFetcher,
+    {
+        let target_stream_so_linger = configuration.target_stream_so_linger().unwrap_or(DEFAULT_TARGET_STREAM_SO_LINGER);
         let payload_encryption_type = match PayloadEncryptionTypeSelector::select(PayloadEncryptionTypeSelectRequest {
             encryption_token: generate_uuid().into(),
             user_token,

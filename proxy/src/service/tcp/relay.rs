@@ -65,11 +65,8 @@ where
 pub(crate) struct TcpRelayFlow;
 
 impl TcpRelayFlow {
-    pub async fn exec<'a, T>(request: TcpRelayFlowRequest<'a, T>, configuration: &ProxyConfig) -> Result<()>
-    where
-        T: RsaCryptoFetcher + Send + Sync + Debug + 'static,
-    {
-        let TcpRelayFlowRequest {
+    pub async fn exec<'a, T>(
+        TcpRelayFlowRequest {
             connection_id,
             message_framed_read,
             message_framed_write,
@@ -78,7 +75,12 @@ impl TcpRelayFlow {
             user_token,
             source_address,
             target_address,
-        } = request;
+        }: TcpRelayFlowRequest<'a, T>,
+        configuration: &ProxyConfig,
+    ) -> Result<()>
+    where
+        T: RsaCryptoFetcher + Send + Sync + Debug + 'static,
+    {
         let (target_read, target_write) = target_stream.into_split();
         {
             let connection_id = connection_id.to_owned();

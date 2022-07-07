@@ -37,18 +37,19 @@ pub(crate) struct UdpRelayFlow;
 
 impl UdpRelayFlow {
     #[instrument(skip_all, fields(request.connection_id))]
-    pub async fn exec<'a, T>(request: UdpRelayFlowRequest<'a, T>) -> Result<UdpRelayFlowResult>
-    where
-        T: RsaCryptoFetcher + Send + Sync + Debug + 'static,
-    {
-        let UdpRelayFlowRequest {
+    pub async fn exec<'a, T>(
+        UdpRelayFlowRequest {
             connection_id,
             message_id,
             user_token,
             mut message_framed_read,
             mut message_framed_write,
             ..
-        } = request;
+        }: UdpRelayFlowRequest<'a, T>,
+    ) -> Result<UdpRelayFlowResult>
+    where
+        T: RsaCryptoFetcher + Send + Sync + Debug + 'static,
+    {
         let connection_id = connection_id.to_owned();
         let message_id = message_id.to_owned();
         let user_token = user_token.to_owned();
