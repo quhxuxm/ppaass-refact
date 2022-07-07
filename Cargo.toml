@@ -1,2 +1,2 @@
 [workspace]
-members = ["proxy", "agent", "common", "util"]
+members = ["proxy", "agent", "common", "util", "agent-ui/src-tauri"]
