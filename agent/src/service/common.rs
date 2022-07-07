@@ -144,13 +144,33 @@ pub(crate) struct TcpRelayFlowResult {
 #[derive(Default)]
 pub(crate) struct TcpRelayFlow;
 
+#[allow(unused)]
+struct TcpRelayProxyToClientRequest<'a, T>
+where
+    T: RsaCryptoFetcher,
+{
+    connection_id: &'a str,
+    target_address: NetAddress,
+    message_framed_read: MessageFramedRead<T, ProxyConnection>,
+    client_stream_write: OwnedWriteHalf,
+}
+
+#[allow(unused)]
+struct TcpRelayClientToProxyRequest<'a, T>
+where
+    T: RsaCryptoFetcher,
+{
+    connection_id: &'a str,
+    init_data: Option<Vec<u8>>,
+    message_framed_write: MessageFramedWrite<T, ProxyConnection>,
+    source_address: NetAddress,
+    target_address: NetAddress,
+    client_stream_read: OwnedReadHalf,
+}
+
 impl TcpRelayFlow {
-    #[instrument(fields(request.client_connection_id), skip_all)]
-    pub async fn exec<'a, T>(request: TcpRelayFlowRequest<'a, T>, configuration: Arc<AgentConfig>) -> Result<TcpRelayFlowResult>
-    where
-        T: RsaCryptoFetcher + Send + Sync + Debug + 'static,
-    {
-        let TcpRelayFlowRequest {
+    pub async fn exec<'a, T>(
+        TcpRelayFlowRequest {
             client_connection_id,
             client_stream,
             client_address,
@@ -160,39 +180,62 @@ impl TcpRelayFlow {
             target_address,
             init_data,
             ..
-        } = request;
-
+        }: TcpRelayFlowRequest<'a, T>,
+        configuration: Arc<AgentConfig>,
+    ) -> Result<TcpRelayFlowResult>
+    where
+        T: RsaCryptoFetcher + Send + Sync + Debug + 'static,
+    {
         let (client_stream_read, client_stream_write) = client_stream.into_split();
-        let target_address_p2c = target_address.clone();
-        let client_connection_id_p2c = client_connection_id.to_owned();
-        let client_connection_id_c2p = client_connection_id.to_owned();
-        tokio::spawn(async move {
-            if let Err(e) = Self::relay_proxy_to_client(&client_connection_id_p2c, target_address_p2c, message_framed_read, client_stream_write).await {
-                error!("Error happen when relay data from proxy to client, error: {e:#?}");
-            }
-        });
-        tokio::spawn(async move {
-            if let Err(e) = Self::relay_client_to_proxy(
-                &client_connection_id_c2p,
-                init_data,
-                message_framed_write,
-                source_address,
-                target_address,
-                client_stream_read,
-                configuration,
-            )
-            .await
-            {
-                error!("Error happen when relay data from client to proxy, error: {e:#?}");
-            }
-        });
+        {
+            let connection_id = client_connection_id.to_owned();
+            let target_address = target_address.clone();
+            tokio::spawn(async move {
+                if let Err(e) = Self::relay_proxy_to_client(TcpRelayProxyToClientRequest {
+                    connection_id: &connection_id,
+                    client_stream_write,
+                    message_framed_read,
+                    target_address,
+                })
+                .await
+                {
+                    error!("Error happen when relay data from proxy to client, error: {e:#?}");
+                }
+            });
+        }
+        {
+            let connection_id = client_connection_id.to_owned();
+            tokio::spawn(async move {
+                if let Err(e) = Self::relay_client_to_proxy(
+                    TcpRelayClientToProxyRequest {
+                        connection_id: &connection_id,
+                        init_data,
+                        message_framed_write,
+                        source_address,
+                        target_address,
+                        client_stream_read,
+                    },
+                    configuration,
+                )
+                .await
+                {
+                    error!("Error happen when relay data from client to proxy, error: {e:#?}");
+                }
+            });
+        }
         Ok(TcpRelayFlowResult { client_address })
     }
 
-    #[instrument(fields(connection_id), skip_all)]
-    async fn relay_client_to_proxy<T>(
-        connection_id: &str, init_data: Option<Vec<u8>>, mut message_framed_write: MessageFramedWrite<T, ProxyConnection>, source_address_a2t: NetAddress,
-        target_address_a2t: NetAddress, mut client_stream_read: OwnedReadHalf, configuration: Arc<AgentConfig>,
+    async fn relay_client_to_proxy<'a, T>(
+        TcpRelayClientToProxyRequest {
+            connection_id,
+            init_data,
+            mut message_framed_write,
+            source_address,
+            target_address,
+            mut client_stream_read,
+        }: TcpRelayClientToProxyRequest<'a, T>,
+        configuration: Arc<AgentConfig>,
     ) -> Result<()>
     where
         T: RsaCryptoFetcher,
@@ -218,8 +261,8 @@ impl TcpRelayFlow {
                 user_token: configuration.user_token().clone().expect("Can not get user token").as_str(),
                 payload_encryption_type,
                 message_payloads: Some(vec![MessagePayload {
-                    source_address: Some(source_address_a2t.clone()),
-                    target_address: Some(target_address_a2t.clone()),
+                    source_address: Some(source_address.clone()),
+                    target_address: Some(target_address.clone()),
                     payload_type: PayloadType::AgentPayload(AgentMessagePayloadTypeValue::TcpData),
                     data: Some(init_data.into()),
                 }]),
@@ -240,18 +283,18 @@ impl TcpRelayFlow {
                 Err(e) => {
                     error!(
                         "Error happen when relay data from client to proxy,  agent address={:?}, target address={:?}, error: {:#?}",
-                        source_address_a2t, target_address_a2t, e
+                        source_address, target_address, e
                     );
                     return Err(e.into());
                 },
                 Ok(0) => {
-                    debug!("Read all data from client, target address: {:?}", target_address_a2t);
+                    debug!("Read all data from client, target address: {:?}", target_address);
                     message_framed_write.flush().await?;
                     message_framed_write.close().await?;
                     return Ok(());
                 },
                 Ok(size) => {
-                    debug!("Read {} bytes from client, target address: {:?}", size, target_address_a2t);
+                    debug!("Read {} bytes from client, target address: {:?}", size, target_address);
                     size
                 },
             };
@@ -273,8 +316,8 @@ impl TcpRelayFlow {
             for (_, chunk) in payload_data_chunks.enumerate() {
                 let chunk_data = Bytes::copy_from_slice(chunk);
                 let payload = MessagePayload {
-                    source_address: Some(source_address_a2t.clone()),
-                    target_address: Some(target_address_a2t.clone()),
+                    source_address: Some(source_address.clone()),
+                    target_address: Some(target_address.clone()),
                     payload_type: PayloadType::AgentPayload(AgentMessagePayloadTypeValue::TcpData),
                     data: Some(chunk_data),
                 };
@@ -299,10 +342,13 @@ impl TcpRelayFlow {
         }
     }
 
-    #[instrument(fields(connection_id), skip_all)]
-    async fn relay_proxy_to_client<T>(
-        connection_id: &str, _target_address_t2a: NetAddress, mut message_framed_read: MessageFramedRead<T, ProxyConnection>,
-        mut client_stream_write: OwnedWriteHalf,
+    async fn relay_proxy_to_client<'a, T>(
+        TcpRelayProxyToClientRequest {
+            connection_id,
+            mut message_framed_read,
+            mut client_stream_write,
+            ..
+        }: TcpRelayProxyToClientRequest<'a, T>,
     ) -> Result<()>
     where
         T: RsaCryptoFetcher + Debug,
